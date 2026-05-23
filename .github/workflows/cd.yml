@@ -1,0 +1,41 @@
+name: CD — Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+
+env:
+  IMAGE_OWNER: ${{ github.repository_owner }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host:     ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key:      ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/seasmp
+            export IMAGE_TAG=${{ inputs.image_tag || 'latest' }}
+            export IMAGE_OWNER=${{ env.IMAGE_OWNER }}
+            bash scripts/deploy.sh
