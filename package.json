@@ -1,0 +1,23 @@
+{
+  "name": "seasmp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart Education Analytics & Security Monitoring Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:frontend": "npm run dev --workspace=apps/frontend",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "db:migrate": "npm run db:migrate --workspace=apps/api",
+    "db:studio": "npm run db:studio --workspace=apps/api"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  }
+}

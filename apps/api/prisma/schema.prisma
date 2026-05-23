@@ -1,0 +1,301 @@
+// SEASMP — Prisma Schema
+// PostgreSQL 17 | Prisma v6.x
+// Texnik topshiriq v2.0 asosida
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum CourseStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum AssessmentType {
+  QUIZ
+  MIDTERM
+  FINAL
+  HOMEWORK
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PASSWORD_CHANGE
+  ROLE_CHANGE
+  ENROLL
+  UNENROLL
+  GRADE_SUBMIT
+  ATTENDANCE_MARK
+  TWO_FA_SETUP
+  TWO_FA_DISABLE
+  BACKUP_CODE_USED
+  IP_BLOCKED
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertType {
+  BRUTE_FORCE
+  MULTI_DEVICE
+  UNUSUAL_HOUR
+  BULK_DELETE
+  RATE_LIMIT
+}
+
+// ─── MODELS ───────────────────────────────────────────────────────────────────
+
+model User {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String    @unique @db.VarChar(255)
+  passwordHash       String    @map("password_hash") @db.VarChar(255)
+  firstName          String    @map("first_name") @db.VarChar(100)
+  lastName           String    @map("last_name") @db.VarChar(100)
+  role               UserRole
+  avatarUrl          String?   @map("avatar_url")
+  isActive           Boolean   @default(true) @map("is_active")
+  twoFactorEnabled   Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret    String?   @map("two_factor_secret") // AES-256 encrypted
+  lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  taughtCourses     Course[]         @relation("TeacherCourses")
+  enrollments       Enrollment[]
+  attendanceMarked  Attendance[]     @relation("MarkedByUser")
+  gradesGiven       Grade[]          @relation("GradedByUser")
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]
+  backupCodes       BackupCode[]
+  securityAlerts    SecurityAlert[]  @relation("UserAlerts")
+  resolvedAlerts    SecurityAlert[]  @relation("ResolvedAlerts")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash") @db.VarChar(255)
+  userAgent String?  @map("user_agent")
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Course {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title         String       @db.VarChar(255)
+  description   String?
+  teacherId     String       @map("teacher_id") @db.Uuid
+  category      String       @db.VarChar(100)
+  price         Decimal      @default(0) @db.Decimal(10, 2)
+  durationWeeks Int          @map("duration_weeks")
+  maxStudents   Int          @default(30) @map("max_students")
+  status        CourseStatus @default(DRAFT)
+  schedule      Json?        // { days: ["Monday","Wednesday"], time: "10:00", room: "A-1" }
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  teacher     User         @relation("TeacherCourses", fields: [teacherId], references: [id])
+  enrollments Enrollment[]
+  assessments Assessment[]
+
+  @@index([teacherId])
+  @@index([status])
+  @@map("courses")
+}
+
+model Enrollment {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId        String           @map("student_id") @db.Uuid
+  courseId         String           @map("course_id") @db.Uuid
+  enrolledAt       DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz
+  status           EnrollmentStatus @default(ACTIVE)
+  dropoutRiskScore Decimal?         @map("dropout_risk_score") @db.Decimal(5, 4) // 0.0000 - 1.0000
+  finalGrade       Decimal?         @map("final_grade") @db.Decimal(5, 2)
+
+  // Relations
+  student    User         @relation(fields: [studentId], references: [id])
+  course     Course       @relation(fields: [courseId], references: [id])
+  attendance Attendance[]
+  grades     Grade[]
+
+  @@unique([studentId, courseId])
+  @@index([studentId])
+  @@index([courseId])
+  @@index([dropoutRiskScore])
+  @@map("enrollments")
+}
+
+model Attendance {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  enrollmentId String           @map("enrollment_id") @db.Uuid
+  lessonDate   DateTime         @map("lesson_date") @db.Date
+  status       AttendanceStatus
+  markedBy     String           @map("marked_by") @db.Uuid
+  qrToken      String?          @unique @map("qr_token") @db.VarChar(64)
+  markedAt     DateTime         @default(now()) @map("marked_at") @db.Timestamptz
+  ipAddress    String?          @map("ip_address") @db.VarChar(45)
+
+  // Relations
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  markedUser User       @relation("MarkedByUser", fields: [markedBy], references: [id])
+
+  @@unique([enrollmentId, lessonDate])
+  @@index([enrollmentId])
+  @@index([lessonDate])
+  @@map("attendance")
+}
+
+model Assessment {
+  id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId  String         @map("course_id") @db.Uuid
+  title     String         @db.VarChar(255)
+  type      AssessmentType
+  maxScore  Decimal        @default(100) @map("max_score") @db.Decimal(5, 2)
+  weight    Decimal        @default(0.1) @db.Decimal(5, 4) // Yakuniy bahoga ta'sir (0-1)
+  dueDate   DateTime?      @map("due_date") @db.Timestamptz
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  course Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  grades Grade[]
+
+  @@index([courseId])
+  @@map("assessments")
+}
+
+model Grade {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assessmentId String   @map("assessment_id") @db.Uuid
+  enrollmentId String   @map("enrollment_id") @db.Uuid
+  score        Decimal  @db.Decimal(5, 2)
+  feedback     String?
+  gradedBy     String   @map("graded_by") @db.Uuid
+  gradedAt     DateTime @default(now()) @map("graded_at") @db.Timestamptz
+
+  // Relations
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  gradedUser User       @relation("GradedByUser", fields: [gradedBy], references: [id])
+
+  @@unique([assessmentId, enrollmentId])
+  @@index([enrollmentId])
+  @@map("grades")
+}
+
+model AuditLog {
+  id         BigInt      @id @default(autoincrement())
+  userId     String?     @map("user_id") @db.Uuid
+  action     AuditAction
+  resource   String      @db.VarChar(100)
+  resourceId String?     @map("resource_id") @db.Uuid
+  oldData    Json?       @map("old_data")
+  newData    Json?       @map("new_data")
+  ipAddress  String      @map("ip_address") @db.VarChar(45)
+  userAgent  String?     @map("user_agent")
+  statusCode Int?        @map("status_code")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@map("audit_logs")
+}
+
+model BackupCode {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @map("code_hash") @db.VarChar(255)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("backup_codes")
+}
+
+model SecurityAlert {
+  id         BigInt        @id @default(autoincrement())
+  type       AlertType
+  severity   AlertSeverity
+  userId     String?       @map("user_id") @db.Uuid
+  ipAddress  String?       @map("ip_address") @db.VarChar(45)
+  details    Json          @default("{}")
+  resolved   Boolean       @default(false)
+  resolvedBy String?       @map("resolved_by") @db.Uuid
+  resolvedAt DateTime?     @map("resolved_at") @db.Timestamptz
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  user     User? @relation("UserAlerts",    fields: [userId],     references: [id], onDelete: SetNull)
+  resolver User? @relation("ResolvedAlerts", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([type])
+  @@index([severity])
+  @@index([resolved])
+  @@index([createdAt])
+  @@map("security_alerts")
+}
+
+model IpBlock {
+  id        BigInt   @id @default(autoincrement())
+  ipAddress String   @unique @map("ip_address") @db.VarChar(45)
+  reason    String   @db.VarChar(255)
+  blockedAt DateTime @default(now()) @map("blocked_at") @db.Timestamptz
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+
+  @@index([expiresAt])
+  @@map("ip_blocks")
+}

@@ -1,0 +1,10 @@
+**/node_modules
+apps/web/.next
+apps/api
+apps/analytics
+nginx
+load-tests
+scripts
+.git
+**/.env*
+**/*.log

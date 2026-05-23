@@ -1,0 +1,12 @@
+node_modules
+apps/api/node_modules
+apps/api/dist
+apps/api/logs
+apps/web
+apps/analytics
+nginx
+load-tests
+scripts
+.git
+**/.env
+**/*.log

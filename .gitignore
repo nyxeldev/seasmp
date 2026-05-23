@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Build outputs
+.next/
+dist/
+build/
+*.egg-info/
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# SSL certificates (generate locally)
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# ML Models
+*.pkl
+*.joblib
+models/trained/
+
+# Docker volumes (local)
+docker/volumes/
+
+# Prisma generated
+apps/api/prisma/generated/
