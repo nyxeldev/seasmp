@@ -1,0 +1,13 @@
+[run]
+source = src
+omit =
+    src/routes/*
+    src/tasks/*
+    src/config/database.py
+    src/services/cache.py
+    src/services/dropout_service.py
+    ml/*
+    tests/*
+
+[report]
+fail_under = 70
