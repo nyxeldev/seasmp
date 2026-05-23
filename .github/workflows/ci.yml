@@ -22,25 +22,14 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: apps/api/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install API deps
-        working-directory: apps/api
-        run: npm ci
+      - name: Install all deps
+        run: npm ci --workspace=apps/api --workspace=apps/web
 
       - name: Lint API
         working-directory: apps/api
         run: npm run lint
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
-
-      - name: Install Web deps
-        working-directory: apps/web
-        run: npm ci
 
       - name: Lint Web
         working-directory: apps/web
@@ -58,11 +47,10 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: apps/api/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install deps
-        working-directory: apps/api
-        run: npm ci
+        run: npm ci --workspace=apps/api
 
       - name: Run unit tests
         working-directory: apps/api
@@ -109,11 +97,10 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: apps/api/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install deps
-        working-directory: apps/api
-        run: npm ci
+        run: npm ci --workspace=apps/api
 
       - name: Run DB migrations
         working-directory: apps/api
@@ -187,7 +174,8 @@ jobs:
       - name: Build and push API image
         uses: docker/build-push-action@v6
         with:
-          context: ./apps/api
+          context: .
+          file: apps/api/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/seasmp-api:latest
@@ -199,6 +187,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./apps/analytics
+          file: apps/analytics/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/seasmp-analytics:latest
@@ -209,7 +198,8 @@ jobs:
       - name: Build and push Frontend image
         uses: docker/build-push-action@v6
         with:
-          context: ./apps/web
+          context: .
+          file: apps/web/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/seasmp-frontend:latest
