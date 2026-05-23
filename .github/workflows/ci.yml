@@ -27,6 +27,10 @@ jobs:
       - name: Install all deps
         run: npm ci --workspace=apps/api --workspace=apps/web
 
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
+
       - name: Lint API
         working-directory: apps/api
         run: npm run lint
@@ -51,6 +55,10 @@ jobs:
 
       - name: Install deps
         run: npm ci --workspace=apps/api
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
 
       - name: Run unit tests
         working-directory: apps/api
@@ -101,6 +109,10 @@ jobs:
 
       - name: Install deps
         run: npm ci --workspace=apps/api
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
 
       - name: Run DB migrations
         working-directory: apps/api
