@@ -231,6 +231,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    continue-on-error: true
     environment: production
 
     steps:
