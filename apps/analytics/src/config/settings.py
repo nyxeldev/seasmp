@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL: str = os.environ["DATABASE_URL"]
+DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/seasmp_db")
 REDIS_URL: str    = os.environ.get("REDIS_URL", "redis://localhost:6379")
 INTERNAL_API_KEY: str = os.environ.get("INTERNAL_API_KEY", "internal-dev-key-change-in-prod")
 MODEL_DIR: str    = os.environ.get("MODEL_DIR", "ml/models")

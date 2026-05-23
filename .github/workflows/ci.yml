@@ -9,6 +9,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: ${{ github.repository_owner }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ─── Lint ────────────────────────────────────────────────────────────────────
@@ -64,8 +65,10 @@ jobs:
         working-directory: apps/api
         run: npm test
         env:
-          JWT_SECRET: test-jwt-secret-min-32-chars-long!!
-          JWT_REFRESH_SECRET: test-refresh-secret-min-32-chars!!
+          JWT_ACCESS_SECRET:  test-access-secret-that-is-long-enough-for-zod
+          JWT_REFRESH_SECRET: test-refresh-secret-that-is-long-enough-for-zod
+          AES_ENCRYPTION_KEY: b7dcb02c6342b24134b3a09db4d897c16df22aa9034a757d4d0028118159a756
+          DISABLE_2FA_REQUIRED: 'false'
 
   # ─── Integration tests ───────────────────────────────────────────────────────
   test-integration:
@@ -124,17 +127,17 @@ jobs:
         working-directory: apps/api
         run: npm run test:integration
         env:
-          TEST_DATABASE_URL: postgresql://seasmp:testpassword@localhost:5432/seasmp_test
-          REDIS_URL:         redis://localhost:6379
-          JWT_SECRET:        test-jwt-secret-min-32-chars-long!!
-          JWT_REFRESH_SECRET: test-refresh-secret-min-32-chars!!
-          JWT_EXPIRES_IN:    15m
-          REFRESH_EXPIRES_IN: 7d
-          NODE_ENV:          test
-          API_PORT:          4000
-          API_HOST:          0.0.0.0
-          CORS_ORIGIN:       http://localhost:3000
-          BCRYPT_ROUNDS:     4
+          TEST_DATABASE_URL:  postgresql://seasmp:testpassword@localhost:5432/seasmp_test
+          REDIS_URL:          redis://localhost:6379
+          JWT_ACCESS_SECRET:  test-access-secret-that-is-long-enough-for-zod
+          JWT_REFRESH_SECRET: test-refresh-secret-that-is-long-enough-for-zod
+          AES_ENCRYPTION_KEY: b7dcb02c6342b24134b3a09db4d897c16df22aa9034a757d4d0028118159a756
+          NODE_ENV:           test
+          API_PORT:           4000
+          API_HOST:           0.0.0.0
+          CORS_ORIGIN:        http://localhost:3000
+          BCRYPT_ROUNDS:      4
+          DISABLE_2FA_REQUIRED: 'false'
 
   # ─── Python tests ────────────────────────────────────────────────────────────
   test-python:
@@ -158,6 +161,9 @@ jobs:
       - name: Run Python tests
         working-directory: apps/analytics
         run: pytest --cov=. --cov-report=term-missing --cov-fail-under=70
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/seasmp_test
+          REDIS_URL:    redis://localhost:6379
 
   # ─── Build & Push images ─────────────────────────────────────────────────────
   build:

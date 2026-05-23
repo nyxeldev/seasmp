@@ -19,6 +19,7 @@ module.exports = {
       displayName: 'unit',
       roots:       ['<rootDir>/src/tests'],
       testMatch:   ['**/*.test.ts'],
+      testPathIgnorePatterns: ['/node_modules/', '/src/tests/integration/'],
       setupFiles:  ['<rootDir>/src/tests/setup.ts'],
     },
     // ── Integration tests (real DB + Redis) ────────────────────────────────────
