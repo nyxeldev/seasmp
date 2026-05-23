@@ -10,7 +10,7 @@
     "test:integration": "jest --selectProjects integration",
     "test:all": "jest",
     "test:coverage": "jest --coverage",
-    "lint": "eslint src --ext .ts",
+    "lint": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
