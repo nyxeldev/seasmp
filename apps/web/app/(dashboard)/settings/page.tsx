@@ -1,14 +1,18 @@
 'use client'
 
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useRef } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/lib/auth-context'
+import { securityApi, usersApi, type Session } from '@/lib/api'
+import { toast } from 'sonner'
 import {
-  User, Lock, Bell, Shield, Eye, EyeOff,
-  Check, Camera, Mail, Phone,
+  User, Lock, Bell, Shield, Eye, EyeOff, Check, Camera,
+  Mail, Monitor, Smartphone, Trash2, RefreshCw, X, Copy,
 } from 'lucide-react'
 
-// ── Animation ─────────────────────────────────────────────────────────────────
 const fadeUp = (delay = 0) => ({
   initial:    { opacity: 0, y: 20 },
   animate:    { opacity: 1, y: 0 },
@@ -16,25 +20,14 @@ const fadeUp = (delay = 0) => ({
 })
 
 // ── Shared card ───────────────────────────────────────────────────────────────
-function SettingsCard({
-  title,
-  description,
-  icon: Icon,
-  children,
-  delay = 0,
+function Card({
+  title, description, icon: Icon, children, delay = 0,
 }: {
-  title: string
-  description: string
-  icon: React.ElementType<{ className?: string; style?: React.CSSProperties }>
-  children: React.ReactNode
-  delay?: number
+  title: string; description: string; icon: React.ElementType<{ className?: string; style?: React.CSSProperties }>; children: React.ReactNode; delay?: number
 }) {
   return (
-    <motion.div
-      {...fadeUp(delay)}
-      className="rounded-xl border p-6"
-      style={{ background: '#1E293B', borderColor: 'rgba(255,255,255,0.06)' }}
-    >
+    <motion.div {...fadeUp(delay)} className="rounded-xl border p-6"
+      style={{ background: '#1E293B', borderColor: 'rgba(255,255,255,0.06)' }}>
       <div className="flex items-start gap-3 mb-6 pb-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <div className="p-2.5 rounded-lg shrink-0" style={{ background: 'rgba(59,130,246,0.1)' }}>
           <Icon className="size-4.5" style={{ color: '#3B82F6' }} />
@@ -49,268 +42,520 @@ function SettingsCard({
   )
 }
 
-// ── Input ─────────────────────────────────────────────────────────────────────
-function Field({
-  label,
-  type = 'text',
-  defaultValue = '',
-  placeholder = '',
-  disabled = false,
-}: {
-  label: string
-  type?: string
-  defaultValue?: string
-  placeholder?: string
-  disabled?: boolean
-}) {
+// ── Field ─────────────────────────────────────────────────────────────────────
+function Field({ label, error, type = 'text', ...props }: {
+  label: string; error?: string; type?: string
+} & React.InputHTMLAttributes<HTMLInputElement>) {
   const [show, setShow] = useState(false)
   const isPassword = type === 'password'
-
   return (
     <div className="space-y-1.5">
       <label className="text-xs font-medium text-slate-400">{label}</label>
       <div className="relative">
         <input
           type={isPassword && show ? 'text' : type}
-          defaultValue={defaultValue}
-          placeholder={placeholder}
-          disabled={disabled}
-          className="w-full rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition-all disabled:opacity-40"
+          {...props}
+          className="w-full rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition-all disabled:opacity-40 pr-10"
           style={{
-            background:  'rgba(255,255,255,0.04)',
-            border:      '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.04)',
+            border: `1px solid ${error ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
           }}
           onFocus={e => {
-            e.currentTarget.style.borderColor = '#3B82F6'
-            e.currentTarget.style.boxShadow   = 'inset 3px 0 0 #3B82F6'
+            e.currentTarget.style.borderColor = error ? '#EF4444' : '#3B82F6'
+            e.currentTarget.style.boxShadow = `inset 3px 0 0 ${error ? '#EF4444' : '#3B82F6'}`
           }}
           onBlur={e => {
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
-            e.currentTarget.style.boxShadow   = 'none'
+            e.currentTarget.style.borderColor = error ? '#EF4444' : 'rgba(255,255,255,0.1)'
+            e.currentTarget.style.boxShadow = 'none'
           }}
         />
         {isPassword && (
-          <button
-            type="button"
-            onClick={() => setShow(v => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-          >
+          <button type="button" onClick={() => setShow(v => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors">
             {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </button>
         )}
       </div>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </div>
+  )
+}
+
+// ── Password strength ─────────────────────────────────────────────────────────
+function PasswordStrength({ password }: { password: string }) {
+  if (!password) return null
+  const checks = [
+    password.length >= 8,
+    /[A-Z]/.test(password),
+    /[0-9]/.test(password),
+    /[^A-Za-z0-9]/.test(password),
+  ]
+  const score = checks.filter(Boolean).length
+  const levels = [
+    { label: "Juda zaif", color: '#EF4444' },
+    { label: "Zaif",      color: '#F59E0B' },
+    { label: "O'rtacha",  color: '#EAB308' },
+    { label: "Kuchli",    color: '#22C55E' },
+  ]
+  const lvl = levels[score - 1] ?? levels[0]
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-1">
+        {[0,1,2,3].map(i => (
+          <div key={i} className="h-1 flex-1 rounded-full transition-all duration-300"
+            style={{ background: i < score ? lvl.color : 'rgba(255,255,255,0.1)' }} />
+        ))}
+      </div>
+      <p className="text-xs" style={{ color: lvl.color }}>{lvl.label}</p>
     </div>
   )
 }
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
-function Toggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string
-  description: string
-  checked: boolean
-  onChange: (v: boolean) => void
+function Toggle({ label, description, checked, onChange }: {
+  label: string; description: string; checked: boolean; onChange: (v: boolean) => void
 }) {
   return (
     <div className="flex items-center justify-between gap-4 py-3 border-b last:border-0"
-      style={{ borderColor: 'rgba(255,255,255,0.06)' }}
-    >
+      style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
       <div className="min-w-0">
         <p className="text-sm font-medium text-white">{label}</p>
         <p className="text-xs text-slate-400 mt-0.5">{description}</p>
       </div>
-      <button
-        onClick={() => onChange(!checked)}
-        aria-pressed={checked}
+      <button onClick={() => onChange(!checked)} aria-pressed={checked}
         className="relative shrink-0 w-10 h-5.5 rounded-full transition-colors"
-        style={{ background: checked ? '#3B82F6' : 'rgba(255,255,255,0.1)' }}
-      >
-        <span
-          className="absolute top-0.5 left-0.5 size-4.5 rounded-full bg-white shadow transition-transform"
-          style={{ transform: checked ? 'translateX(18px)' : 'translateX(0)' }}
-        />
+        style={{ background: checked ? '#3B82F6' : 'rgba(255,255,255,0.1)' }}>
+        <span className="absolute top-0.5 left-0.5 size-4.5 rounded-full bg-white shadow transition-transform"
+          style={{ transform: checked ? 'translateX(18px)' : 'translateX(0)' }} />
       </button>
     </div>
   )
 }
 
-// ── Save button ───────────────────────────────────────────────────────────────
-function SaveButton({ saved }: { saved: boolean }) {
+// ── Submit button ─────────────────────────────────────────────────────────────
+function SubmitBtn({ loading, saved, label = 'Saqlash' }: { loading?: boolean; saved?: boolean; label?: string }) {
   return (
-    <button
-      type="submit"
-      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all seasmp-btn"
-      style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}
-    >
-      {saved ? <><Check className="size-4" /> Saqlandi</> : 'Saqlash'}
+    <button type="submit" disabled={loading}
+      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-60 seasmp-btn"
+      style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
+      {loading ? <RefreshCw className="size-4 animate-spin" /> : saved ? <><Check className="size-4" /> Saqlandi</> : label}
     </button>
   )
 }
 
-// ── Profile section ───────────────────────────────────────────────────────────
-function ProfileSection() {
-  const { user } = useAuth()
-  const [saved, setSaved] = useState(false)
+// ── 2FA QR Modal ──────────────────────────────────────────────────────────────
+function TwoFaModal({ onClose }: { onClose: () => void }) {
+  const [data, setData] = useState<{ qrCodeUrl: string; secret: string; backupCodes?: string[] } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [code, setCode] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [done, setDone] = useState(false)
 
-  const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : 'U'
+  useState(() => {
+    securityApi.setup2fa().then(r => {
+      setData(r.data)
+      setLoading(false)
+    }).catch(() => { toast.error('2FA sozlamalarini yuklashda xato'); onClose() })
+  })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const confirm = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    setConfirming(true)
+    try {
+      await securityApi.confirm2fa(code)
+      setDone(true)
+      toast.success('2FA faollashtirildi!')
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  const copySecret = () => {
+    if (data?.secret) { navigator.clipboard.writeText(data.secret); toast.success('Nusxalandi') }
   }
 
   return (
-    <SettingsCard
-      title="Profil ma'lumotlari"
-      description="Ismingiz, email va avatar sozlamalari"
-      icon={User}
-      delay={0}
-    >
-      <form onSubmit={handleSubmit} className="space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 16 }}
+        transition={{ duration: 0.25, ease: 'easeOut' as const }}
+        className="w-full max-w-sm rounded-2xl border p-6 space-y-5"
+        style={{ background: '#1E293B', borderColor: 'rgba(255,255,255,0.1)' }}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-white">2FA Sozlash</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition-colors">
+            <X className="size-4" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="size-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+          </div>
+        ) : done ? (
+          <div className="text-center py-6 space-y-3">
+            <div className="size-14 rounded-full bg-green-500/15 flex items-center justify-center mx-auto">
+              <Check className="size-7 text-green-400" />
+            </div>
+            <p className="text-sm font-medium text-white">2FA faollashtirildi!</p>
+            <p className="text-xs text-slate-400">Hisobingiz endi qo'shimcha himoyalangan.</p>
+            <button onClick={onClose}
+              className="mt-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+              style={{ background: '#2563EB' }}>Yopish</button>
+          </div>
+        ) : data ? (
+          <>
+            <p className="text-xs text-slate-400">
+              Google Authenticator yoki Authy ilovasida QR-kodni skanerlang.
+            </p>
+            <div className="flex justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={data.qrCodeUrl} alt="2FA QR Code"
+                className="size-40 rounded-lg"
+                style={{ background: '#fff', padding: '8px' }} />
+            </div>
+            <div className="rounded-lg px-3 py-2.5 flex items-center gap-2"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <code className="text-xs text-slate-300 flex-1 break-all">{data.secret}</code>
+              <button onClick={copySecret} className="shrink-0 text-slate-400 hover:text-white transition-colors">
+                <Copy className="size-3.5" />
+              </button>
+            </div>
+            <form onSubmit={confirm} className="space-y-3">
+              <Field label="Tasdiqlash kodi (6 raqam)" value={code}
+                onChange={e => setCode(e.target.value)}
+                placeholder="000000" maxLength={6} inputMode="numeric" />
+              <div className="flex gap-2">
+                <button type="button" onClick={onClose}
+                  className="flex-1 py-2 rounded-lg text-sm text-slate-400 hover:text-white transition-colors"
+                  style={{ border: '1px solid rgba(255,255,255,0.1)' }}>Bekor</button>
+                <button type="submit" disabled={confirming || code.length !== 6}
+                  className="flex-1 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-60"
+                  style={{ background: '#2563EB' }}>
+                  {confirming ? 'Tekshirilmoqda…' : 'Tasdiqlash'}
+                </button>
+              </div>
+            </form>
+            {(data.backupCodes?.length ?? 0) > 0 && (
+              <details className="text-xs text-slate-400">
+                <summary className="cursor-pointer hover:text-white transition-colors">
+                  Zaxira kodlar ({data.backupCodes!.length})
+                </summary>
+                <div className="mt-2 grid grid-cols-2 gap-1">
+                  {data.backupCodes!.map(c => (
+                    <code key={c} className="bg-black/20 rounded px-2 py-1 text-slate-300">{c}</code>
+                  ))}
+                </div>
+              </details>
+            )}
+          </>
+        ) : null}
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Profile section ───────────────────────────────────────────────────────────
+const profileSchema = z.object({
+  firstName: z.string().min(2, 'Kamida 2 ta harf'),
+  lastName:  z.string().min(2, 'Kamida 2 ta harf'),
+  email:     z.string().email('Noto\'g\'ri email'),
+  phone:     z.string().optional(),
+})
+type ProfileForm = z.infer<typeof profileSchema>
+
+function ProfileSection() {
+  const { user } = useAuth()
+  const [saved, setSaved]       = useState(false)
+  const [loading, setLoading]   = useState(false)
+  const [avatar, setAvatar]     = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const { register, handleSubmit, formState: { errors } } = useForm<ProfileForm>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      firstName: user?.firstName ?? '',
+      lastName:  user?.lastName ?? '',
+      email:     user?.email ?? '',
+    },
+  })
+
+  const onSubmit = async (data: ProfileForm) => {
+    setLoading(true)
+    try {
+      await usersApi.updateMe(data)
+      setSaved(true)
+      toast.success("Profil yangilandi")
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) { toast.error('Fayl 2MB dan kichik bo\'lishi kerak'); return }
+    const reader = new FileReader()
+    reader.onload = ev => setAvatar(ev.target?.result as string)
+    reader.readAsDataURL(file)
+    toast.info('Avatar yuklash hali backend tomonidan qo\'llab-quvvatlanmaydi')
+  }
+
+  const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : 'U'
+
+  return (
+    <Card title="Profil ma'lumotlari" description="Ismingiz, email va avatar sozlamalari" icon={User} delay={0}>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* Avatar */}
         <div className="flex items-center gap-4">
           <div className="relative">
-            <div
-              className="size-16 rounded-full flex items-center justify-center text-xl font-bold text-white shrink-0"
-              style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}
-            >
-              {initials}
+            <div className="size-16 rounded-full flex items-center justify-center text-xl font-bold text-white shrink-0 overflow-hidden"
+              style={{ background: avatar ? 'transparent' : 'linear-gradient(135deg, #3B82F6, #2563EB)' }}>
+              {avatar
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={avatar} alt="Avatar" className="size-full object-cover" />
+                : initials}
             </div>
-            <button
-              type="button"
+            <button type="button" onClick={() => fileRef.current?.click()}
               className="absolute -bottom-1 -right-1 size-6 rounded-full flex items-center justify-center"
-              style={{ background: '#3B82F6', border: '2px solid #1E293B' }}
-            >
+              style={{ background: '#3B82F6', border: '2px solid #1E293B' }}>
               <Camera className="size-3 text-white" />
             </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           </div>
           <div>
             <p className="text-sm font-medium text-white">{user?.firstName} {user?.lastName}</p>
             <p className="text-xs text-slate-400 mt-0.5">{user?.role}</p>
-            <button
-              type="button"
-              className="text-xs text-blue-400 hover:text-blue-300 mt-1 transition-colors"
-            >
+            <button type="button" onClick={() => fileRef.current?.click()}
+              className="text-xs text-blue-400 hover:text-blue-300 mt-1 transition-colors">
               Rasmni o'zgartirish
             </button>
           </div>
         </div>
 
-        {/* Fields */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Ism" defaultValue={user?.firstName ?? ''} placeholder="Ismingiz" />
-          <Field label="Familiya" defaultValue={user?.lastName ?? ''} placeholder="Familiyangiz" />
+          <Field label="Ism" error={errors.firstName?.message}
+            {...register('firstName')} placeholder="Ismingiz" />
+          <Field label="Familiya" error={errors.lastName?.message}
+            {...register('lastName')} placeholder="Familiyangiz" />
         </div>
-        <Field
-          label="Email"
-          type="email"
-          defaultValue={user?.email ?? ''}
-          placeholder="email@example.com"
-        />
-        <Field label="Telefon" placeholder="+998 90 000 00 00" />
+        <Field label="Email" type="email" error={errors.email?.message}
+          {...register('email')} placeholder="email@example.com" />
+        <Field label="Telefon" {...register('phone')} placeholder="+998 90 000 00 00" />
 
         <div className="flex justify-end pt-1">
-          <SaveButton saved={saved} />
+          <SubmitBtn loading={loading} saved={saved} />
         </div>
       </form>
-    </SettingsCard>
+    </Card>
   )
 }
 
 // ── Security section ──────────────────────────────────────────────────────────
-function SecuritySection() {
-  const [saved, setSaved]   = useState(false)
-  const [twoFa, setTwoFa]   = useState(true)
-  const [sessions, setSessions] = useState(true)
+const pwSchema = z.object({
+  current:  z.string().min(1, 'Joriy parol kiritilmadi'),
+  next:     z.string().min(8, 'Kamida 8 ta belgi'),
+  confirm:  z.string(),
+}).refine(d => d.next === d.confirm, { message: 'Parollar mos kelmadi', path: ['confirm'] })
+type PwForm = z.infer<typeof pwSchema>
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+function SecuritySection() {
+  const [saved, setSaved]     = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [twoFa, setTwoFa]     = useState(false)
+  const [alerts, setAlerts]   = useState(true)
+  const [show2faModal, setShow2faModal] = useState(false)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [sessLoading, setSessLoading] = useState(false)
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+
+  const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<PwForm>({
+    resolver: zodResolver(pwSchema),
+  })
+  const nextPw = watch('next', '')
+
+  const onSubmit = async (data: PwForm) => {
+    setLoading(true)
+    try {
+      await usersApi.changePassword(data.current, data.next)
+      setSaved(true)
+      toast.success('Parol yangilandi')
+      reset()
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handle2faToggle = (v: boolean) => {
+    if (v) { setShow2faModal(true) }
+    else   { setTwoFa(false); toast.info('2FA o\'chirildi') }
+  }
+
+  const loadSessions = async () => {
+    setSessLoading(true)
+    try {
+      const r = await securityApi.sessions()
+      setSessions(Array.isArray(r.data) ? r.data : [])
+    } catch {
+      toast.error("Sessiyalarni yuklab bo'lmadi")
+    } finally {
+      setSessLoading(false)
+    }
+  }
+
+  const revokeSession = async (id: string) => {
+    setRevokingId(id)
+    try {
+      await securityApi.revokeSession(id)
+      setSessions(s => s.filter(x => x.id !== id))
+      toast.success('Sessiya tugatildi')
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setRevokingId(null)
+    }
+  }
+
+  const getDeviceIcon = (ua?: string) => {
+    if (!ua) return <Monitor className="size-4" />
+    return /mobile|android|iphone/i.test(ua)
+      ? <Smartphone className="size-4" />
+      : <Monitor className="size-4" />
   }
 
   return (
-    <SettingsCard
-      title="Xavfsizlik"
-      description="Parol va ikki faktorli autentifikatsiya"
-      icon={Lock}
-      delay={0.1}
-    >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <Field label="Joriy parol" type="password" placeholder="••••••••" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Yangi parol" type="password" placeholder="••••••••" />
-          <Field label="Yangi parolni tasdiqlang" type="password" placeholder="••••••••" />
-        </div>
+    <>
+      <Card title="Xavfsizlik" description="Parol va ikki faktorli autentifikatsiya" icon={Lock} delay={0.1}>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <Field label="Joriy parol" type="password" error={errors.current?.message}
+            {...register('current')} placeholder="••••••••" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Yangi parol" type="password" error={errors.next?.message}
+              {...register('next')} placeholder="••••••••" />
+            <Field label="Yangi parolni tasdiqlang" type="password" error={errors.confirm?.message}
+              {...register('confirm')} placeholder="••••••••" />
+          </div>
+          {nextPw && <PasswordStrength password={nextPw} />}
 
-        <div
-          className="rounded-lg p-4 space-y-0 mt-2"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-        >
-          <Toggle
-            label="Ikki faktorli autentifikatsiya (2FA)"
-            description="TOTP ilovasi orqali qo'shimcha himoya"
-            checked={twoFa}
-            onChange={setTwoFa}
-          />
-          <Toggle
-            label="Shubhali kirishlar haqida xabar"
-            description="Noma'lum IP yoki qurilmadan kirishda ogohlantirish"
-            checked={sessions}
-            onChange={setSessions}
-          />
-        </div>
+          <div className="rounded-lg p-4 space-y-0 mt-2"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <Toggle label="Ikki faktorli autentifikatsiya (2FA)"
+              description="TOTP ilovasi orqali qo'shimcha himoya"
+              checked={twoFa} onChange={handle2faToggle} />
+            <Toggle label="Shubhali kirishlar haqida xabar"
+              description="Noma'lum IP yoki qurilmadan kirishda ogohlantirish"
+              checked={alerts} onChange={setAlerts} />
+          </div>
 
-        <div
-          className="flex items-start gap-3 rounded-lg p-3"
-          style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)' }}
-        >
-          <Shield className="size-4 text-blue-400 shrink-0 mt-0.5" />
-          <p className="text-xs text-slate-300 leading-relaxed">
-            So'nggi kirish: <span className="text-white font-medium">Bugun, 10:32</span> — Toshkent, O'zbekiston
-          </p>
-        </div>
+          <div className="flex items-start gap-3 rounded-lg p-3"
+            style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)' }}>
+            <Shield className="size-4 text-blue-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-300 leading-relaxed">
+              So'nggi kirish: <span className="text-white font-medium">Bugun, 10:32</span> — Toshkent, O'zbekiston
+            </p>
+          </div>
 
-        <div className="flex justify-end pt-1">
-          <SaveButton saved={saved} />
+          <div className="flex justify-end pt-1">
+            <SubmitBtn loading={loading} saved={saved} />
+          </div>
+        </form>
+
+        {/* Sessions */}
+        <div className="mt-6 pt-5 border-t space-y-3" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">Faol sessiyalar</p>
+              <p className="text-xs text-slate-400 mt-0.5">Barcha faol qurilma va brauzerlar</p>
+            </div>
+            <button onClick={loadSessions} disabled={sessLoading}
+              className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50">
+              <RefreshCw className={`size-3.5 ${sessLoading ? 'animate-spin' : ''}`} />
+              Yangilash
+            </button>
+          </div>
+
+          {sessions.length === 0 && !sessLoading && (
+            <p className="text-xs text-slate-500 py-2">Sessiyalarni yuklash uchun "Yangilash" bosing.</p>
+          )}
+
+          {sessLoading && (
+            <div className="space-y-2">
+              {[0,1,2].map(i => (
+                <div key={i} className="h-12 rounded-lg animate-pulse"
+                  style={{ background: 'rgba(255,255,255,0.05)' }} />
+              ))}
+            </div>
+          )}
+
+          <AnimatePresence>
+            {sessions.map(sess => (
+              <motion.div key={sess.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.2, ease: 'easeOut' as const }}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <span className="text-slate-400 shrink-0">{getDeviceIcon(sess.userAgent)}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-white truncate">
+                    {sess.userAgent
+                      ? sess.userAgent.split(' ')[0]?.replace(/\//g, ' ') ?? 'Brauzer'
+                      : 'Noma\'lum qurilma'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {sess.ipAddress ?? 'IP noma\'lum'} · {new Date(sess.createdAt).toLocaleDateString('uz-UZ')}
+                  </p>
+                </div>
+                {sess.isRevoked ? (
+                  <span className="text-[11px] text-slate-500">Yakunlangan</span>
+                ) : (
+                  <button onClick={() => revokeSession(sess.id)} disabled={revokingId === sess.id}
+                    className="p-1.5 rounded-md text-slate-400 hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50">
+                    {revokingId === sess.id
+                      ? <RefreshCw className="size-3.5 animate-spin" />
+                      : <Trash2 className="size-3.5" />}
+                  </button>
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
-      </form>
-    </SettingsCard>
+      </Card>
+
+      <AnimatePresence>
+        {show2faModal && (
+          <TwoFaModal onClose={() => { setShow2faModal(false); setTwoFa(true) }} />
+        )}
+      </AnimatePresence>
+    </>
   )
 }
 
 // ── Notifications section ─────────────────────────────────────────────────────
 function NotificationsSection() {
   const [prefs, setPrefs] = useState({
-    attendance:   true,
-    grades:       true,
-    risk:         true,
-    system:       false,
-    weeklyReport: true,
-    email:        true,
+    attendance: true, grades: true, risk: true,
+    system: false, weeklyReport: true, email: true,
   })
-
-  const set = (k: keyof typeof prefs) => (v: boolean) =>
-    setPrefs(p => ({ ...p, [k]: v }))
-
   const [saved, setSaved] = useState(false)
+  const set = (k: keyof typeof prefs) => (v: boolean) => setPrefs(p => ({ ...p, [k]: v }))
 
   return (
-    <SettingsCard
-      title="Bildirishnomalar"
-      description="Qaysi hodisalar haqida xabardor bo'lishni tanlang"
-      icon={Bell}
-      delay={0.2}
-    >
-      <div
-        className="rounded-lg overflow-hidden"
-        style={{ border: '1px solid rgba(255,255,255,0.06)' }}
-      >
+    <Card title="Bildirishnomalar" description="Qaysi hodisalar haqida xabardor bo'lishni tanlang" icon={Bell} delay={0.2}>
+      <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="px-4 py-2.5" style={{ background: 'rgba(255,255,255,0.03)' }}>
           <div className="flex items-center gap-2">
             <Bell className="size-3.5 text-slate-400" />
@@ -323,7 +568,6 @@ function NotificationsSection() {
           <Toggle label="Xavf ogohlantirishlari" description="O'quvchi xavf darajasi oshganda" checked={prefs.risk} onChange={set('risk')} />
           <Toggle label="Tizim xabarlari" description="Texnik xizmat va yangilanishlar" checked={prefs.system} onChange={set('system')} />
         </div>
-
         <div className="px-4 py-2.5 mt-1" style={{ background: 'rgba(255,255,255,0.03)' }}>
           <div className="flex items-center gap-2">
             <Mail className="size-3.5 text-slate-400" />
@@ -335,17 +579,14 @@ function NotificationsSection() {
           <Toggle label="Haftalik hisobot" description="Har dushanba kuni umumiy hisobot" checked={prefs.weeklyReport} onChange={set('weeklyReport')} />
         </div>
       </div>
-
       <div className="flex justify-end pt-4">
-        <button
-          onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2500) }}
+        <button onClick={() => { setSaved(true); toast.success("Sozlamalar saqlandi"); setTimeout(() => setSaved(false), 2500) }}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all seasmp-btn"
-          style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}
-        >
+          style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
           {saved ? <><Check className="size-4" /> Saqlandi</> : 'Saqlash'}
         </button>
       </div>
-    </SettingsCard>
+    </Card>
   )
 }
 
@@ -357,7 +598,6 @@ export default function SettingsPage() {
         <h1 className="text-xl font-semibold text-white">Sozlamalar</h1>
         <p className="text-sm text-slate-400 mt-1">Hisobingiz va tizim afzalliklarini boshqaring</p>
       </motion.div>
-
       <ProfileSection />
       <SecuritySection />
       <NotificationsSection />

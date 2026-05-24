@@ -10,6 +10,8 @@ import {
   DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { Bell, ChevronRight, User, LogOut } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { LangSwitcher } from '@/components/lang-switcher'
 
 // ── Breadcrumb ────────────────────────────────────────────────────────────────
 const LABELS: Record<string, string> = {
@@ -61,7 +63,9 @@ function TopHeader() {
     >
       <Breadcrumb />
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        <LangSwitcher />
+        <ThemeToggle />
         {/* Notifications */}
         <button className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition-colors">
           <Bell className="size-4" />

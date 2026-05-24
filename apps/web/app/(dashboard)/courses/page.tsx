@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Plus, Search, BookOpen, Users, ExternalLink } from 'lucide-react'
+import { SkeletonCard } from '@/components/ui/skeleton'
 
 const CATEGORIES = ['IT', 'Mathematics', 'Languages', 'Science', 'Art', 'Business']
 
@@ -129,15 +130,18 @@ export default function CoursesPage() {
   const [status, setStatus]     = useState('ALL')
   const [search, setSearch]     = useState('')
   const [open, setOpen]         = useState(false)
+  const [loadingCourses, setLoadingCourses] = useState(true)
   const [form, setForm] = useState({
     title: '', category: 'IT', durationWeeks: 8, price: 0, maxStudents: 20,
     teacherId: '', scheduleDay: 'Monday', scheduleTime: '09:00', room: 'A-1',
   })
 
   const load = async () => {
+    setLoadingCourses(true)
     const q   = status !== 'ALL' ? `status=${status}&limit=100` : 'limit=100'
     const res = await coursesApi.list(q).catch(e => { toast.error(e.message); return null })
     if (res) setCourses(res.data)
+    setLoadingCourses(false)
   }
 
   useEffect(() => { load() }, [status]) // eslint-disable-line
@@ -302,7 +306,11 @@ export default function CoursesPage() {
       </div>
 
       {/* Grid */}
-      {filtered.length > 0 ? (
+      {loadingCourses ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[0,1,2,3,4,5].map(i => <SkeletonCard key={i} />)}
+        </div>
+      ) : filtered.length > 0 ? (
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
           initial="hidden"
