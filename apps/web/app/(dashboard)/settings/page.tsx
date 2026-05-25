@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/lib/auth-context'
 import { useLocale } from '@/store/locale'
-import { securityApi, usersApi, type Session } from '@/lib/api'
+import { securityApi, usersApi, type Session, type AuditLog } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   User, Lock, Bell, Shield, Eye, EyeOff, Check,
@@ -380,6 +380,7 @@ type PwForm = z.infer<typeof pwSchema>
 
 function SecuritySection() {
   const { t } = useLocale()
+  const { user } = useAuth()
   const [saved, setSaved]     = useState(false)
   const [loading, setLoading] = useState(false)
   const [twoFa, setTwoFa]     = useState(false)
@@ -388,10 +389,23 @@ function SecuritySection() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [sessLoading, setSessLoading] = useState(false)
   const [revokingId, setRevokingId] = useState<string | null>(null)
+  const [loginHistory, setLoginHistory] = useState<AuditLog[]>([])
+  const [histLoading, setHistLoading] = useState(false)
 
   const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<PwForm>({
     resolver: zodResolver(pwSchema),
   })
+
+  useEffect(() => {
+    setHistLoading(true)
+    securityApi.auditLogs('action=LOGIN&limit=10&sortBy=createdAt&sortDir=desc')
+      .then(r => {
+        const all: AuditLog[] = Array.isArray(r.data) ? r.data : (r as any).data?.logs ?? []
+        setLoginHistory(user?.email ? all.filter(l => l.user?.email === user.email) : all)
+      })
+      .catch(() => {})
+      .finally(() => setHistLoading(false))
+  }, [user?.email])
   const nextPw = watch('next', '')
 
   const onSubmit = async (data: PwForm) => {
@@ -544,6 +558,48 @@ function SecuritySection() {
               </motion.div>
             ))}
           </AnimatePresence>
+        </div>
+
+        {/* Login History */}
+        <div className="mt-6 pt-5 border-t" style={{ borderColor: 'var(--s-border)' }}>
+          <p className="text-sm font-semibold mb-3" style={{ color: 'var(--s-text)' }}>
+            🕐 {t('settings.loginHistory')}
+          </p>
+          {histLoading ? (
+            <div className="space-y-2">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="h-10 rounded-lg animate-pulse" style={{ background: 'var(--s-alt)' }} />
+              ))}
+            </div>
+          ) : loginHistory.length === 0 ? (
+            <p className="text-xs py-2" style={{ color: 'var(--s-muted)' }}>{t('settings.noLoginHistory')}</p>
+          ) : (
+            <div className="space-y-1">
+              {loginHistory.map(entry => (
+                <div key={entry.id}
+                  className="flex items-center justify-between rounded-lg px-3 py-2"
+                  style={{ background: 'var(--s-alt)', border: '1px solid var(--s-border)' }}>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Monitor className="size-3.5 shrink-0" style={{ color: 'var(--s-muted)' }} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: 'var(--s-text)' }}>
+                        {entry.ipAddress ?? 'IP noma\'lum'}
+                      </p>
+                      <p className="text-[11px] truncate" style={{ color: 'var(--s-muted)' }}>
+                        {entry.userAgent?.split(' ')[0] ?? 'Brauzer'}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className="text-[11px] shrink-0 ml-3"
+                    style={{ color: (entry.statusCode ?? 200) >= 400 ? '#ef4444' : 'var(--s-muted)' }}
+                  >
+                    {new Date(entry.createdAt).toLocaleString('uz-UZ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </Card>
 

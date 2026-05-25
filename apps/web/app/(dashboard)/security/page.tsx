@@ -8,6 +8,7 @@ import {
   type AlertSeverity,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { RoleGuard } from '@/components/RoleGuard'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -44,12 +45,11 @@ function SeverityBadge({ severity }: { severity: AlertSeverity }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function SecurityPage() {
   const { user } = useAuth()
-
-  if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
-    return <p className="text-muted-foreground">Kirish taqiqlangan.</p>
-  }
-
-  return <SecurityDashboard isSuperAdmin={user.role === 'SUPER_ADMIN'} />
+  return (
+    <RoleGuard allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+      <SecurityDashboard isSuperAdmin={user?.role === 'SUPER_ADMIN'} />
+    </RoleGuard>
+  )
 }
 
 function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {

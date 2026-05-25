@@ -2,6 +2,26 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* ── Smooth theme transition ─────────────────────────────── */
+*,
+*::before,
+*::after {
+  transition:
+    background-color 320ms ease,
+    border-color 320ms ease,
+    color 200ms ease,
+    box-shadow 320ms ease,
+    opacity 200ms ease !important;
+}
+
+/* Exception: never animate transforms/spinners/SVGs */
+*[class*="animate-"],
+*[class*="spin"],
+svg,
+svg * {
+  transition: none !important;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -93,10 +113,6 @@
   --s-input:    rgba(255,255,255,0.04);
   --s-hover:    rgba(255,255,255,0.06);
   --s-ring:     var(--color-card);
-}
-
-* {
-  transition: background-color 0.2s, border-color 0.2s, color 0.1s;
 }
 
 body {
@@ -251,4 +267,24 @@ body {
 }
 .seasmp-btn:not(:disabled):hover::after {
   animation: seasmp-shimmer 0.75s ease-out;
+}
+
+/* ── Skeleton pulse ──────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── Responsive breakpoints ──────────────────────────────── */
+@media (max-width: 640px) {
+  .kpi-grid              { grid-template-columns: 1fr 1fr !important; }
+  .settings-cols         { grid-template-columns: 1fr !important; }
+  .settings-profile-cols { grid-template-columns: 1fr !important; }
+  .chart-cols            { grid-template-columns: 1fr !important; }
+  .hide-mobile           { display: none !important; }
+}
+
+@media (max-width: 1024px) {
+  .kpi-grid      { grid-template-columns: 1fr 1fr !important; }
+  .settings-cols { grid-template-columns: 1fr !important; }
 }

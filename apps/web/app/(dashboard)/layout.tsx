@@ -16,6 +16,7 @@ import { GlobalSearch } from '@/components/global-search'
 import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
 import { useLocale } from '@/store/locale'
 import type { TKey } from '@/store/locale'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const SEGMENT_KEYS: Record<string, TKey> = {
   dashboard:   'nav.dashboard',
@@ -132,7 +133,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <TopHeader />
           <main className="flex-1 overflow-y-auto p-6">
-            {children}
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
           </main>
         </div>
       </div>

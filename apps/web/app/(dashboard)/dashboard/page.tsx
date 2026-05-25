@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/lib/auth-context'
+import { useRole } from '@/hooks/useRole'
 import { useLocale } from '@/store/locale'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -240,7 +241,7 @@ function AdminDashboard() {
     <div className="space-y-6">
       {/* KPI cards */}
       <motion.div
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
+        className="kpi-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
         variants={stagger}
         initial="initial"
         animate="animate"
@@ -403,9 +404,8 @@ function StudentDashboard() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { user } = useAuth()
-
-  if (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') return <AdminDashboard />
-  if (user?.role === 'TEACHER') return <TeacherDashboard />
+  const { isAdmin, isTeacher } = useRole()
+  if (isAdmin)   return <AdminDashboard />
+  if (isTeacher) return <TeacherDashboard />
   return <StudentDashboard />
 }
