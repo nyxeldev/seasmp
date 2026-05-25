@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/lib/auth-context'
+import { useLocale } from '@/store/locale'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -227,11 +228,12 @@ function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, t
 
 // ── Admin dashboard ───────────────────────────────────────────────────────────
 function AdminDashboard() {
+  const { t } = useLocale()
   const kpis: KpiProps[] = [
-    { label: "Jami o'quvchilar", target: 247, icon: Users,          trendDir: 'up',   trendVal: '+12',  trendColor: 'green' },
-    { label: 'Faol kurslar',     target: 18,  icon: BookOpen,       trendDir: 'up',   trendVal: '+3',   trendColor: 'green' },
-    { label: "O'rtacha davomat", target: 94,  suffix: '%', icon: CalendarCheck, trendDir: 'down', trendVal: '-2%',  trendColor: 'amber' },
-    { label: 'Yuqori xavf',      target: 12,  icon: AlertTriangle,  trendDir: 'up',   trendVal: '+5',   trendColor: 'red', pulse: true },
+    { label: t('dashboard.totalStudents'), target: 247, icon: Users,          trendDir: 'up',   trendVal: '+12',  trendColor: 'green' },
+    { label: t('dashboard.activeCourses'), target: 18,  icon: BookOpen,       trendDir: 'up',   trendVal: '+3',   trendColor: 'green' },
+    { label: t('dashboard.avgAttendance'), target: 94,  suffix: '%', icon: CalendarCheck, trendDir: 'down', trendVal: '-2%',  trendColor: 'amber' },
+    { label: t('dashboard.highRisk'),      target: 12,  icon: AlertTriangle,  trendDir: 'up',   trendVal: '+5',   trendColor: 'red', pulse: true },
   ]
 
   return (
@@ -253,7 +255,7 @@ function AdminDashboard() {
           <DashCard>
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Davomat trendi</h2>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{t('dashboard.attendanceTrend')}</h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>So'nggi 7 kun</p>
               </div>
               <Badge
@@ -306,7 +308,7 @@ function AdminDashboard() {
           <DashCard className="h-full">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Xavf ostidagi o'quvchilar</h2>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{t('dashboard.riskStudents')}</h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>Top 5 · qoldirish ehtimoli</p>
               </div>
               <AlertTriangle className="size-4" style={{ color: '#EF4444' }} />
@@ -337,7 +339,7 @@ function AdminDashboard() {
       <motion.div {...fadeUp(0.4)}>
         <DashCard>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>So'nggi faoliyat</h2>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{t('dashboard.recentActivity')}</h2>
             <span className="text-xs" style={{ color: 'var(--s-muted)' }}>10 ta voqea</span>
           </div>
 

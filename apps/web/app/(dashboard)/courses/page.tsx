@@ -13,6 +13,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { toast } from 'sonner'
 import { Plus, Search, BookOpen, Users, ExternalLink } from 'lucide-react'
 import { SkeletonCard } from '@/components/ui/skeleton'
+import { useLocale } from '@/store/locale'
 
 const CATEGORIES = ['IT', 'Mathematics', 'Languages', 'Science', 'Art', 'Business']
 
@@ -128,6 +129,7 @@ function CourseCard({ course, canManage, isAdmin, onStatusChange }: {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function CoursesPage() {
   const { user } = useAuth()
+  const { t }    = useLocale()
   const [courses, setCourses]   = useState<Course[]>([])
   const [teachers, setTeachers] = useState<User[]>([])
   const [status, setStatus]     = useState('ALL')
@@ -188,7 +190,7 @@ export default function CoursesPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Kurslar</h1>
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>{t('courses.title')}</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>{courses.length} ta kurs</p>
         </div>
 
@@ -200,7 +202,7 @@ export default function CoursesPage() {
                 style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}
               />
             }>
-              <Plus className="size-4" /> Yangi kurs
+              <Plus className="size-4" /> {t('courses.new')}
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader><DialogTitle>Yangi kurs yaratish</DialogTitle></DialogHeader>
@@ -290,7 +292,7 @@ export default function CoursesPage() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Kurs yoki o'qituvchi..."
+            placeholder={t('courses.search')}
             className="w-full pl-9 pr-3 py-2 rounded-lg text-sm outline-none transition-all"
             style={{ background: 'var(--s-bg-card)', border: '1px solid var(--s-border)', color: 'var(--s-text)' }}
             onFocus={e => { e.currentTarget.style.borderColor = '#3B82F6' }}

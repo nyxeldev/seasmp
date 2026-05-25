@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { attendanceApi, coursesApi, enrollmentsApi, type Attendance, type Course, type Enrollment } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useLocale } from '@/store/locale'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,13 +14,13 @@ import { toast } from 'sonner'
 import { QrCode, RefreshCw, Plus, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 
 // ── Heatmap helpers ───────────────────────────────────────────────────────────
-function heatColor(pct: number) {
-  if (pct < 0)   return 'var(--s-alt)'
-  if (pct === 0) return 'rgba(239,68,68,0.2)'
-  if (pct < 60)  return '#14532d'
-  if (pct < 80)  return '#166534'
-  if (pct < 90)  return '#16a34a'
-  return '#22c55e'
+function heatClass(rate: number): string {
+  if (rate < 0)   return 'heat-none'
+  if (rate === 0) return 'heat-zero'
+  if (rate < 50)  return 'heat-low'
+  if (rate < 70)  return 'heat-med'
+  if (rate < 90)  return 'heat-good'
+  return 'heat-great'
 }
 
 function fmt(d: Date) {
@@ -27,14 +28,24 @@ function fmt(d: Date) {
 }
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string; Icon: React.ElementType<{ className?: string }> }> = {
-  PRESENT: { label: 'Keldi',    color: '#22C55E', bg: 'rgba(34,197,94,0.12)',  Icon: CheckCircle  },
-  ABSENT:  { label: 'Kelmadi', color: '#EF4444', bg: 'rgba(239,68,68,0.12)', Icon: XCircle      },
+  PRESENT: { label: 'Keldi',      color: '#22C55E', bg: 'rgba(34,197,94,0.12)',  Icon: CheckCircle  },
+  ABSENT:  { label: 'Kelmadi',    color: '#EF4444', bg: 'rgba(239,68,68,0.12)', Icon: XCircle      },
   LATE:    { label: 'Kech keldi', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)', Icon: AlertCircle  },
 }
+
+const LEGEND = [
+  { cls: 'heat-none',  label: "Dars yo'q" },
+  { cls: 'heat-zero',  label: '0%'        },
+  { cls: 'heat-low',   label: '<50%'      },
+  { cls: 'heat-med',   label: '<70%'      },
+  { cls: 'heat-good',  label: '<90%'      },
+  { cls: 'heat-great', label: '90%+'      },
+]
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AttendancePage() {
   const { user } = useAuth()
+  const { t }    = useLocale()
   const [records, setRecords]         = useState<Attendance[]>([])
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [courses, setCourses]         = useState<Course[]>([])
@@ -83,7 +94,7 @@ export default function AttendancePage() {
       setMarkOpen(false)
       setForm({ enrollmentId: '', lessonDate: '', status: 'PRESENT' })
       load()
-    } catch (err: any) { toast.error(err.message) }
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Xato') }
   }
 
   const generateQr = async (e: React.FormEvent) => {
@@ -92,8 +103,8 @@ export default function AttendancePage() {
     try {
       const res = await attendanceApi.generateQr(qrForm.courseId, qrForm.lessonDate)
       setQrData(res.data)
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Xato')
     } finally {
       setQrLoading(false)
     }
@@ -146,11 +157,11 @@ export default function AttendancePage() {
   }
 
   return (
-    <div className="space-y-5 relative">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Davomat</h1>
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>{t('attendance.title')}</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>{records.length} ta yozuv</p>
         </div>
 
@@ -161,7 +172,7 @@ export default function AttendancePage() {
                 style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)', background: 'transparent' }}
               />
             }>
-              <Plus className="size-4" /> Belgilash
+              <Plus className="size-4" /> {t('attendance.mark')}
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Davomat belgilash</DialogTitle></DialogHeader>
@@ -189,14 +200,14 @@ export default function AttendancePage() {
                   <Select value={form.status} onValueChange={v => setForm(f => ({...f, status: v ?? ''}))}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="PRESENT">Keldi</SelectItem>
-                      <SelectItem value="ABSENT">Kelmadi</SelectItem>
-                      <SelectItem value="LATE">Kech keldi</SelectItem>
+                      <SelectItem value="PRESENT">{t('attendance.present')}</SelectItem>
+                      <SelectItem value="ABSENT">{t('attendance.absent')}</SelectItem>
+                      <SelectItem value="LATE">{t('attendance.late')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <DialogFooter showCloseButton>
-                  <Button type="submit">Saqlash</Button>
+                  <Button type="submit">{t('common.save')}</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -228,42 +239,40 @@ export default function AttendancePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: 'easeOut' as const }}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Davomat xaritasi</h2>
-          <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--s-muted)' }}>
-            <span>Kam</span>
-            {['var(--s-alt)', '#14532d', '#166534', '#16a34a', '#22c55e'].map((c, i) => (
-              <span key={i} className="size-3 rounded-sm inline-block" style={{ background: c }} />
-            ))}
-            <span>Ko'p</span>
-          </div>
-        </div>
+        <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--s-text)' }}>
+          {t('attendance.heatmap')}
+        </h2>
 
-        <div className="flex gap-1.5 flex-wrap">
+        {/* Cells: 14×14px, 2px gap */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
           {heatmapDays.map(({ date, dateStr, pct, total }) => (
             <div
               key={dateStr}
-              title={`${fmt(date)}: ${pct >= 0 ? `${pct}% davomat (${total} talaba)` : "Dars yo'q"}`}
-              className="size-7 rounded-md cursor-default transition-transform hover:scale-110"
-              style={{ background: heatColor(pct) }}
+              title={pct >= 0
+                ? `${fmt(date)}: ${pct}% davomat (${total} talaba)`
+                : `${fmt(date)}: Dars yo'q`}
+              className={`heat-cell ${heatClass(pct)}`}
+              style={{
+                width: '14px', height: '14px',
+                borderRadius: '3px',
+                cursor: 'default',
+                transition: 'transform 0.1s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.4)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)' }}
             />
           ))}
         </div>
 
-        {/* Heatmap legend row */}
-        <div className="flex items-center gap-4 mt-3 text-[11px]" style={{ color: 'var(--s-muted)' }}>
-          <div className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-sm inline-block" style={{ background: 'rgba(239,68,68,0.2)' }} />
-            <span>0% davomat</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-sm inline-block" style={{ background: '#22c55e' }} />
-            <span>90%+ davomat</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-sm inline-block" style={{ background: 'var(--s-alt)' }} />
-            <span>Dars yo'q</span>
-          </div>
+        {/* Legend */}
+        <div className="flex items-center gap-4 mt-4 flex-wrap">
+          {LEGEND.map(({ cls, label }) => (
+            <div key={cls} className="flex items-center gap-1.5">
+              <div className={`heat-cell ${cls}`}
+                style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0 }} />
+              <span style={{ fontSize: '11px', color: 'var(--s-muted)' }}>{label}</span>
+            </div>
+          ))}
         </div>
       </motion.div>
 
@@ -279,7 +288,7 @@ export default function AttendancePage() {
           style={{ borderColor: 'var(--s-border)' }}>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>
-              {todayRecs.length > 0 ? "Bugungi davomat" : "So'nggi dars davomati"}
+              {todayRecs.length > 0 ? t('attendance.today') : "So'nggi dars davomati"}
             </h2>
             {sessionDate && <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>{sessionDate}</p>}
           </div>
@@ -342,19 +351,32 @@ export default function AttendancePage() {
         </div>
       </motion.div>
 
-      {/* ── Floating QR button + Dialog ─────────────────────────────────────── */}
+      {/* ── Fixed QR button + Dialog ─────────────────────────────────────── */}
       {isTeacher && (
         <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) setQrData(null) }}>
           <DialogTrigger render={
             <button
-              className="fixed bottom-8 right-8 flex items-center gap-2.5 px-5 py-3 rounded-full text-sm font-semibold text-white shadow-2xl seasmp-btn z-40"
               style={{
-                background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)',
-                boxShadow: '0 8px 32px rgba(59,130,246,0.45)',
+                position:     'fixed',
+                bottom:       '32px',
+                right:        '32px',
+                display:      'flex',
+                alignItems:   'center',
+                gap:          '8px',
+                padding:      '12px 20px',
+                background:   '#3b82f6',
+                color:        'white',
+                border:       'none',
+                borderRadius: '12px',
+                cursor:       'pointer',
+                fontSize:     '14px',
+                fontWeight:   500,
+                boxShadow:    '0 4px 20px rgba(59,130,246,0.4)',
+                zIndex:       100,
               }}
             />
           }>
-            <QrCode className="size-4.5" /> QR Yaratish
+            <QrCode className="size-4" /> {t('attendance.qr')}
           </DialogTrigger>
 
           <DialogContent className="max-w-sm">
@@ -377,7 +399,7 @@ export default function AttendancePage() {
                   onChange={e => setQrForm(f => ({...f, lessonDate: e.target.value}))} required />
               </div>
               <Button type="submit" disabled={!qrForm.courseId || !qrForm.lessonDate || qrLoading}>
-                {qrLoading ? 'Yaratilmoqda...' : 'QR Yaratish'}
+                {qrLoading ? 'Yaratilmoqda...' : t('attendance.qr')}
               </Button>
             </form>
 
@@ -385,6 +407,7 @@ export default function AttendancePage() {
               <div className="flex flex-col items-center gap-3 pt-3 border-t"
                 style={{ borderColor: 'var(--s-border)' }}>
                 <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={qrData.qrCodeUrl} alt="QR Code"
                     className="rounded-xl p-2 size-56"
                     style={{ background: '#fff' }} />
@@ -400,7 +423,7 @@ export default function AttendancePage() {
                   <span className={countdown <= 10 ? 'text-red-400 font-semibold' : ''}>{countdown}s qoldi</span>
                   <button
                     type="button"
-                    onClick={() => generateQr({ preventDefault: () => {} } as any)}
+                    onClick={() => generateQr({ preventDefault: () => {} } as React.FormEvent)}
                     disabled={qrLoading}
                     className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 transition-colors"
                   >

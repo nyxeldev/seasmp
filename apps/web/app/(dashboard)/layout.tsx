@@ -10,7 +10,6 @@ import {
   DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { ChevronRight, User, LogOut } from 'lucide-react'
-import { ThemeToggle } from '@/components/theme-toggle'
 import { LanguageSwitcher } from '@/components/lang-switcher'
 import { NotificationBell } from '@/components/notification-bell'
 import { GlobalSearch } from '@/components/global-search'
@@ -69,7 +68,6 @@ function TopHeader() {
 
       <div className="flex items-center gap-1">
         <LanguageSwitcher />
-        <ThemeToggle />
         <NotificationBell />
 
         {/* Avatar dropdown */}

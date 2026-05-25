@@ -9,6 +9,7 @@ import {
   type PyRiskStudent, type PyTeacherKpi, type PyCourseFullAnalytics,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useLocale } from '@/store/locale'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -108,6 +109,7 @@ function RiskBar({ score }: { score: number }) {
 
 // ── Admin analytics ────────────────────────────────────────────────────────────
 function AdminAnalytics() {
+  const { t } = useLocale()
   const [stats, setStats]         = useState<DashboardStats | null>(null)
   const [riskData, setRiskData]   = useState<PyRiskStudent[]>([])
   const [riskLoading, setRiskLoading] = useState(false)
@@ -196,7 +198,7 @@ function AdminAnalytics() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Analytics</h1>
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>{t('analytics.title')}</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>
             {pyOffline ? '⚠ Analytics servisi offline — mock data ko\'rsatilmoqda' : 'Real-time tahlil'}
           </p>

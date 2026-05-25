@@ -182,6 +182,22 @@ body {
   }
 }
 
+/* ── Attendance heatmap cells ──────────────────────────────── */
+.heat-cell  { background: var(--heat-bg, #e2e8f0) }
+.heat-none  { --heat-bg: #e2e8f0 }
+.heat-zero  { --heat-bg: #fecaca }
+.heat-low   { --heat-bg: #fca5a5 }
+.heat-med   { --heat-bg: #fdba74 }
+.heat-good  { --heat-bg: #86efac }
+.heat-great { --heat-bg: #22c55e }
+
+.dark .heat-none  { --heat-bg: #1e293b }
+.dark .heat-zero  { --heat-bg: #7f1d1d }
+.dark .heat-low   { --heat-bg: #991b1b }
+.dark .heat-med   { --heat-bg: #92400e }
+.dark .heat-good  { --heat-bg: #14532d }
+.dark .heat-great { --heat-bg: #15803d }
+
 @keyframes seasmp-grid {
   0%   { background-position: 0 0; }
   100% { background-position: 48px 48px; }

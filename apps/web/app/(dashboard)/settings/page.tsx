@@ -304,8 +304,8 @@ function ProfileSection() {
       setSaved(true)
       toast.success("Profil yangilandi")
       setTimeout(() => setSaved(false), 2500)
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Xato')
     } finally {
       setLoading(false)
     }
@@ -314,30 +314,55 @@ function ProfileSection() {
   const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : 'U'
 
   return (
-    <Card title="Profil ma'lumotlari" description="Ismingiz, email va avatar sozlamalari" icon={User} delay={0}>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-        {/* Avatar */}
-        <AvatarUpload
-          currentUrl={avatarUrl}
-          initials={initials}
-          onUploadComplete={url => { setAvatarUrl(url); refresh() }}
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Ism" error={errors.firstName?.message}
-            {...register('firstName')} placeholder="Ismingiz" />
-          <Field label="Familiya" error={errors.lastName?.message}
-            {...register('lastName')} placeholder="Familiyangiz" />
+    <motion.div {...fadeUp(0)} className="rounded-2xl border"
+      style={{ background: 'var(--s-bg-card)', borderColor: 'var(--s-border)' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'clamp(160px, 20%, 200px) 1fr',
+        gap: '32px',
+        padding: '32px',
+      }}>
+        {/* Left: Avatar + name */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <AvatarUpload
+            currentUrl={avatarUrl}
+            initials={initials}
+            onUploadComplete={url => { setAvatarUrl(url); refresh() }}
+          />
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontWeight: 600, fontSize: '14px', color: 'var(--s-text)' }}>
+              {user?.firstName} {user?.lastName}
+            </p>
+            <span style={{
+              display: 'inline-block', marginTop: '4px',
+              background: 'rgba(59,130,246,0.12)', color: '#3b82f6',
+              fontSize: '11px', padding: '2px 8px', borderRadius: '99px', fontWeight: 500,
+            }}>
+              {user?.role}
+            </span>
+          </div>
+          <p style={{ fontSize: '11px', color: 'var(--s-muted)', textAlign: 'center' }}>
+            PNG, JPG · max 2MB
+          </p>
         </div>
-        <Field label="Email" type="email" error={errors.email?.message}
-          {...register('email')} placeholder="email@example.com" />
-        <Field label="Telefon" {...register('phone')} placeholder="+998 90 000 00 00" />
 
-        <div className="flex justify-end pt-1">
-          <SubmitBtn loading={loading} saved={saved} />
-        </div>
-      </form>
-    </Card>
+        {/* Right: Form fields */}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Ism" error={errors.firstName?.message}
+              {...register('firstName')} placeholder="Ismingiz" />
+            <Field label="Familiya" error={errors.lastName?.message}
+              {...register('lastName')} placeholder="Familiyangiz" />
+          </div>
+          <Field label="Email" type="email" error={errors.email?.message}
+            {...register('email')} placeholder="email@example.com" />
+          <Field label="Telefon" {...register('phone')} placeholder="+998 90 000 00 00" />
+          <div className="flex justify-end pt-1">
+            <SubmitBtn loading={loading} saved={saved} />
+          </div>
+        </form>
+      </div>
+    </motion.div>
   )
 }
 
@@ -575,14 +600,26 @@ function NotificationsSection() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   return (
-    <div className="max-w-2xl space-y-5">
-      <motion.div {...fadeUp()}>
+    <div style={{ maxWidth: '960px', paddingBottom: '40px' }}>
+      <motion.div {...fadeUp()} style={{ marginBottom: '24px' }}>
         <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Sozlamalar</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--s-muted)' }}>Hisobingiz va tizim afzalliklarini boshqaring</p>
       </motion.div>
-      <ProfileSection />
-      <SecuritySection />
-      <NotificationsSection />
+
+      {/* Profile — full width */}
+      <div style={{ marginBottom: '24px' }}>
+        <ProfileSection />
+      </div>
+
+      {/* Security + Notifications — 2 column */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+        gap: '24px',
+      }}>
+        <SecuritySection />
+        <NotificationsSection />
+      </div>
     </div>
   )
 }
