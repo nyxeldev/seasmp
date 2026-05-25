@@ -48,6 +48,59 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ── SEASMP color system (Tailwind v4 — CSS-only config) ── */
+@theme {
+  --color-bg:      #ffffff;
+  --color-card:    #ffffff;
+  --color-surface: #f8fafc;
+  --color-border:  #e2e8f0;
+  --color-text1:   #0f172a;
+  --color-text2:   #475569;
+  --color-text3:   #94a3b8;
+  --color-accent:  #3b82f6;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger:  #ef4444;
+}
+
+/* Light mode bridge aliases — used by existing inline styles */
+:root {
+  --s-bg:       var(--color-bg);
+  --s-bg-card:  var(--color-card);
+  --s-border:   var(--color-border);
+  --s-sidebar:  var(--color-bg);
+  --s-header:   var(--color-bg);
+  --s-text:     var(--color-text1);
+  --s-muted:    var(--color-text2);
+  --s-input:    rgba(0,0,0,0.04);
+  --s-hover:    rgba(0,0,0,0.06);
+  --s-ring:     var(--color-surface);
+  --s-alt:      var(--color-surface);
+  --dropdown-bg: var(--color-card);
+}
+
+/* Dark mode — overrides @theme defaults */
+.dark {
+  --color-bg:      #0f172a;
+  --color-card:    #1e293b;
+  --color-surface: #1e293b;
+  --color-border:  #334155;
+  --color-text1:   #f8fafc;
+  --color-text2:   #94a3b8;
+  --color-text3:   #475569;
+
+  --s-header:   var(--color-card);
+  --s-input:    rgba(255,255,255,0.04);
+  --s-hover:    rgba(255,255,255,0.06);
+  --s-ring:     var(--color-card);
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text1);
+  transition: background-color 0.3s, color 0.3s;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

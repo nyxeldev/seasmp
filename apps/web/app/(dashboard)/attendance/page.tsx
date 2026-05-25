@@ -14,7 +14,7 @@ import { QrCode, RefreshCw, Plus, Clock, CheckCircle, XCircle, AlertCircle } fro
 
 // ── Heatmap helpers ───────────────────────────────────────────────────────────
 function heatColor(pct: number) {
-  if (pct < 0)   return 'rgba(255,255,255,0.04)'
+  if (pct < 0)   return 'var(--s-alt)'
   if (pct === 0) return 'rgba(239,68,68,0.2)'
   if (pct < 60)  return '#14532d'
   if (pct < 80)  return '#166534'
@@ -150,15 +150,15 @@ export default function AttendancePage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-white">Davomat</h1>
-          <p className="text-xs text-slate-400 mt-0.5">{records.length} ta yozuv</p>
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Davomat</h1>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>{records.length} ta yozuv</p>
         </div>
 
         {isTeacher && (
           <Dialog open={markOpen} onOpenChange={setMarkOpen}>
             <DialogTrigger render={
               <button className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors shrink-0"
-                style={{ borderColor: 'rgba(255,255,255,0.12)', color: '#94A3B8', background: 'transparent' }}
+                style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)', background: 'transparent' }}
               />
             }>
               <Plus className="size-4" /> Belgilash
@@ -215,7 +215,7 @@ export default function AttendancePage() {
             ))}
           </SelectContent>
         </Select>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs" style={{ color: 'var(--s-muted)' }}>
           {heatmapDays.filter(d => d.total > 0).length} ta faol kun (so'nggi 30 kun)
         </span>
       </div>
@@ -223,16 +223,16 @@ export default function AttendancePage() {
       {/* Calendar heatmap */}
       <motion.div
         className="rounded-xl border p-5"
-        style={{ background: '#1E293B', borderColor: 'rgba(255,255,255,0.06)' }}
+        style={{ background: 'var(--s-bg-card)', borderColor: 'var(--s-border)' }}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: 'easeOut' as const }}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-white">Davomat xaritasi</h2>
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Davomat xaritasi</h2>
+          <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--s-muted)' }}>
             <span>Kam</span>
-            {['rgba(255,255,255,0.04)', '#14532d', '#166534', '#16a34a', '#22c55e'].map((c, i) => (
+            {['var(--s-alt)', '#14532d', '#166534', '#16a34a', '#22c55e'].map((c, i) => (
               <span key={i} className="size-3 rounded-sm inline-block" style={{ background: c }} />
             ))}
             <span>Ko'p</span>
@@ -251,7 +251,7 @@ export default function AttendancePage() {
         </div>
 
         {/* Heatmap legend row */}
-        <div className="flex items-center gap-4 mt-3 text-[11px] text-slate-500">
+        <div className="flex items-center gap-4 mt-3 text-[11px]" style={{ color: 'var(--s-muted)' }}>
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-sm inline-block" style={{ background: 'rgba(239,68,68,0.2)' }} />
             <span>0% davomat</span>
@@ -261,7 +261,7 @@ export default function AttendancePage() {
             <span>90%+ davomat</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-sm inline-block" style={{ background: 'rgba(255,255,255,0.04)' }} />
+            <span className="size-2.5 rounded-sm inline-block" style={{ background: 'var(--s-alt)' }} />
             <span>Dars yo'q</span>
           </div>
         </div>
@@ -270,18 +270,18 @@ export default function AttendancePage() {
       {/* Today's attendance */}
       <motion.div
         className="rounded-xl border"
-        style={{ background: '#1E293B', borderColor: 'rgba(255,255,255,0.06)' }}
+        style={{ background: 'var(--s-bg-card)', borderColor: 'var(--s-border)' }}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: 'easeOut' as const, delay: 0.1 }}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b"
-          style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          style={{ borderColor: 'var(--s-border)' }}>
           <div>
-            <h2 className="text-sm font-semibold text-white">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>
               {todayRecs.length > 0 ? "Bugungi davomat" : "So'nggi dars davomati"}
             </h2>
-            {sessionDate && <p className="text-xs text-slate-400 mt-0.5">{sessionDate}</p>}
+            {sessionDate && <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>{sessionDate}</p>}
           </div>
           {displayRecs.length > 0 && (
             <div className="flex items-center gap-3 text-xs">
@@ -298,7 +298,7 @@ export default function AttendancePage() {
           )}
         </div>
 
-        <div className="divide-y" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+        <div className="divide-y" style={{ borderColor: 'var(--s-border)' }}>
           {displayRecs.length > 0 ? displayRecs.map((r, i) => {
             const meta = STATUS_META[r.status] ?? STATUS_META.ABSENT
             const Icon = meta.Icon
@@ -308,20 +308,22 @@ export default function AttendancePage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.15 + i * 0.03 }}
-                className="flex items-center gap-3 px-5 py-3 hover:bg-white/2 transition-colors"
+                className="flex items-center gap-3 px-5 py-3 transition-colors"
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
               >
-                <div className="size-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white"
-                  style={{ background: `${meta.color}22` }}>
+                <div className="size-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold"
+                  style={{ background: `${meta.color}22`, color: meta.color }}>
                   {r.enrollment.student.firstName[0]}{r.enrollment.student.lastName[0]}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--s-text)' }}>
                     {r.enrollment.student.firstName} {r.enrollment.student.lastName}
                   </p>
-                  <p className="text-xs text-slate-400 truncate">{r.enrollment.course.title}</p>
+                  <p className="text-xs truncate" style={{ color: 'var(--s-muted)' }}>{r.enrollment.course.title}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1 text-xs" style={{ color: '#64748B' }}>
+                  <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--s-muted)' }}>
                     <Clock className="size-3" />
                     {new Date(r.lessonDate).toLocaleDateString('uz-UZ', { month: 'short', day: 'numeric' })}
                   </div>
@@ -334,7 +336,7 @@ export default function AttendancePage() {
             )
           }) : (
             <div className="py-12 text-center">
-              <p className="text-sm text-slate-400">Davomat yozuvlari mavjud emas</p>
+              <p className="text-sm" style={{ color: 'var(--s-muted)' }}>Davomat yozuvlari mavjud emas</p>
             </div>
           )}
         </div>
@@ -381,7 +383,7 @@ export default function AttendancePage() {
 
             {qrData && (
               <div className="flex flex-col items-center gap-3 pt-3 border-t"
-                style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                style={{ borderColor: 'var(--s-border)' }}>
                 <div className="relative">
                   <img src={qrData.qrCodeUrl} alt="QR Code"
                     className="rounded-xl p-2 size-56"
@@ -394,7 +396,7 @@ export default function AttendancePage() {
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-3 text-sm text-slate-400">
+                <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--s-muted)' }}>
                   <span className={countdown <= 10 ? 'text-red-400 font-semibold' : ''}>{countdown}s qoldi</span>
                   <button
                     type="button"
@@ -405,7 +407,7 @@ export default function AttendancePage() {
                     <RefreshCw className="size-3.5" /> Yangilash
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 text-center">
+                <p className="text-xs text-center" style={{ color: 'var(--s-muted)' }}>
                   Talabalar bu QR kodni skanerlashsin
                 </p>
               </div>

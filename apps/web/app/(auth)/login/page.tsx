@@ -68,13 +68,16 @@ function FloatingInput({
         autoFocus={autoFocus}
         placeholder=" "
         className={[
-          'peer w-full rounded-xl px-4 pt-6 pb-2 text-sm text-white placeholder-transparent',
-          'bg-white/5 border transition-all duration-200 outline-none',
+          'peer w-full rounded-xl px-4 pt-6 pb-2 text-sm placeholder-transparent',
+          'border transition-all duration-200 outline-none',
           isPassword ? 'pr-11' : '',
-          focused
-            ? 'border-blue-500 bg-white/[0.08] shadow-[inset_3px_0_0_#3B82F6,0_0_0_3px_rgba(59,130,246,0.10)]'
-            : 'border-[#334155] hover:border-[#475569]',
+          focused ? 'shadow-[inset_3px_0_0_#3B82F6,0_0_0_3px_rgba(59,130,246,0.10)]' : '',
         ].join(' ')}
+        style={{
+          background: 'var(--s-input)',
+          color: 'var(--s-text)',
+          borderColor: focused ? '#3B82F6' : 'var(--s-border)',
+        }}
       />
       <label
         htmlFor={id}
@@ -82,8 +85,9 @@ function FloatingInput({
           'absolute left-4 pointer-events-none transition-all duration-200',
           floated
             ? 'top-2 text-[10px] font-medium text-blue-400'
-            : 'top-1/2 -translate-y-1/2 text-sm text-white/40',
+            : 'top-1/2 -translate-y-1/2 text-sm',
         ].join(' ')}
+        style={floated ? {} : { color: 'var(--s-muted)' }}
       >
         {label}
       </label>
@@ -92,7 +96,10 @@ function FloatingInput({
           type="button"
           tabIndex={-1}
           onClick={() => setShowPwd(s => !s)}
-          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+          className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
+          style={{ color: 'var(--s-muted)' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-text)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-muted)' }}
         >
           {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>
@@ -408,10 +415,11 @@ export default function LoginPage() {
 
   const otpInputBase = [
     'w-full h-16 text-center text-[2rem] font-mono tracking-[0.6em] rounded-xl',
-    'bg-white/5 border border-white/10 text-white placeholder-white/20',
-    'focus:outline-none focus:border-blue-500 focus:bg-white/[0.08]',
+    'border placeholder-transparent',
+    'focus:outline-none focus:border-blue-500',
     'focus:shadow-[0_0_0_3px_rgba(59,130,246,0.12)] transition-all',
   ].join(' ')
+  const otpInputStyle = { background: 'var(--s-input)', color: 'var(--s-text)', borderColor: 'var(--s-border)' }
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row" style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -422,14 +430,16 @@ export default function LoginPage() {
       {/* ── Right form panel ────────────────────────────────────────────── */}
       <div
         className="relative w-full md:w-[45%] flex flex-col min-h-screen"
-        style={{ background: '#1E293B' }}
+        style={{ background: 'var(--s-bg)' }}
       >
         {/* Theme toggle */}
         <div className="absolute top-5 right-5 z-20">
           <button
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-            className="w-9 h-9 rounded-lg flex items-center justify-center
-              text-white/35 hover:text-white/70 hover:bg-white/8 transition-all"
+            className="w-9 h-9 rounded-lg flex items-center justify-center transition-all"
+            style={{ color: 'var(--s-muted)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-text)'; (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-muted)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
           >
             {mounted && resolvedTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
@@ -450,8 +460,8 @@ export default function LoginPage() {
                   transition={{ duration: 0.32 }}
                 >
                   <div className="mb-8">
-                    <h2 className="text-2xl font-bold text-white mb-1.5">Xush kelibsiz</h2>
-                    <p className="text-white/38 text-sm">Davom etish uchun tizimga kiring</p>
+                    <h2 className="text-2xl font-bold mb-1.5" style={{ color: 'var(--s-text)' }}>Xush kelibsiz</h2>
+                    <p className="text-sm" style={{ color: 'var(--s-muted)' }}>Davom etish uchun tizimga kiring</p>
                   </div>
 
                   <form onSubmit={handleCredentials} className="flex flex-col gap-3.5">
@@ -467,7 +477,8 @@ export default function LoginPage() {
                     <div className="flex justify-end mt-0.5">
                       <button
                         type="button"
-                        className="text-[11px] text-white/35 hover:text-blue-400 transition-colors"
+                        className="text-[11px] hover:text-blue-400 transition-colors"
+                        style={{ color: 'var(--s-muted)' }}
                       >
                         Parolni unutdingizmi?
                       </button>
@@ -479,8 +490,8 @@ export default function LoginPage() {
                     </GradientButton>
                   </form>
 
-                  <div className="mt-9 pt-6 border-t border-white/[0.06]">
-                    <p className="text-[11px] text-white/18 text-center font-mono">
+                  <div className="mt-9 pt-6 border-t" style={{ borderColor: 'var(--s-border)' }}>
+                    <p className="text-[11px] text-center font-mono" style={{ color: 'var(--s-muted)' }}>
                       admin@seasmp.uz · Admin@1234
                     </p>
                   </div>
@@ -497,7 +508,8 @@ export default function LoginPage() {
                   transition={{ duration: 0.32 }}
                 >
                   <button type="button" onClick={() => setStep('credentials')}
-                    className="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/65 mb-7 transition-colors">
+                    className="flex items-center gap-1.5 text-xs hover:text-blue-400 mb-7 transition-colors"
+                    style={{ color: 'var(--s-muted)' }}>
                     <ArrowLeft size={13} /> Orqaga
                   </button>
 
@@ -506,8 +518,8 @@ export default function LoginPage() {
                       flex items-center justify-center mb-4">
                       <ShieldCheck size={20} className="text-blue-400" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-1.5">2FA Tasdiqlash</h2>
-                    <p className="text-white/38 text-sm">Authenticator ilovangizdan 6 raqamli kodni kiriting</p>
+                    <h2 className="text-2xl font-bold mb-1.5" style={{ color: 'var(--s-text)' }}>2FA Tasdiqlash</h2>
+                    <p className="text-sm" style={{ color: 'var(--s-muted)' }}>Authenticator ilovangizdan 6 raqamli kodni kiriting</p>
                   </div>
 
                   <form onSubmit={handleTotp} className="flex flex-col gap-3.5">
@@ -516,6 +528,7 @@ export default function LoginPage() {
                       value={otpCode} autoFocus placeholder="000000"
                       onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       className={otpInputBase}
+                      style={otpInputStyle}
                     />
                     <GradientButton type="submit" loading={loading}
                       disabled={loading || otpCode.length !== 6}>
@@ -526,7 +539,8 @@ export default function LoginPage() {
 
                   <button type="button" onClick={() => setStep('backup')}
                     className="mt-5 w-full flex items-center justify-center gap-1.5
-                      text-xs text-white/28 hover:text-white/60 transition-colors">
+                      text-xs hover:text-blue-400 transition-colors"
+                    style={{ color: 'var(--s-muted)' }}>
                     <Key size={12} /> Backup kod ishlatish
                   </button>
                 </motion.div>
@@ -542,7 +556,8 @@ export default function LoginPage() {
                   transition={{ duration: 0.32 }}
                 >
                   <button type="button" onClick={() => setStep('totp')}
-                    className="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/65 mb-7 transition-colors">
+                    className="flex items-center gap-1.5 text-xs hover:text-blue-400 mb-7 transition-colors"
+                    style={{ color: 'var(--s-muted)' }}>
                     <ArrowLeft size={13} /> Authenticator kodiga qaytish
                   </button>
 
@@ -551,8 +566,8 @@ export default function LoginPage() {
                       flex items-center justify-center mb-4">
                       <Key size={20} className="text-amber-400" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-1.5">Backup kod</h2>
-                    <p className="text-white/38 text-sm">Avval saqlangan backup kodingizni kiriting</p>
+                    <h2 className="text-2xl font-bold mb-1.5" style={{ color: 'var(--s-text)' }}>Backup kod</h2>
+                    <p className="text-sm" style={{ color: 'var(--s-muted)' }}>Avval saqlangan backup kodingizni kiriting</p>
                   </div>
 
                   <form onSubmit={handleBackup} className="flex flex-col gap-3.5">
@@ -561,10 +576,11 @@ export default function LoginPage() {
                       onChange={e => setBackupInput(e.target.value.toUpperCase())}
                       className={[
                         'w-full h-14 text-center font-mono tracking-[0.35em] text-lg rounded-xl',
-                        'bg-white/5 border border-white/10 text-white placeholder-white/20',
-                        'focus:outline-none focus:border-blue-500 focus:bg-white/[0.08]',
+                        'border placeholder-transparent',
+                        'focus:outline-none focus:border-blue-500',
                         'focus:shadow-[0_0_0_3px_rgba(59,130,246,0.12)] transition-all',
                       ].join(' ')}
+                      style={otpInputStyle}
                     />
                     <GradientButton type="submit" loading={loading} disabled={loading || !backupInput.trim()}>
                       {!loading && 'Kirish'}
@@ -584,7 +600,7 @@ export default function LoginPage() {
                   className="flex flex-col items-center gap-4 py-20"
                 >
                   <Loader2 size={30} className="animate-spin text-blue-400" />
-                  <p className="text-white/38 text-sm">2FA sozlanmoqda...</p>
+                  <p className="text-sm" style={{ color: 'var(--s-muted)' }}>2FA sozlanmoqda...</p>
                 </motion.div>
               )}
 
@@ -599,13 +615,13 @@ export default function LoginPage() {
                 >
                   <div className="mb-6">
                     <div className="flex items-center gap-2.5 mb-1.5">
-                      <h2 className="text-xl font-bold text-white">2FA Sozlash</h2>
+                      <h2 className="text-xl font-bold" style={{ color: 'var(--s-text)' }}>2FA Sozlash</h2>
                       <span className="text-[10px] bg-orange-500/12 text-orange-400
                         border border-orange-500/18 px-2 py-0.5 rounded-full font-medium">
                         Majburiy
                       </span>
                     </div>
-                    <p className="text-white/38 text-sm">
+                    <p className="text-sm" style={{ color: 'var(--s-muted)' }}>
                       QR kodni Google Authenticator yoki Authy bilan skanerlang
                     </p>
                   </div>
@@ -617,15 +633,18 @@ export default function LoginPage() {
                       </div>
                     )}
                     <div className="w-full">
-                      <p className="text-[11px] text-white/28 mb-1.5">Qo'lda kiritish uchun secret:</p>
-                      <div className="flex items-center gap-2 bg-white/5 border border-white/8
-                        rounded-xl px-3 py-2.5">
-                        <code className="text-[11px] font-mono text-white/55 flex-1 break-all select-all">
+                      <p className="text-[11px] mb-1.5" style={{ color: 'var(--s-muted)' }}>Qo'lda kiritish uchun secret:</p>
+                      <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 border"
+                        style={{ background: 'var(--s-input)', borderColor: 'var(--s-border)' }}>
+                        <code className="text-[11px] font-mono flex-1 break-all select-all" style={{ color: 'var(--s-muted)' }}>
                           {secret}
                         </code>
                         <button type="button"
                           onClick={() => { navigator.clipboard.writeText(secret); toast.success('Nusxalandi') }}
-                          className="text-white/28 hover:text-white/65 transition-colors shrink-0">
+                          className="transition-colors shrink-0"
+                          style={{ color: 'var(--s-muted)' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-text)' }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-muted)' }}>
                           <Copy size={13} />
                         </button>
                       </div>
@@ -647,7 +666,8 @@ export default function LoginPage() {
                   transition={{ duration: 0.32 }}
                 >
                   <button type="button" onClick={() => setStep('setup_qr')}
-                    className="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/65 mb-7 transition-colors">
+                    className="flex items-center gap-1.5 text-xs hover:text-blue-400 mb-7 transition-colors"
+                    style={{ color: 'var(--s-muted)' }}>
                     <ArrowLeft size={13} /> Orqaga
                   </button>
 
@@ -656,8 +676,8 @@ export default function LoginPage() {
                       flex items-center justify-center mb-4">
                       <ShieldCheck size={20} className="text-blue-400" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-1.5">Kodni kiriting</h2>
-                    <p className="text-white/38 text-sm">
+                    <h2 className="text-2xl font-bold mb-1.5" style={{ color: 'var(--s-text)' }}>Kodni kiriting</h2>
+                    <p className="text-sm" style={{ color: 'var(--s-muted)' }}>
                       Authenticator ilovangiz ko'rsatayotgan 6 raqamli kodni kiriting
                     </p>
                   </div>
@@ -668,6 +688,7 @@ export default function LoginPage() {
                       value={setupCode} autoFocus placeholder="000000"
                       onChange={e => setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       className={otpInputBase}
+                      style={otpInputStyle}
                     />
                     <GradientButton type="submit" loading={loading}
                       disabled={loading || setupCode.length !== 6}>
@@ -692,8 +713,8 @@ export default function LoginPage() {
                       flex items-center justify-center mb-4">
                       <Key size={20} className="text-amber-400" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-1.5">Backup kodlaringiz</h2>
-                    <p className="text-white/38 text-sm">Har biri faqat bir marta ishlatiladi.</p>
+                    <h2 className="text-2xl font-bold mb-1.5" style={{ color: 'var(--s-text)' }}>Backup kodlaringiz</h2>
+                    <p className="text-sm" style={{ color: 'var(--s-muted)' }}>Har biri faqat bir marta ishlatiladi.</p>
                   </div>
 
                   <div className="bg-amber-500/[0.07] border border-amber-500/14 rounded-xl px-4 py-3 mb-4">
@@ -705,8 +726,8 @@ export default function LoginPage() {
                   <div className="grid grid-cols-2 gap-2 mb-4">
                     {backupCodes.map((code, i) => (
                       <div key={i}
-                        className="font-mono text-sm bg-white/5 border border-white/[0.07]
-                          rounded-lg px-3 py-2 text-center tracking-wider text-white/75 select-all">
+                        className="font-mono text-sm rounded-lg px-3 py-2 text-center tracking-wider select-all border"
+                        style={{ background: 'var(--s-input)', borderColor: 'var(--s-border)', color: 'var(--s-text)' }}>
                         {code}
                       </div>
                     ))}
@@ -714,9 +735,10 @@ export default function LoginPage() {
 
                   <button type="button"
                     onClick={() => { navigator.clipboard.writeText(backupCodes.join('\n')); toast.success('Barcha kodlar nusxalandi') }}
-                    className="w-full h-10 rounded-xl text-xs font-medium text-white/40 hover:text-white/70
-                      border border-white/8 hover:border-white/18 flex items-center justify-center gap-2
-                      transition-all mb-3">
+                    className="w-full h-10 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-all mb-3 border"
+                    style={{ color: 'var(--s-muted)', borderColor: 'var(--s-border)' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-text)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--s-text)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-muted)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--s-border)' }}>
                     <Copy size={13} /> Barcha kodlarni nusxalash
                   </button>
 
@@ -732,7 +754,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="px-8 pb-5 text-center">
-          <p className="text-[11px] text-white/14">© 2026 SEASMP. Barcha huquqlar himoyalangan.</p>
+          <p className="text-[11px]" style={{ color: 'var(--s-muted)' }}>© 2026 SEASMP. Barcha huquqlar himoyalangan.</p>
         </div>
       </div>
     </div>

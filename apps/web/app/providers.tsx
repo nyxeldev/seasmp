@@ -7,7 +7,7 @@ import { LocaleProvider } from '@/lib/locale-context'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="seasmp-theme" disableTransitionOnChange>
       <LocaleProvider>
         <AuthProvider>
           {children}

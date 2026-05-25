@@ -110,8 +110,8 @@ function DashCard({
     <div
       className={`rounded-xl border p-5 ${className}`}
       style={{
-        background:   '#1E293B',
-        borderColor:  'rgba(255,255,255,0.06)',
+        background:   'var(--s-bg-card)',
+        borderColor:  'var(--s-border)',
         ...style,
       }}
     >
@@ -133,7 +133,7 @@ function RiskRing({ score }: { score: number }) {
 
   return (
     <svg width="44" height="44" viewBox="0 0 44 44" className="shrink-0">
-      <circle cx={cx} cy={cy} r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3.5" />
+      <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--s-border)" strokeWidth="3.5" />
       <circle
         cx={cx} cy={cy} r={R}
         fill="none"
@@ -158,10 +158,10 @@ function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background: '#0F172A', border: '1px solid rgba(255,255,255,0.1)',
+      background: 'var(--s-bg)', border: '1px solid var(--s-border)',
       borderRadius: '8px', padding: '8px 12px',
     }}>
-      <p style={{ color: '#94A3B8', fontSize: '11px', marginBottom: '2px' }}>{label}</p>
+      <p style={{ color: 'var(--s-muted)', fontSize: '11px', marginBottom: '2px' }}>{label}</p>
       <p style={{ color: '#3B82F6', fontSize: '15px', fontWeight: 700 }}>{payload[0].value}%</p>
     </div>
   )
@@ -194,13 +194,13 @@ function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, t
     <motion.div variants={staggerItem}>
       <DashCard>
         <div className="flex items-start justify-between mb-3">
-          <p className="text-sm text-slate-400 font-medium">{label}</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--s-muted)' }}>{label}</p>
           <div className="p-2 rounded-lg" style={{ background: 'rgba(59,130,246,0.1)' }}>
             <Icon className="size-4" style={{ color: '#3B82F6' }} />
           </div>
         </div>
 
-        <p className="text-3xl font-bold text-white mb-3 tabular-nums">
+        <p className="text-3xl font-bold mb-3 tabular-nums" style={{ color: 'var(--s-text)' }}>
           {count}{suffix}
         </p>
 
@@ -218,7 +218,7 @@ function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, t
             <TrendIcon className="size-3" />
             {trendVal}
           </span>
-          <span className="text-xs text-slate-500">bu oy</span>
+          <span className="text-xs" style={{ color: 'var(--s-muted)' }}>bu oy</span>
         </div>
       </DashCard>
     </motion.div>
@@ -253,8 +253,8 @@ function AdminDashboard() {
           <DashCard>
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="text-sm font-semibold text-white">Davomat trendi</h2>
-                <p className="text-xs text-slate-400 mt-0.5">So'nggi 7 kun</p>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Davomat trendi</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>So'nggi 7 kun</p>
               </div>
               <Badge
                 className="text-xs px-2 py-0.5"
@@ -272,16 +272,16 @@ function AdminDashboard() {
                     <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}    />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <CartesianGrid stroke="var(--s-border)" vertical={false} />
                 <XAxis
                   dataKey="day"
-                  tick={{ fill: '#64748B', fontSize: 11 }}
+                  tick={{ fill: 'var(--s-muted)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   domain={[80, 100]}
-                  tick={{ fill: '#64748B', fontSize: 11 }}
+                  tick={{ fill: 'var(--s-muted)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={v => `${v}%`}
@@ -294,7 +294,7 @@ function AdminDashboard() {
                   strokeWidth={2.5}
                   fill="url(#areaGrad)"
                   dot={{ fill: '#3B82F6', r: 3, strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: '#3B82F6', stroke: '#0F172A', strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: '#3B82F6', stroke: 'var(--s-bg)', strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -306,8 +306,8 @@ function AdminDashboard() {
           <DashCard className="h-full">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-semibold text-white">Xavf ostidagi o'quvchilar</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Top 5 · qoldirish ehtimoli</p>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Xavf ostidagi o'quvchilar</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>Top 5 · qoldirish ehtimoli</p>
               </div>
               <AlertTriangle className="size-4" style={{ color: '#EF4444' }} />
             </div>
@@ -323,8 +323,8 @@ function AdminDashboard() {
                 >
                   <RiskRing score={s.score} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{s.name}</p>
-                    <p className="text-xs text-slate-400 truncate">{s.course} · {s.absences} sinfdan qoldi</p>
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--s-text)' }}>{s.name}</p>
+                    <p className="text-xs truncate" style={{ color: 'var(--s-muted)' }}>{s.course} · {s.absences} sinfdan qoldi</p>
                   </div>
                 </motion.div>
               ))}
@@ -337,8 +337,8 @@ function AdminDashboard() {
       <motion.div {...fadeUp(0.4)}>
         <DashCard>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-white">So'nggi faoliyat</h2>
-            <span className="text-xs text-slate-400">10 ta voqea</span>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>So'nggi faoliyat</h2>
+            <span className="text-xs" style={{ color: 'var(--s-muted)' }}>10 ta voqea</span>
           </div>
 
           <div className="space-y-0.5">
@@ -351,7 +351,9 @@ function AdminDashboard() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.45 + i * 0.04 }}
-                  className="flex items-start gap-3 rounded-lg px-3 py-2.5 hover:bg-white/4 transition-colors group"
+                  className="flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors group"
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                 >
                   <div
                     className="size-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
@@ -360,13 +362,13 @@ function AdminDashboard() {
                     <Icon className="size-3.5" style={{ color }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white leading-snug">
+                    <p className="text-sm leading-snug" style={{ color: 'var(--s-text)' }}>
                       <span className="font-medium">{ev.actor}</span>
                       {' '}
-                      <span className="text-slate-300">{ev.msg}</span>
+                      <span style={{ color: 'var(--s-muted)' }}>{ev.msg}</span>
                     </p>
                   </div>
-                  <span className="text-xs text-slate-500 shrink-0 mt-0.5 tabular-nums">{ev.time}</span>
+                  <span className="text-xs shrink-0 mt-0.5 tabular-nums" style={{ color: 'var(--s-muted)' }}>{ev.time}</span>
                 </motion.div>
               )
             })}
@@ -381,8 +383,8 @@ function AdminDashboard() {
 function TeacherDashboard() {
   return (
     <motion.div className="space-y-6" {...fadeUp()}>
-      <h1 className="text-2xl font-semibold text-white">Mening kurslarim</h1>
-      <p className="text-slate-400 text-sm">Kurslar bo'limiga o'ting →</p>
+      <h1 className="text-2xl font-semibold" style={{ color: 'var(--s-text)' }}>Mening kurslarim</h1>
+      <p className="text-sm" style={{ color: 'var(--s-muted)' }}>Kurslar bo'limiga o'ting →</p>
     </motion.div>
   )
 }
@@ -391,8 +393,8 @@ function TeacherDashboard() {
 function StudentDashboard() {
   return (
     <motion.div className="space-y-6" {...fadeUp()}>
-      <h1 className="text-2xl font-semibold text-white">Mening ro'yxatlarim</h1>
-      <p className="text-slate-400 text-sm">Kurslar bo'limiga o'ting →</p>
+      <h1 className="text-2xl font-semibold" style={{ color: 'var(--s-text)' }}>Mening ro'yxatlarim</h1>
+      <p className="text-sm" style={{ color: 'var(--s-muted)' }}>Kurslar bo'limiga o'ting →</p>
     </motion.div>
   )
 }

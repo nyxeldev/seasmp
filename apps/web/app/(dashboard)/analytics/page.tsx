@@ -30,26 +30,26 @@ const fadeUp = (delay = 0) => ({
   transition: { duration: 0.4, ease: 'easeOut' as const, delay },
 })
 
-// ── Dark card shell ────────────────────────────────────────────────────────────
+// ── Card shell ────────────────────────────────────────────────────────────────
 function DC({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={`rounded-xl border p-5 ${className}`}
-      style={{ background: '#1E293B', borderColor: 'rgba(255,255,255,0.06)' }}>
+      style={{ background: 'var(--s-bg-card)', borderColor: 'var(--s-border)' }}>
       {children}
     </div>
   )
 }
 
-// ── Dark chart tooltip ────────────────────────────────────────────────────────
+// ── Chart tooltip ─────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DarkTooltip({ active, payload, label, unit = '' }: any) {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background: '#0F172A', border: '1px solid rgba(255,255,255,0.1)',
+      background: 'var(--s-bg)', border: '1px solid var(--s-border)',
       borderRadius: '8px', padding: '8px 12px', fontSize: '12px',
     }}>
-      {label && <p style={{ color: '#94A3B8', marginBottom: '4px' }}>{label}</p>}
+      {label && <p style={{ color: 'var(--s-muted)', marginBottom: '4px' }}>{label}</p>}
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color ?? '#3B82F6', fontWeight: 600 }}>
           {p.name ? `${p.name}: ` : ''}{p.value}{unit}
@@ -98,7 +98,7 @@ function RiskBar({ score }: { score: number }) {
   const color = riskColor(score)
   return (
     <div className="flex items-center gap-2 w-full">
-      <div className="flex-1 h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+      <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--s-border)' }}>
         <div className="h-1.5 rounded-full transition-all" style={{ width: `${score}%`, background: color }} />
       </div>
       <span className="text-xs font-medium tabular-nums w-9 text-right" style={{ color }}>{score}%</span>
@@ -196,23 +196,25 @@ function AdminAnalytics() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-white">Analytics</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Analytics</h1>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>
             {pyOffline ? '⚠ Analytics servisi offline — mock data ko\'rsatilmoqda' : 'Real-time tahlil'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Date range */}
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg text-xs text-white outline-none"
-            style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.1)' }} />
-          <span className="text-xs text-slate-500">—</span>
+            className="px-2.5 py-1.5 rounded-lg text-xs outline-none"
+            style={{ background: 'var(--s-bg-card)', border: '1px solid var(--s-border)', color: 'var(--s-text)' }} />
+          <span className="text-xs" style={{ color: 'var(--s-muted)' }}>—</span>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg text-xs text-white outline-none"
-            style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.1)' }} />
+            className="px-2.5 py-1.5 rounded-lg text-xs outline-none"
+            style={{ background: 'var(--s-bg-card)', border: '1px solid var(--s-border)', color: 'var(--s-text)' }} />
           <button onClick={loadHighRisk} disabled={riskLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-300 border transition-colors hover:bg-slate-700/50"
-            style={{ borderColor: 'rgba(255,255,255,0.12)' }}>
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors"
+            style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)' }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
             <RefreshCw className={`size-3.5 ${riskLoading ? 'animate-spin' : ''}`} /> Yangilash
           </button>
           <button onClick={triggerCalc} disabled={triggering || pyOffline}
@@ -234,13 +236,13 @@ function AdminAnalytics() {
             variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' as const } } }}>
             <DC>
               <div className="flex items-start justify-between mb-3">
-                <p className="text-xs font-medium text-slate-400">{label}</p>
+                <p className="text-xs font-medium" style={{ color: 'var(--s-muted)' }}>{label}</p>
                 <div className="p-2 rounded-lg" style={{ background: `${color}18` }}>
                   <Icon className="size-4" style={{ color }} />
                 </div>
               </div>
-              <p className="text-3xl font-bold text-white tabular-nums mb-2">
-                {value}<span className="text-base font-normal text-slate-400 ml-0.5">{unit}</span>
+              <p className="text-3xl font-bold tabular-nums mb-2" style={{ color: 'var(--s-text)' }}>
+                {value}<span className="text-base font-normal ml-0.5" style={{ color: 'var(--s-muted)' }}>{unit}</span>
               </p>
               <div className="flex items-center gap-1 text-xs" style={{ color: trendUp ? '#22C55E' : '#F59E0B' }}>
                 {trendUp ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
@@ -255,11 +257,11 @@ function AdminAnalytics() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <motion.div {...fadeUp(0.2)}>
           <DC>
-            <h2 className="text-sm font-semibold text-white mb-1">Baholar (baholash turiga ko'ra)</h2>
-            <p className="text-xs text-slate-400 mb-4">O'rtacha ball, 100 dan</p>
+            <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--s-text)' }}>Baholar (baholash turiga ko'ra)</h2>
+            <p className="text-xs mb-4" style={{ color: 'var(--s-muted)' }}>O'rtacha ball, 100 dan</p>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={GRADES_DATA} margin={{ left: -20, right: 4, top: 4, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <CartesianGrid stroke="var(--s-border)" vertical={false} />
                 <XAxis dataKey="name" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 100]} tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<DarkTooltip unit="" />} />
@@ -276,8 +278,8 @@ function AdminAnalytics() {
 
         <motion.div {...fadeUp(0.25)}>
           <DC>
-            <h2 className="text-sm font-semibold text-white mb-1">Davomat dinamikasi</h2>
-            <p className="text-xs text-slate-400 mb-4">Haftalik davomat foizi</p>
+            <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--s-text)' }}>Davomat dinamikasi</h2>
+            <p className="text-xs mb-4" style={{ color: 'var(--s-muted)' }}>Haftalik davomat foizi</p>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={ATT_TREND} margin={{ left: -20, right: 4, top: 4, bottom: 0 }}>
                 <defs>
@@ -286,14 +288,14 @@ function AdminAnalytics() {
                     <stop offset="100%" stopColor="#22C55E" stopOpacity={0}   />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <CartesianGrid stroke="var(--s-border)" vertical={false} />
                 <XAxis dataKey="week" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis domain={[80, 100]} tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false}
                   tickFormatter={v => `${v}%`} />
                 <Tooltip content={<DarkTooltip unit="%" />} />
                 <Line type="monotone" dataKey="pct" stroke="#22C55E" strokeWidth={2.5}
                   dot={{ fill: '#22C55E', r: 3, strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: '#22C55E', stroke: '#0F172A', strokeWidth: 2 }} />
+                  activeDot={{ r: 5, fill: '#22C55E', stroke: 'var(--s-bg)', strokeWidth: 2 }} />
               </LineChart>
             </ResponsiveContainer>
           </DC>
@@ -305,10 +307,10 @@ function AdminAnalytics() {
         <DC>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-white">O'qituvchilar KPI taqqoslamasi</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Asosiy ko'rsatkichlar bo'yicha</p>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>O'qituvchilar KPI taqqoslamasi</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>Asosiy ko'rsatkichlar bo'yicha</p>
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-400">
+            <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--s-muted)' }}>
               <span className="flex items-center gap-1.5">
                 <span className="size-2.5 rounded-full inline-block" style={{ background: '#3B82F6' }} />
                 Toshmatov
@@ -325,7 +327,7 @@ function AdminAnalytics() {
           </div>
           <ResponsiveContainer width="100%" height={280}>
             <RadarChart data={RADAR_DATA} margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
-              <PolarGrid stroke="rgba(255,255,255,0.08)" />
+              <PolarGrid stroke="var(--s-border)" />
               <PolarAngleAxis dataKey="metric" tick={{ fill: '#64748B', fontSize: 11 }} />
               <Radar name="Toshmatov" dataKey="A" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.12} strokeWidth={2} />
               <Radar name="Rahimov"   dataKey="B" stroke="#22C55E" fill="#22C55E" fillOpacity={0.12} strokeWidth={2} />
@@ -342,7 +344,7 @@ function AdminAnalytics() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <AlertTriangle className="size-4" style={{ color: '#EF4444' }} />
-              <h2 className="text-sm font-semibold text-white">Qoldirish xavfi — talabalar</h2>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Qoldirish xavfi — talabalar</h2>
             </div>
             <Link href="/analytics/risk">
               <button className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
@@ -353,7 +355,7 @@ function AdminAnalytics() {
 
           <div className="space-y-0">
             {/* Table header */}
-            <div className="grid grid-cols-12 gap-3 px-3 py-2 text-[11px] font-medium text-slate-500 uppercase tracking-wide">
+            <div className="grid grid-cols-12 gap-3 px-3 py-2 text-[11px] font-medium uppercase tracking-wide" style={{ color: 'var(--s-muted)' }}>
               <div className="col-span-4">Talaba</div>
               <div className="col-span-3">Kurs</div>
               <div className="col-span-1 text-center">Davomat</div>
@@ -367,19 +369,21 @@ function AdminAnalytics() {
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.4 + i * 0.05 }}
-                className="grid grid-cols-12 gap-3 px-3 py-3 rounded-lg hover:bg-white/3 transition-colors items-center border-t"
-                style={{ borderColor: 'rgba(255,255,255,0.04)' }}
+                className="grid grid-cols-12 gap-3 px-3 py-3 rounded-lg transition-colors items-center border-t"
+                style={{ borderColor: 'var(--s-border)' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
               >
                 <div className="col-span-4 flex items-center gap-2 min-w-0">
-                  <div className="size-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                    style={{ background: riskColor(r.score) + '33' }}>
+                  <div className="size-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                    style={{ background: riskColor(r.score) + '33', color: 'var(--s-text)' }}>
                     {r.name.split(' ').map(n => n[0]).join('')}
                   </div>
-                  <span className="text-sm font-medium text-white truncate">{r.name}</span>
+                  <span className="text-sm font-medium truncate" style={{ color: 'var(--s-text)' }}>{r.name}</span>
                 </div>
-                <div className="col-span-3 text-xs text-slate-400 truncate">{r.course}</div>
+                <div className="col-span-3 text-xs truncate" style={{ color: 'var(--s-muted)' }}>{r.course}</div>
                 <div className="col-span-1 text-center">
-                  <span className={`text-xs font-medium ${r.att < 70 ? 'text-red-400' : 'text-slate-300'}`}>
+                  <span className="text-xs font-medium" style={{ color: r.att < 70 ? '#EF4444' : 'var(--s-text)' }}>
                     {r.att}%
                   </span>
                 </div>
@@ -451,8 +455,8 @@ function TeacherAnalytics({ userId }: { userId: string }) {
     <div className="space-y-5">
       <div className="flex items-center gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-white">Kurs Analitikasi</h1>
-          <p className="text-xs text-slate-400 mt-0.5">O'qituvchi ko'rinishi</p>
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Kurs Analitikasi</h1>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>O'qituvchi ko'rinishi</p>
         </div>
         <Select value={courseId} onValueChange={v => setCourseId(v ?? '')}>
           <SelectTrigger className="w-56"><SelectValue placeholder="Kursni tanlang" /></SelectTrigger>
@@ -461,8 +465,10 @@ function TeacherAnalytics({ userId }: { userId: string }) {
           </SelectContent>
         </Select>
         <button onClick={computeScores} disabled={scoring || !courseId}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-300 border transition-colors hover:bg-slate-700/50 disabled:opacity-50"
-          style={{ borderColor: 'rgba(255,255,255,0.12)' }}>
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors disabled:opacity-50"
+          style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)' }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
           <RefreshCw className={`size-3.5 ${scoring ? 'animate-spin' : ''}`} />
           {scoring ? 'Navbatda...' : 'Xavfni hisoblash'}
         </button>
@@ -472,8 +478,8 @@ function TeacherAnalytics({ userId }: { userId: string }) {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {kpiCards.map(({ label, value }) => (
             <DC key={label}>
-              <p className="text-xs text-slate-400 mb-2">{label}</p>
-              <p className="text-2xl font-bold text-white">{value}</p>
+              <p className="text-xs mb-2" style={{ color: 'var(--s-muted)' }}>{label}</p>
+              <p className="text-2xl font-bold" style={{ color: 'var(--s-text)' }}>{value}</p>
             </DC>
           ))}
         </div>
@@ -481,7 +487,7 @@ function TeacherAnalytics({ userId }: { userId: string }) {
 
       {pyOffline && (
         <DC>
-          <p className="text-sm text-slate-400 text-center">
+          <p className="text-sm text-center" style={{ color: 'var(--s-muted)' }}>
             Analytics servisi offline —{' '}
             <code className="text-xs text-blue-400 font-mono">.\apps\analytics\start.ps1</code>
           </p>
@@ -492,10 +498,10 @@ function TeacherAnalytics({ userId }: { userId: string }) {
         <div className="space-y-4">
           {pyStats.weekly_attendance.length > 0 && (
             <DC>
-              <h2 className="text-sm font-semibold text-white mb-4">Haftalik davomat trendi</h2>
+              <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--s-text)' }}>Haftalik davomat trendi</h2>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={pyStats.weekly_attendance} margin={{ left: -20 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
+                  <CartesianGrid stroke="var(--s-border)" vertical={false} />
                   <XAxis dataKey="week" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis domain={[0, 100]} tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false}
                     tickFormatter={v => `${v}%`} />
@@ -509,7 +515,7 @@ function TeacherAnalytics({ userId }: { userId: string }) {
 
           {pyStats.at_risk_students.length > 0 && (
             <DC>
-              <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+              <h2 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--s-text)' }}>
                 <AlertTriangle className="size-4 text-red-400" />
                 Xavf ostidagi talabalar ({pyStats.at_risk_students.length})
               </h2>
@@ -517,8 +523,8 @@ function TeacherAnalytics({ userId }: { userId: string }) {
                 {pyStats.at_risk_students.map(s => (
                   <div key={s.enrollmentId}
                     className="flex items-center gap-3 py-2 border-b last:border-0"
-                    style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                    <span className="text-sm font-medium text-white flex-1">{s.name}</span>
+                    style={{ borderColor: 'var(--s-border)' }}>
+                    <span className="text-sm font-medium flex-1" style={{ color: 'var(--s-text)' }}>{s.name}</span>
                     <RiskBar score={Math.round(s.riskScore * 100)} />
                     <Link href={`/students/${s.id}`}>
                       <button className="text-xs text-blue-400 hover:text-blue-300 transition-colors shrink-0">Ko'rish</button>
@@ -540,7 +546,7 @@ export default function AnalyticsPage() {
   if (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') return <AdminAnalytics />
   if (user?.role === 'TEACHER') return <TeacherAnalytics userId={user.id} />
   return (
-    <div className="py-16 text-center text-slate-400 text-sm">
+    <div className="py-16 text-center text-sm" style={{ color: 'var(--s-muted)' }}>
       Analytics sizning rolingiz uchun mavjud emas.
     </div>
   )

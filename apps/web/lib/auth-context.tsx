@@ -36,12 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken')
-    if (token) {
-      refresh().finally(() => setLoading(false))
-    } else {
-      setLoading(false)
-    }
+    // Always attempt refresh — the httpOnly cookie may still be valid even
+    // if the localStorage access token is missing (e.g. after browser restart)
+    refresh().finally(() => setLoading(false))
   }, [refresh])
 
   const login = async (email: string, password: string): Promise<LoginResult> => {

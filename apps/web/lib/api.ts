@@ -5,14 +5,36 @@ function getToken() {
   return localStorage.getItem('accessToken')
 }
 
-export function setTokens(access: string, refresh: string) {
+export function setTokens(access: string, refresh?: string) {
   localStorage.setItem('accessToken', access)
-  localStorage.setItem('refreshToken', refresh)
+  if (refresh) localStorage.setItem('refreshToken', refresh)
 }
 
 export function clearTokens() {
   localStorage.removeItem('accessToken')
   localStorage.removeItem('refreshToken')
+}
+
+let refreshingPromise: Promise<string | null> | null = null
+
+async function tryRefresh(): Promise<string | null> {
+  if (refreshingPromise) return refreshingPromise
+  refreshingPromise = (async () => {
+    try {
+      const res = await fetch(`${BASE}/v1/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) { clearTokens(); return null }
+      const json = await res.json()
+      const newToken = json?.data?.accessToken
+      if (newToken) { localStorage.setItem('accessToken', newToken); return newToken }
+      clearTokens(); return null
+    } catch { clearTokens(); return null }
+    finally { refreshingPromise = null }
+  })()
+  return refreshingPromise
 }
 
 async function request<T>(
@@ -22,14 +44,30 @@ async function request<T>(
   token?: string | null,
 ): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const tok = token !== undefined ? token : getToken()
+  let tok = token !== undefined ? token : getToken()
   if (tok) headers['Authorization'] = `Bearer ${tok}`
 
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
+    credentials: 'include',
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
+
+  // Auto-refresh on 401 (only for authenticated paths)
+  if (res.status === 401 && token === undefined && path !== '/v1/auth/login') {
+    const newToken = await tryRefresh()
+    if (newToken) {
+      const retryHeaders: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${newToken}` }
+      const retry = await fetch(`${BASE}${path}`, {
+        method, headers: retryHeaders, credentials: 'include',
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      })
+      const retryJson = await retry.json().catch(() => ({}))
+      if (!retry.ok) throw new ApiError(retry.status, retryJson?.error?.message ?? `HTTP ${retry.status}`, retryJson?.error?.code)
+      return retryJson
+    }
+  }
 
   const json = await res.json().catch(() => ({}))
 
@@ -38,6 +76,23 @@ async function request<T>(
     throw new ApiError(res.status, msg, json?.error?.code)
   }
 
+  return json
+}
+
+async function uploadFile<T>(path: string, formData: FormData): Promise<T> {
+  const tok = getToken()
+  const headers: Record<string, string> = {}
+  if (tok) headers['Authorization'] = `Bearer ${tok}`
+
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: formData,
+  })
+
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new ApiError(res.status, json?.error?.message ?? `HTTP ${res.status}`, json?.error?.code)
   return json
 }
 
@@ -216,6 +271,7 @@ export interface User {
   role: UserRole
   isActive: boolean
   createdAt: string
+  avatarUrl?: string
 }
 
 export interface Course {

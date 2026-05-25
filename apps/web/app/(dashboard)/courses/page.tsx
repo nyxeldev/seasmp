@@ -30,7 +30,7 @@ function ProgressRing({ pct, color }: { pct: number; color: string }) {
   const circ = 2 * Math.PI * R
   return (
     <svg width="40" height="40" viewBox="0 0 40 40" className="shrink-0">
-      <circle cx={cx} cy={cy} r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3.5" />
+      <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--s-border)" strokeWidth="3.5" />
       <circle
         cx={cx} cy={cy} r={R} fill="none" stroke={color} strokeWidth="3.5"
         strokeDasharray={circ} strokeDashoffset={circ - (pct / 100) * circ}
@@ -68,7 +68,7 @@ function CourseCard({ course, canManage, isAdmin, onStatusChange }: {
   return (
     <div
       className="rounded-xl border p-5 flex flex-col gap-4 hover:border-blue-500/30 transition-colors"
-      style={{ background: '#1E293B', borderColor: 'rgba(255,255,255,0.06)' }}
+      style={{ background: 'var(--s-bg-card)', borderColor: 'var(--s-border)' }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -76,21 +76,21 @@ function CourseCard({ course, canManage, isAdmin, onStatusChange }: {
             style={{ background: 'rgba(59,130,246,0.1)', color: '#60A5FA' }}>
             {course.category}
           </span>
-          <h3 className="text-sm font-semibold text-white leading-snug line-clamp-2">{course.title}</h3>
+          <h3 className="text-sm font-semibold leading-snug line-clamp-2" style={{ color: 'var(--s-text)' }}>{course.title}</h3>
         </div>
         <ProgressRing pct={fillPct} color={ringColor} />
       </div>
 
       <div className="flex items-center gap-2">
         <TeacherAvatar name={teacherName} />
-        <span className="text-xs text-slate-400 truncate">{teacherName}</span>
+        <span className="text-xs truncate" style={{ color: 'var(--s-muted)' }}>{teacherName}</span>
       </div>
 
       <div className="flex items-center justify-between pt-3 border-t"
-        style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        style={{ borderColor: 'var(--s-border)' }}>
         <div className="flex items-center gap-1.5">
-          <Users className="size-3.5 text-slate-500" />
-          <span className="text-xs text-slate-400">{enrolled} / {course.maxStudents}</span>
+          <Users className="size-3.5" style={{ color: 'var(--s-muted)' }} />
+          <span className="text-xs" style={{ color: 'var(--s-muted)' }}>{enrolled} / {course.maxStudents}</span>
         </div>
         <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
           style={{ color: status.color, background: status.bg }}>
@@ -112,7 +112,10 @@ function CourseCard({ course, canManage, isAdmin, onStatusChange }: {
           )}
           {isAdmin && course.status !== 'ARCHIVED' && (
             <button onClick={() => onStatusChange(course.id, 'ARCHIVED')}
-              className="text-xs px-2 py-0.5 rounded text-slate-400 hover:bg-slate-700/50 transition-colors">
+              className="text-xs px-2 py-0.5 rounded transition-colors"
+              style={{ color: 'var(--s-muted)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
               Arxivlash
             </button>
           )}
@@ -185,8 +188,8 @@ export default function CoursesPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-white">Kurslar</h1>
-          <p className="text-xs text-slate-400 mt-0.5">{courses.length} ta kurs</p>
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Kurslar</h1>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>{courses.length} ta kurs</p>
         </div>
 
         {canManage && (
@@ -282,16 +285,16 @@ export default function CoursesPage() {
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-52 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 pointer-events-none" style={{ color: 'var(--s-muted)' }} />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Kurs yoki o'qituvchi..."
-            className="w-full pl-9 pr-3 py-2 rounded-lg text-sm text-white placeholder:text-slate-500 outline-none transition-all"
-            style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.1)' }}
+            className="w-full pl-9 pr-3 py-2 rounded-lg text-sm outline-none transition-all"
+            style={{ background: 'var(--s-bg-card)', border: '1px solid var(--s-border)', color: 'var(--s-text)' }}
             onFocus={e => { e.currentTarget.style.borderColor = '#3B82F6' }}
-            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'var(--s-border)' }}
           />
         </div>
         <Select value={status} onValueChange={v => setStatus(v ?? 'ALL')}>
@@ -336,9 +339,9 @@ export default function CoursesPage() {
         </motion.div>
       ) : (
         <div className="rounded-xl border py-20 flex flex-col items-center gap-3"
-          style={{ background: '#1E293B', borderColor: 'rgba(255,255,255,0.06)' }}>
-          <BookOpen className="size-10 text-slate-600" />
-          <p className="text-sm text-slate-400">
+          style={{ background: 'var(--s-bg-card)', borderColor: 'var(--s-border)' }}>
+          <BookOpen className="size-10" style={{ color: 'var(--s-muted)' }} />
+          <p className="text-sm" style={{ color: 'var(--s-muted)' }}>
             {search ? 'Qidiruvga mos kurs topilmadi' : 'Kurslar mavjud emas'}
           </p>
         </div>

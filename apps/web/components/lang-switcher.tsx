@@ -1,69 +1,93 @@
 'use client'
-
 import { useState, useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useLocale } from '@/lib/locale-context'
+import { useLocaleStore } from '@/store/locale'
+import type { Locale } from '@/lib/i18n'
 
-const LANGS = [
-  { code: 'uz', label: "O'zbek", flag: '🇺🇿' },
-  { code: 'ru', label: 'Русский', flag: '🇷🇺' },
-  { code: 'en', label: 'English', flag: '🇬🇧' },
-] as const
+const LANGS: { code: Locale; label: string; short: string; flag: string }[] = [
+  { code: 'uz', label: "O'zbekcha", short: 'UZ', flag: '🇺🇿' },
+  { code: 'ru', label: 'Русский',   short: 'RU', flag: '🇷🇺' },
+  { code: 'en', label: 'English',   short: 'EN', flag: '🇬🇧' },
+]
 
-type Locale = 'uz' | 'ru' | 'en'
-
-export function LangSwitcher() {
-  const { locale, setLocale } = useLocale()
-  const [open, setOpen] = useState(false)
+export function LanguageSwitcher() {
+  const { locale, setLocale } = useLocaleStore()
+  const [open, setOpen]       = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const current = LANGS.find(l => l.code === locale) ?? LANGS[0]
+  const active = LANGS.find(l => l.code === locale) ?? LANGS[0]
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-700/50 transition-colors outline-none select-none"
+        style={{
+          display:     'flex',
+          alignItems:  'center',
+          gap:         '6px',
+          padding:     '6px 10px',
+          borderRadius: '8px',
+          border:      '1px solid var(--color-border)',
+          background:  'transparent',
+          cursor:      'pointer',
+          fontSize:    '13px',
+          fontWeight:  500,
+          color:       'var(--color-text2)',
+        }}
       >
-        <span className="text-base leading-none">{current.flag}</span>
-        <span className="hidden sm:block font-medium text-xs">{current.code.toUpperCase()}</span>
+        <span style={{ fontSize: '16px', lineHeight: 1 }}>{active.flag}</span>
+        <span style={{ color: 'var(--color-text1)' }}>{active.short}</span>
+        <span style={{ fontSize: '10px', opacity: 0.5 }}>▾</span>
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.95 }}
-            transition={{ duration: 0.15, ease: 'easeOut' as const }}
-            className="absolute right-0 top-full mt-1.5 w-36 rounded-lg border overflow-hidden z-50"
-            style={{ background: '#1E293B', borderColor: 'rgba(255,255,255,0.1)' }}
-          >
-            {LANGS.map(lang => (
-              <button
-                key={lang.code}
-                onClick={() => { setLocale(lang.code as Locale); setOpen(false) }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700/50 transition-colors text-left"
-                style={locale === lang.code ? { color: '#fff', background: 'rgba(59,130,246,0.15)' } : {}}
-              >
-                <span className="text-base">{lang.flag}</span>
-                <span>{lang.label}</span>
-                {locale === lang.code && (
-                  <span className="ml-auto size-1.5 rounded-full bg-blue-400 shrink-0" />
-                )}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {open && (
+        <div style={{
+          position:     'absolute',
+          right:        0,
+          top:          'calc(100% + 8px)',
+          minWidth:     '160px',
+          borderRadius: '12px',
+          border:       '1px solid var(--color-border)',
+          background:   'var(--dropdown-bg, var(--color-card))',
+          boxShadow:    '0 8px 24px rgba(0,0,0,0.12)',
+          overflow:     'hidden',
+          zIndex:       9999,
+        }}>
+          {LANGS.map(lang => (
+            <button
+              key={lang.code}
+              onClick={() => { setLocale(lang.code); setOpen(false) }}
+              style={{
+                width:       '100%',
+                display:     'flex',
+                alignItems:  'center',
+                gap:         '10px',
+                padding:     '10px 16px',
+                border:      'none',
+                background:  locale === lang.code ? 'rgba(59,130,246,0.08)' : 'transparent',
+                cursor:      'pointer',
+                fontSize:    '13px',
+                textAlign:   'left',
+                color:       locale === lang.code ? '#3b82f6' : 'var(--color-text1)',
+                fontWeight:  locale === lang.code ? 500 : 400,
+              }}
+            >
+              <span style={{ fontSize: '18px', lineHeight: 1 }}>{lang.flag}</span>
+              <span>{lang.label}</span>
+              {locale === lang.code && (
+                <span style={{ marginLeft: 'auto', color: '#3b82f6' }}>✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
