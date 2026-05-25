@@ -15,6 +15,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Shield, AlertTriangle, Users, Ban, RefreshCw, CheckCircle, ExternalLink } from 'lucide-react'
+import { useLocale } from '@/store/locale'
 
 // ─── Severity helpers ─────────────────────────────────────────────────────────
 const SEV_COLORS: Record<AlertSeverity, string> = {
@@ -52,6 +53,7 @@ export default function SecurityPage() {
 }
 
 function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
+  const { t } = useLocale()
   const [stats, setStats]       = useState<AlertStats | null>(null)
   const [alerts, setAlerts]     = useState<SecurityAlert[]>([])
   const [sessions, setSessions] = useState<ActiveSession[]>([])
@@ -118,22 +120,22 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
 
   // KPI cards
   const kpiItems = stats ? [
-    { label: 'Bugungi alertlar',  value: stats.todayTotal,  icon: Shield,        color: 'text-blue-600' },
-    { label: 'Hal qilinmagan',    value: stats.unresolved,  icon: AlertTriangle, color: 'text-red-600' },
-    { label: 'Bloklangan IP lar', value: stats.blockedIps,  icon: Ban,           color: 'text-orange-600' },
-    { label: 'Aktiv sessionlar',  value: sessions.length,   icon: Users,         color: 'text-green-600' },
+    { label: t('security.todayAlerts'),    value: stats.todayTotal, icon: Shield,        color: 'text-blue-600' },
+    { label: t('security.unresolved'),     value: stats.unresolved, icon: AlertTriangle, color: 'text-red-600' },
+    { label: t('security.blockedIPs'),     value: stats.blockedIps, icon: Ban,           color: 'text-orange-600' },
+    { label: t('security.activeSessions'), value: sessions.length,  icon: Users,         color: 'text-green-600' },
   ] : []
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <Shield className="size-6" /> Xavfsizlik Dashboard
+          <Shield className="size-6" /> {t('security.title')}
         </h1>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => { loadStats(); loadAlerts(); loadSessions() }} disabled={loading}>
             <RefreshCw className={`size-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
-            Yangilash
+            {t('attendance.refresh')}
           </Button>
           <Link href="/security/audit">
             <Button variant="outline" size="sm">

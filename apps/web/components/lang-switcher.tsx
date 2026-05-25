@@ -30,9 +30,9 @@ function GBFlag() {
   return (
     <svg width="20" height="14" viewBox="0 0 20 14" style={{ borderRadius: '2px', display: 'block' }}>
       <rect width="20" height="14" fill="#012169"/>
-      <path d="M0 0 L20 14 M20 0 L0 14" stroke="white" strokeWidth="3"/>
-      <path d="M0 0 L20 14 M20 0 L0 14" stroke="#C8102E" strokeWidth="1.5"/>
-      <path d="M10 0 V14 M0 7 H20" stroke="white" strokeWidth="4"/>
+      <path d="M0 0 L20 14 M20 0 L0 14" stroke="white" strokeWidth="2.8"/>
+      <path d="M0 0 L20 14 M20 0 L0 14" stroke="#C8102E" strokeWidth="1.6"/>
+      <path d="M10 0 V14 M0 7 H20" stroke="white" strokeWidth="4.2"/>
       <path d="M10 0 V14 M0 7 H20" stroke="#C8102E" strokeWidth="2.5"/>
     </svg>
   )

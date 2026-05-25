@@ -27,25 +27,34 @@ function fmt(d: Date) {
   return d.toLocaleDateString('uz-UZ', { month: 'short', day: 'numeric' })
 }
 
-const STATUS_META: Record<string, { label: string; color: string; bg: string; Icon: React.ElementType<{ className?: string }> }> = {
-  PRESENT: { label: 'Keldi',      color: '#22C55E', bg: 'rgba(34,197,94,0.12)',  Icon: CheckCircle  },
-  ABSENT:  { label: 'Kelmadi',    color: '#EF4444', bg: 'rgba(239,68,68,0.12)', Icon: XCircle      },
-  LATE:    { label: 'Kech keldi', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)', Icon: AlertCircle  },
-}
-
 const LEGEND = [
-  { cls: 'heat-none',  label: "Dars yo'q" },
-  { cls: 'heat-zero',  label: '0%'        },
-  { cls: 'heat-low',   label: '<50%'      },
-  { cls: 'heat-med',   label: '<70%'      },
-  { cls: 'heat-good',  label: '<90%'      },
-  { cls: 'heat-great', label: '90%+'      },
+  { cls: 'heat-none',  key: 'heat-none'  as const },
+  { cls: 'heat-zero',  key: 'heat-zero'  as const },
+  { cls: 'heat-low',   key: 'heat-low'   as const },
+  { cls: 'heat-med',   key: 'heat-med'   as const },
+  { cls: 'heat-good',  key: 'heat-good'  as const },
+  { cls: 'heat-great', key: 'heat-great' as const },
 ]
+
+const LEGEND_LABELS: Record<string, { uz: string; ru: string; en: string }> = {
+  'heat-none':  { uz: "Dars yo'q", ru: 'Нет урока', en: 'No class' },
+  'heat-zero':  { uz: '0%',        ru: '0%',         en: '0%'       },
+  'heat-low':   { uz: '<50%',      ru: '<50%',        en: '<50%'     },
+  'heat-med':   { uz: '<70%',      ru: '<70%',        en: '<70%'     },
+  'heat-good':  { uz: '<90%',      ru: '<90%',        en: '<90%'     },
+  'heat-great': { uz: '90%+',      ru: '90%+',        en: '90%+'     },
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AttendancePage() {
   const { user } = useAuth()
-  const { t }    = useLocale()
+  const { t, locale } = useLocale()
+
+  const STATUS_META: Record<string, { label: string; color: string; bg: string; Icon: React.ElementType<{ className?: string }> }> = {
+    PRESENT: { label: t('attendance.present'), color: '#22C55E', bg: 'rgba(34,197,94,0.12)',  Icon: CheckCircle  },
+    ABSENT:  { label: t('attendance.absent'),  color: '#EF4444', bg: 'rgba(239,68,68,0.12)', Icon: XCircle      },
+    LATE:    { label: t('attendance.late'),    color: '#F59E0B', bg: 'rgba(245,158,11,0.1)', Icon: AlertCircle  },
+  }
   const [records, setRecords]         = useState<Attendance[]>([])
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [courses, setCourses]         = useState<Course[]>([])
@@ -157,7 +166,7 @@ export default function AttendancePage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ paddingBottom: '80px' }}>
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -175,12 +184,12 @@ export default function AttendancePage() {
               <Plus className="size-4" /> {t('attendance.mark')}
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>Davomat belgilash</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t('attendance.markTitle')}</DialogTitle></DialogHeader>
               <form onSubmit={mark} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <Label>Talaba ro'yxati</Label>
+                  <Label>{t('attendance.enrollLabel')}</Label>
                   <Select value={form.enrollmentId} onValueChange={v => setForm(f => ({...f, enrollmentId: v ?? ''}))}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Talabani tanlang" /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={t('attendance.selectStudent')} /></SelectTrigger>
                     <SelectContent>
                       {enrollments.map(e => (
                         <SelectItem key={e.id} value={e.id}>
@@ -191,12 +200,12 @@ export default function AttendancePage() {
                   </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>Dars sanasi</Label>
+                  <Label>{t('attendance.lessonDate')}</Label>
                   <Input type="date" value={form.lessonDate}
                     onChange={e => setForm(f => ({...f, lessonDate: e.target.value}))} required />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>Holat</Label>
+                  <Label>{t('common.status')}</Label>
                   <Select value={form.status} onValueChange={v => setForm(f => ({...f, status: v ?? ''}))}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -220,7 +229,7 @@ export default function AttendancePage() {
         <Select value={selectedCourse} onValueChange={v => setSelectedCourse(v ?? 'ALL')}>
           <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">Barcha kurslar</SelectItem>
+            <SelectItem value="ALL">{t('attendance.allCourses')}</SelectItem>
             {teacherCourses.map(c => (
               <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
             ))}
@@ -266,11 +275,13 @@ export default function AttendancePage() {
 
         {/* Legend */}
         <div className="flex items-center gap-4 mt-4 flex-wrap">
-          {LEGEND.map(({ cls, label }) => (
+          {LEGEND.map(({ cls, key }) => (
             <div key={cls} className="flex items-center gap-1.5">
               <div className={`heat-cell ${cls}`}
                 style={{ width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0 }} />
-              <span style={{ fontSize: '11px', color: 'var(--s-muted)' }}>{label}</span>
+              <span style={{ fontSize: '11px', color: 'var(--s-muted)' }}>
+                {LEGEND_LABELS[key]?.[locale] ?? key}
+              </span>
             </div>
           ))}
         </div>
@@ -288,7 +299,7 @@ export default function AttendancePage() {
           style={{ borderColor: 'var(--s-border)' }}>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>
-              {todayRecs.length > 0 ? t('attendance.today') : "So'nggi dars davomati"}
+              {todayRecs.length > 0 ? t('attendance.today') : t('attendance.recentLesson')}
             </h2>
             {sessionDate && <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>{sessionDate}</p>}
           </div>
@@ -345,7 +356,7 @@ export default function AttendancePage() {
             )
           }) : (
             <div className="py-12 text-center">
-              <p className="text-sm" style={{ color: 'var(--s-muted)' }}>Davomat yozuvlari mavjud emas</p>
+              <p className="text-sm" style={{ color: 'var(--s-muted)' }}>{t('attendance.noRecords')}</p>
             </div>
           )}
         </div>
@@ -364,7 +375,7 @@ export default function AttendancePage() {
                 alignItems:   'center',
                 gap:          '8px',
                 padding:      '12px 20px',
-                background:   '#3b82f6',
+                background:   'linear-gradient(135deg, #3b82f6, #2563eb)',
                 color:        'white',
                 border:       'none',
                 borderRadius: '12px',
@@ -380,12 +391,12 @@ export default function AttendancePage() {
           </DialogTrigger>
 
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>QR Davomat</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t('attendance.qrTitle')}</DialogTitle></DialogHeader>
             <form onSubmit={generateQr} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Kurs</Label>
+                <Label>{t('attendance.course')}</Label>
                 <Select value={qrForm.courseId} onValueChange={v => setQrForm(f => ({...f, courseId: v ?? ''}))}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Kursni tanlang" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('attendance.selectCourse')} /></SelectTrigger>
                   <SelectContent>
                     {teacherCourses.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
@@ -394,12 +405,12 @@ export default function AttendancePage() {
                 </Select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>Dars sanasi</Label>
+                <Label>{t('attendance.lessonDate')}</Label>
                 <Input type="date" value={qrForm.lessonDate}
                   onChange={e => setQrForm(f => ({...f, lessonDate: e.target.value}))} required />
               </div>
               <Button type="submit" disabled={!qrForm.courseId || !qrForm.lessonDate || qrLoading}>
-                {qrLoading ? 'Yaratilmoqda...' : t('attendance.qr')}
+                {qrLoading ? t('attendance.generating') : t('attendance.qr')}
               </Button>
             </form>
 
@@ -427,11 +438,11 @@ export default function AttendancePage() {
                     disabled={qrLoading}
                     className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 transition-colors"
                   >
-                    <RefreshCw className="size-3.5" /> Yangilash
+                    <RefreshCw className="size-3.5" /> {t('attendance.refresh')}
                   </button>
                 </div>
                 <p className="text-xs text-center" style={{ color: 'var(--s-muted)' }}>
-                  Talabalar bu QR kodni skanerlashsin
+                  {t('attendance.qrScan')}
                 </p>
               </div>
             )}

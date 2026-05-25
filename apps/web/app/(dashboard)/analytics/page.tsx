@@ -153,30 +153,30 @@ function AdminAnalytics() {
 
   const metricCards = [
     {
-      label: "O'rtacha baho",
+      label: t('analytics.avgGrade'),
       value: '78.4',
       unit: '/100',
       icon: GraduationCap,
       trendUp: true,
-      trend: '+2.1 bu oy',
+      trend: `+2.1 ${t('common.thisMonth')}`,
       color: '#3B82F6',
     },
     {
-      label: 'Davomat trendi',
+      label: t('analytics.attendanceTrend'),
       value: avgAttendance === '—' ? '91.2' : avgAttendance,
       unit: '%',
       icon: CalendarCheck,
       trendUp: true,
-      trend: '+1.8% haftalik',
+      trend: `+1.8% ${t('common.thisWeek')}`,
       color: '#22C55E',
     },
     {
-      label: "O'rtacha xavf darajasi",
+      label: t('analytics.avgRisk'),
       value: avgRisk !== null ? String(avgRisk) : '34',
       unit: '%',
       icon: ShieldAlert,
       trendUp: false,
-      trend: pyOffline ? 'Real-time ma\'lumot yo\'q' : '-3% bu hafta',
+      trend: pyOffline ? t('common.noData') : `-3% ${t('common.thisWeek')}`,
       color: '#F59E0B',
     },
   ]
@@ -217,7 +217,7 @@ function AdminAnalytics() {
             style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)' }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-            <RefreshCw className={`size-3.5 ${riskLoading ? 'animate-spin' : ''}`} /> Yangilash
+            <RefreshCw className={`size-3.5 ${riskLoading ? 'animate-spin' : ''}`} /> {t('attendance.refresh')}
           </button>
           <button onClick={triggerCalc} disabled={triggering || pyOffline}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white seasmp-btn disabled:opacity-50"

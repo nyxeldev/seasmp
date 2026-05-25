@@ -14,29 +14,29 @@ import { LanguageSwitcher } from '@/components/lang-switcher'
 import { NotificationBell } from '@/components/notification-bell'
 import { GlobalSearch } from '@/components/global-search'
 import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
+import { useLocale } from '@/store/locale'
+import type { TKey } from '@/store/locale'
 
-// ── Breadcrumb ────────────────────────────────────────────────────────────────
-const LABELS: Record<string, string> = {
-  dashboard:   'Dashboard',
-  courses:     'Kurslar',
-  users:       "O'quvchilar",
-  attendance:  'Davomat',
-  analytics:   'Analytics',
-  security:    'Xavfsizlik',
-  settings:    'Sozlamalar',
-  enrollments: "Ro'yxatlar",
-  risk:        'Xavf tahlili',
-  audit:       'Audit log',
-  grades:      'Baholar',
+const SEGMENT_KEYS: Record<string, TKey> = {
+  dashboard:   'nav.dashboard',
+  courses:     'nav.courses',
+  users:       'nav.students',
+  attendance:  'nav.attendance',
+  analytics:   'nav.analytics',
+  security:    'nav.security',
+  settings:    'nav.settings',
 }
 
+// ── Breadcrumb ────────────────────────────────────────────────────────────────
 function Breadcrumb() {
   const pathname = usePathname()
+  const { t } = useLocale()
   const segments = pathname.split('/').filter(Boolean)
   return (
     <nav aria-label="breadcrumb" className="flex items-center gap-1 text-sm">
       {segments.map((seg, i) => {
-        const label  = LABELS[seg] ?? seg
+        const key = SEGMENT_KEYS[seg]
+        const label = key ? t(key) : seg
         const isLast = i === segments.length - 1
         return (
           <span key={i} className="flex items-center gap-1">
@@ -54,6 +54,7 @@ function Breadcrumb() {
 // ── Top header ────────────────────────────────────────────────────────────────
 function TopHeader() {
   const { user, logout } = useAuth()
+  const { t } = useLocale()
   if (!user) return null
 
   const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
@@ -92,11 +93,11 @@ function TopHeader() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
-              <User /> Profil
+              <User /> {t('settings.profile')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={logout}>
-              <LogOut /> Chiqish
+              <LogOut /> {t('common.logout')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

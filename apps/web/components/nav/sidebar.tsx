@@ -11,7 +11,6 @@ import type { TKey } from '@/store/locale'
 import {
   LayoutDashboard, BookOpen, Users, CalendarCheck,
   TrendingUp, ShieldCheck, Settings, LogOut, Shield,
-  PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
@@ -181,19 +180,6 @@ export function Sidebar() {
               </motion.span>
             )}
           </AnimatePresence>
-          <button onClick={toggle} aria-label="Toggle sidebar"
-            className="p-1.5 rounded-md transition-colors shrink-0 ml-auto"
-            style={{ color: 'var(--color-text3)' }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'
-              ;(e.currentTarget as HTMLElement).style.color = 'var(--color-text1)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.background = 'transparent'
-              ;(e.currentTarget as HTMLElement).style.color = 'var(--color-text3)'
-            }}>
-            {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-          </button>
         </div>
 
         {/* Nav */}
@@ -287,34 +273,40 @@ export function Sidebar() {
         </div>
       </motion.aside>
 
-      {/* Pull tab */}
+      {/* Pull tab — circular, positioned at top: 72px */}
       <button
         onClick={toggle}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         style={{
           position:       'absolute',
-          right:          '-12px',
-          top:            '50%',
-          transform:      'translateY(-50%)',
-          width:          '24px',
-          height:         '48px',
+          right:          '-14px',
+          top:            '72px',
+          width:          '28px',
+          height:         '28px',
           background:     'var(--color-card)',
           border:         '1px solid var(--color-border)',
-          borderLeft:     'none',
-          borderRadius:   '0 8px 8px 0',
+          borderRadius:   '50%',
           cursor:         'pointer',
           display:        'flex',
           alignItems:     'center',
           justifyContent: 'center',
           zIndex:         10,
           color:          'var(--color-text2)',
-          fontSize:       '12px',
-          transition:     'background 0.2s',
+          fontSize:       '13px',
+          fontWeight:     600,
+          boxShadow:      '0 2px 8px rgba(0,0,0,0.12)',
+          transition:     'background 0.2s, box-shadow 0.2s',
         }}
-        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'}
-        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-card)'}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'
+          ;(e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.18)'
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLElement).style.background = 'var(--color-card)'
+          ;(e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'
+        }}
       >
-        {collapsed ? '›' : '‹'}
+        {collapsed ? '→' : '←'}
       </button>
     </div>
   )

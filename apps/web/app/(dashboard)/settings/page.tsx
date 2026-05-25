@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/lib/auth-context'
+import { useLocale } from '@/store/locale'
 import { securityApi, usersApi, type Session } from '@/lib/api'
 import { toast } from 'sonner'
 import {
@@ -138,12 +139,14 @@ function Toggle({ label, description, checked, onChange }: {
 }
 
 // ── Submit button ─────────────────────────────────────────────────────────────
-function SubmitBtn({ loading, saved, label = 'Saqlash' }: { loading?: boolean; saved?: boolean; label?: string }) {
+function SubmitBtn({ loading, saved, label }: { loading?: boolean; saved?: boolean; label?: string }) {
+  const { t } = useLocale()
+  const btnLabel = label ?? t('settings.save')
   return (
     <button type="submit" disabled={loading}
       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-60 seasmp-btn"
       style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
-      {loading ? <RefreshCw className="size-4 animate-spin" /> : saved ? <><Check className="size-4" /> Saqlandi</> : label}
+      {loading ? <RefreshCw className="size-4 animate-spin" /> : saved ? <><Check className="size-4" /> {t('settings.saved')}</> : btnLabel}
     </button>
   )
 }
@@ -284,6 +287,7 @@ type ProfileForm = z.infer<typeof profileSchema>
 
 function ProfileSection() {
   const { user, refresh } = useAuth()
+  const { t } = useLocale()
   const [saved, setSaved]       = useState(false)
   const [loading, setLoading]   = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(user?.avatarUrl)
@@ -316,7 +320,7 @@ function ProfileSection() {
   return (
     <motion.div {...fadeUp(0)} className="rounded-2xl border"
       style={{ background: 'var(--s-bg-card)', borderColor: 'var(--s-border)' }}>
-      <div style={{
+      <div className="settings-profile" style={{
         display: 'grid',
         gridTemplateColumns: 'clamp(160px, 20%, 200px) 1fr',
         gap: '32px',
@@ -342,21 +346,21 @@ function ProfileSection() {
             </span>
           </div>
           <p style={{ fontSize: '11px', color: 'var(--s-muted)', textAlign: 'center' }}>
-            PNG, JPG · max 2MB
+            {t('settings.avatarHint')}
           </p>
         </div>
 
         {/* Right: Form fields */}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Ism" error={errors.firstName?.message}
-              {...register('firstName')} placeholder="Ismingiz" />
-            <Field label="Familiya" error={errors.lastName?.message}
-              {...register('lastName')} placeholder="Familiyangiz" />
+            <Field label={t('settings.firstName')} error={errors.firstName?.message}
+              {...register('firstName')} placeholder={t('settings.firstName')} />
+            <Field label={t('settings.lastName')} error={errors.lastName?.message}
+              {...register('lastName')} placeholder={t('settings.lastName')} />
           </div>
-          <Field label="Email" type="email" error={errors.email?.message}
+          <Field label={t('settings.email')} type="email" error={errors.email?.message}
             {...register('email')} placeholder="email@example.com" />
-          <Field label="Telefon" {...register('phone')} placeholder="+998 90 000 00 00" />
+          <Field label={t('settings.phone')} {...register('phone')} placeholder="+998 90 000 00 00" />
           <div className="flex justify-end pt-1">
             <SubmitBtn loading={loading} saved={saved} />
           </div>
@@ -375,6 +379,7 @@ const pwSchema = z.object({
 type PwForm = z.infer<typeof pwSchema>
 
 function SecuritySection() {
+  const { t } = useLocale()
   const [saved, setSaved]     = useState(false)
   const [loading, setLoading] = useState(false)
   const [twoFa, setTwoFa]     = useState(false)
@@ -443,25 +448,25 @@ function SecuritySection() {
 
   return (
     <>
-      <Card title="Xavfsizlik" description="Parol va ikki faktorli autentifikatsiya" icon={Lock} delay={0.1}>
+      <Card title={t('settings.security')} description={t('settings.securityDescription')} icon={Lock} delay={0.1}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          <Field label="Joriy parol" type="password" error={errors.current?.message}
+          <Field label={t('settings.currentPassword')} type="password" error={errors.current?.message}
             {...register('current')} placeholder="••••••••" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Yangi parol" type="password" error={errors.next?.message}
+            <Field label={t('settings.newPassword')} type="password" error={errors.next?.message}
               {...register('next')} placeholder="••••••••" />
-            <Field label="Yangi parolni tasdiqlang" type="password" error={errors.confirm?.message}
+            <Field label={t('settings.confirmPassword')} type="password" error={errors.confirm?.message}
               {...register('confirm')} placeholder="••••••••" />
           </div>
           {nextPw && <PasswordStrength password={nextPw} />}
 
           <div className="rounded-lg p-4 space-y-0 mt-2"
             style={{ background: 'var(--s-alt)', border: '1px solid var(--s-border)' }}>
-            <Toggle label="Ikki faktorli autentifikatsiya (2FA)"
-              description="TOTP ilovasi orqali qo'shimcha himoya"
+            <Toggle label={t('settings.twoFactor')}
+              description={t('settings.twoFactorDesc')}
               checked={twoFa} onChange={handle2faToggle} />
-            <Toggle label="Shubhali kirishlar haqida xabar"
-              description="Noma'lum IP yoki qurilmadan kirishda ogohlantirish"
+            <Toggle label={t('settings.suspiciousLogin')}
+              description={t('settings.suspLoginDesc')}
               checked={alerts} onChange={setAlerts} />
           </div>
 
@@ -482,18 +487,18 @@ function SecuritySection() {
         <div className="mt-6 pt-5 border-t space-y-3" style={{ borderColor: 'var(--s-border)' }}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Faol sessiyalar</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>Barcha faol qurilma va brauzerlar</p>
+              <p className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{t('settings.activeSessions')}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>{t('settings.allDevices')}</p>
             </div>
             <button onClick={loadSessions} disabled={sessLoading}
               className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50">
               <RefreshCw className={`size-3.5 ${sessLoading ? 'animate-spin' : ''}`} />
-              Yangilash
+              {t('attendance.refresh')}
             </button>
           </div>
 
           {sessions.length === 0 && !sessLoading && (
-            <p className="text-xs py-2" style={{ color: 'var(--s-muted)' }}>Sessiyalarni yuklash uchun "Yangilash" bosing.</p>
+            <p className="text-xs py-2" style={{ color: 'var(--s-muted)' }}>{t('settings.loadSessions')}</p>
           )}
 
           {sessLoading && (
@@ -553,6 +558,7 @@ function SecuritySection() {
 
 // ── Notifications section ─────────────────────────────────────────────────────
 function NotificationsSection() {
+  const { t } = useLocale()
   const [prefs, setPrefs] = useState({
     attendance: true, grades: true, risk: true,
     system: false, weeklyReport: true, email: true,
@@ -561,7 +567,7 @@ function NotificationsSection() {
   const set = (k: keyof typeof prefs) => (v: boolean) => setPrefs(p => ({ ...p, [k]: v }))
 
   return (
-    <Card title="Bildirishnomalar" description="Qaysi hodisalar haqida xabardor bo'lishni tanlang" icon={Bell} delay={0.2}>
+    <Card title={t('settings.notifications')} description={t('settings.notifDescription')} icon={Bell} delay={0.2}>
       <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--s-border)' }}>
         <div className="px-4 py-2.5" style={{ background: 'var(--s-alt)' }}>
           <div className="flex items-center gap-2">
@@ -587,10 +593,10 @@ function NotificationsSection() {
         </div>
       </div>
       <div className="flex justify-end pt-4">
-        <button onClick={() => { setSaved(true); toast.success("Sozlamalar saqlandi"); setTimeout(() => setSaved(false), 2500) }}
+        <button onClick={() => { setSaved(true); toast.success(t('settings.saved')); setTimeout(() => setSaved(false), 2500) }}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all seasmp-btn"
           style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
-          {saved ? <><Check className="size-4" /> Saqlandi</> : 'Saqlash'}
+          {saved ? <><Check className="size-4" /> {t('settings.saved')}</> : t('settings.save')}
         </button>
       </div>
     </Card>
@@ -599,11 +605,20 @@ function NotificationsSection() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
+  const { t } = useLocale()
   return (
     <div style={{ maxWidth: '960px', paddingBottom: '40px' }}>
+      <style>{`
+        .settings-profile { grid-template-columns: clamp(160px, 20%, 200px) 1fr !important; }
+        @media (max-width: 768px) {
+          .settings-profile { grid-template-columns: 1fr !important; }
+          .settings-profile > div:first-child { align-items: flex-start !important; }
+          .settings-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
       <motion.div {...fadeUp()} style={{ marginBottom: '24px' }}>
-        <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Sozlamalar</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--s-muted)' }}>Hisobingiz va tizim afzalliklarini boshqaring</p>
+        <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>{t('settings.title')}</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--s-muted)' }}>{t('settings.description')}</p>
       </motion.div>
 
       {/* Profile — full width */}
@@ -612,7 +627,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Security + Notifications — 2 column */}
-      <div style={{
+      <div className="settings-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
         gap: '24px',

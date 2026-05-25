@@ -13,9 +13,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Plus, Search, ToggleLeft } from 'lucide-react'
+import { useLocale } from '@/store/locale'
 
 export default function UsersPage() {
   const { user: me } = useAuth()
+  const { t } = useLocale()
   const [users, setUsers]     = useState<User[]>([])
   const [search, setSearch]   = useState('')
   const [role, setRole]       = useState('ALL')
@@ -56,10 +58,10 @@ export default function UsersPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Users</h1>
+        <h1 className="text-2xl font-semibold">{t('students.title')}</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
-            <Plus className="size-4" /> New User
+            <Plus className="size-4" /> {t('students.new')}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Create User</DialogTitle></DialogHeader>
@@ -105,7 +107,7 @@ export default function UsersPage() {
       <div className="flex gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input className="pl-8" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input className="pl-8" placeholder={t('students.search')} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={role} onValueChange={v => setRole(v ?? 'ALL')}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
