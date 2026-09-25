@@ -9,6 +9,9 @@ venv/
 .env
 .env.local
 .env.production
+# Zaxira nusxalar ham sir saqlaydi — .env.bak_<timestamp> kabi
+.env.bak*
+.env.*.bak
 
 # Build outputs
 .next/

@@ -28,7 +28,7 @@ module.exports = {
       displayName: 'integration',
       roots:       ['<rootDir>/src/tests/integration'],
       testMatch:   ['**/*.integration.test.ts'],
-      setupFiles:  ['<rootDir>/src/tests/setup.ts'],
+      setupFiles:  ['<rootDir>/src/tests/setup.integration.ts'],
     },
   ],
   testTimeout: 30000,

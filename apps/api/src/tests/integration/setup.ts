@@ -26,7 +26,16 @@ export { prisma }
 
 // ─── Seed helpers ─────────────────────────────────────────────────────────────
 
-const TS = Date.now()
+/**
+ * Test foydalanuvchilarining e-pochtasiga qo'shiladigan noyob qo'shimcha.
+ *
+ * Faqat `Date.now()` yetarli emas edi: uchta suite parallel ishlaydi va
+ * ular bir millisekundda boshlansa bir xil e-pochta chiqardi. O'shanda
+ * `upsert` bitta foydalanuvchini qaytarib, birining `cleanup` i ikkinchisi
+ * hali ishlatayotgan qatorni o'chirib yuborardi — natijada tasodifiy 404.
+ * Jarayon identifikatori va tasodifiy qism buni istisno qiladi.
+ */
+const TS = `${Date.now()}_${process.pid}_${Math.random().toString(36).slice(2, 8)}`
 
 export async function seedAdmin() {
   return prisma.user.upsert({
