@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { assessmentsApi, enrollmentsApi, type Assessment, type Enrollment, type Grade } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
-import { useBreadcrumbTitle } from '@/lib/breadcrumb'
+import { useCourse } from '@/lib/use-course'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -26,14 +26,14 @@ export default function CourseGradesPage() {
   const [edits, setEdits]             = useState<Record<string, string>>({})
   const [saving, setSaving]           = useState<Record<string, boolean>>({})
 
-  // Kurs nomi ro'yxatdan o'tishlar bilan birga keladi — breadcrumb'da xom UUID
-  // ko'rinmasligi uchun shundan olinadi, qo'shimcha so'rov qilinmaydi.
-  useBreadcrumbTitle(enrollments[0]?.course?.title)
+  // Manzildagi qism slug bo'lishi mumkin — quyidagi so'rovlar esa UUID kutadi
+  const { courseId } = useCourse(id)
 
   const load = useCallback(async () => {
+    if (!courseId) return
     const [assRes, enrollRes] = await Promise.all([
-      assessmentsApi.byCourse(id).catch(() => ({ data: [] as Assessment[] })),
-      enrollmentsApi.list(`courseId=${id}&limit=200`).catch(() => ({ data: [] as Enrollment[] })),
+      assessmentsApi.byCourse(courseId).catch(() => ({ data: [] as Assessment[] })),
+      enrollmentsApi.list(`courseId=${courseId}&limit=200`).catch(() => ({ data: [] as Enrollment[] })),
     ])
     setAssessments(assRes.data)
     setEnrollments(enrollRes.data)
@@ -48,7 +48,7 @@ export default function CourseGradesPage() {
       })
     }))
     setGradeMap(map)
-  }, [id])
+  }, [courseId])
 
   useEffect(() => { load() }, [load])
 

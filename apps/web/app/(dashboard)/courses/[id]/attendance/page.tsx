@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { attendanceApi, enrollmentsApi, type Attendance, type Enrollment } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
-import { useBreadcrumbTitle } from '@/lib/breadcrumb'
+import { useCourse } from '@/lib/use-course'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -35,22 +35,24 @@ export default function CourseAttendancePage() {
   const [qrToken, setQrToken]         = useState<string | null>(null)
   const [qrCountdown, setQrCountdown] = useState(0)
 
-  // Kurs nomi ro'yxatdan o'tishlar bilan birga keladi — breadcrumb'da xom UUID
-  // ko'rinmasligi uchun shundan olinadi, qo'shimcha so'rov qilinmaydi.
-  useBreadcrumbTitle(enrollments[0]?.course?.title)
   const [form, setForm]               = useState({ enrollmentId: '', lessonDate: '', status: 'PRESENT' as AttStatus })
   const [qrDate, setQrDate]           = useState(new Date().toISOString().slice(0, 10))
 
+  // Manzildagi qism slug bo'lishi mumkin — quyidagi so'rovlar esa UUID kutadi
+  const { courseId } = useCourse(id)
+
   const load = useCallback(() => {
+    if (!courseId) return
     const q = filterDate ? `lessonDate=${filterDate}&limit=500` : 'limit=500'
-    attendanceApi.byCourse(id, q).then(r => setRecords(r.data)).catch(e => toast.error(e.message))
-  }, [id, filterDate])
+    attendanceApi.byCourse(courseId, q).then(r => setRecords(r.data)).catch(e => toast.error(e.message))
+  }, [courseId, filterDate])
 
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    enrollmentsApi.list(`courseId=${id}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
-  }, [id])
+    if (!courseId) return
+    enrollmentsApi.list(`courseId=${courseId}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
+  }, [courseId])
 
   // QR countdown
   useEffect(() => {

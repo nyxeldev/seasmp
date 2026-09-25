@@ -163,6 +163,8 @@ model RefreshToken {
 model Course {
   id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   title         String       @db.VarChar(255)
+  /// Manzil qatorida UUID o'rniga ko'rinadigan o'qilishi mumkin bo'lgan qism
+  slug          String       @unique @db.VarChar(100)
   description   String?
   teacherId     String       @map("teacher_id") @db.Uuid
   category      String       @db.VarChar(100)

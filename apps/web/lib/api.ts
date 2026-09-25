@@ -277,6 +277,8 @@ export interface User {
 export interface Course {
   id: string
   title: string
+  /** Manzil qatorida UUID o'rniga ishlatiladi */
+  slug: string
   category: string
   status: string
   price: number
@@ -293,7 +295,7 @@ export interface Enrollment {
   enrolledAt: string
   dropoutRiskScore?: number | null
   student: { id: string; firstName: string; lastName: string; email: string }
-  course: { id: string; title: string; category: string }
+  course: { id: string; slug: string; title: string; category: string }
 }
 
 export interface Attendance {

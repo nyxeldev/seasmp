@@ -111,7 +111,7 @@ export const analyticsService = {
     const enrollments = await prisma.enrollment.findMany({
       where: { studentId },
       include: {
-        course: { select: { id: true, title: true, category: true } },
+        course: { select: { id: true, slug: true, title: true, category: true } },
         attendance: { select: { status: true } },
         grades: { select: { score: true, assessment: { select: { maxScore: true, weight: true } } } },
       },

@@ -30,6 +30,8 @@ const SEGMENT_KEYS: Record<string, TKey> = {
   attendance:  'nav.attendance',
   grades:      'nav.grades',
   analytics:   'nav.analytics',
+  audit:       'nav.audit',
+  risk:        'nav.risk',
   security:    'nav.security',
   settings:    'nav.settings',
 }
@@ -46,14 +48,14 @@ function Breadcrumb() {
     <nav aria-label="breadcrumb" className="flex items-center gap-1 text-sm">
       {segments.map((seg, i) => {
         const key = SEGMENT_KEYS[seg]
-        // Dinamik segment — bu identifikator. Xom UUID foydalanuvchiga hech
-        // narsa aytmaydi, shuning uchun sahifa bergan nom ko'rsatiladi. Nom
-        // hali yuklanmagan bo'lsa qisqartirilgan ko'rinish chiziladi.
+        // Ro'yxatda yo'q segment — bu obyektning identifikatori (slug yoki UUID).
+        // Manzil qatorida slug turishi mumkin, lekin breadcrumb'da obyektning
+        // to'liq nomi ko'rinishi kerak: "web-dasturlash-asoslari" emas,
+        // "Web dasturlash asoslari". Nom hali yuklanmagan bo'lsa slug qoladi,
+        // UUID esa qisqartiriladi — u baribir hech narsa anglatmaydi.
         const label = key
           ? t(key)
-          : UUID_RE.test(seg)
-            ? (entityTitle ?? `${seg.slice(0, 8)}…`)
-            : seg
+          : entityTitle ?? (UUID_RE.test(seg) ? `${seg.slice(0, 8)}…` : seg)
         const isLast = i === segments.length - 1
         return (
           <span key={i} className="flex items-center gap-1">

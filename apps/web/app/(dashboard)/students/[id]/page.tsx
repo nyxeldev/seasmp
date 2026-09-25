@@ -26,6 +26,7 @@ interface EnrollmentStats {
   enrollmentId: string
   courseTitle: string
   courseId: string
+  courseSlug: string
   status: string
   attendanceRate: number
   avgGrade: string
@@ -102,6 +103,7 @@ export default function StudentProfilePage() {
           enrollmentId: e.id,
           courseTitle:  e.course.title,
           courseId:     e.course.id,
+          courseSlug:   e.course.slug,
           status:       e.status,
           attendanceRate: Number(rate),
           avgGrade,
@@ -215,7 +217,7 @@ export default function StudentProfilePage() {
                 {stats.map(s => (
                   <TableRow key={s.enrollmentId}>
                     <TableCell className="font-medium">
-                      <Link href={`/courses/${s.courseId}`} className="hover:underline">{s.courseTitle}</Link>
+                      <Link href={`/courses/${s.courseSlug}`} className="hover:underline">{s.courseTitle}</Link>
                     </TableCell>
                     <TableCell>
                       <Badge variant={s.status === 'ACTIVE' ? 'default' : 'outline'}>{s.status}</Badge>

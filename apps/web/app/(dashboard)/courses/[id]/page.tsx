@@ -43,13 +43,19 @@ export default function CourseDetailPage() {
   // Breadcrumb'da xom UUID emas, kursning nomi ko'rinsin
   useBreadcrumbTitle(course?.title)
 
+  // Manzildagi qism slug bo'lishi mumkin; qolgan so'rovlar esa kursning UUID
+  // sini kutadi, shuning uchun ular kurs yuklangandan KEYIN ishga tushadi.
+  const courseId = course?.id ?? null
+
   const loadCourse     = () => coursesApi.getById(id).then(r => setCourse(r.data)).catch(e => toast.error(e.message))
-  const loadEnrollments= () => enrollmentsApi.list(`courseId=${id}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
-  const loadAssessments= () => assessmentsApi.byCourse(id).then(r => setAssessments(r.data)).catch(() => {})
+  const loadEnrollments= () => courseId && enrollmentsApi.list(`courseId=${courseId}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
+  const loadAssessments= () => courseId && assessmentsApi.byCourse(courseId).then(r => setAssessments(r.data)).catch(() => {})
+
+  useEffect(() => { loadCourse() }, [id]) // eslint-disable-line
 
   useEffect(() => {
-    loadCourse(); loadEnrollments(); loadAssessments()
-  }, [id]) // eslint-disable-line
+    loadEnrollments(); loadAssessments()
+  }, [courseId]) // eslint-disable-line
 
   useEffect(() => {
     if ((user?.role === 'ADMIN') && enrollOpen) {
@@ -70,7 +76,7 @@ export default function CourseDetailPage() {
 
   const generateQr = async () => {
     try {
-      const res = await attendanceApi.generateQr(id, qrDate)
+      const res = await attendanceApi.generateQr(course!.id, qrDate)
       setQrToken(res.data.token)
       setQrCountdown(res.data.expiresIn)
       toast.success('QR token generated — 5 minutes')
@@ -80,7 +86,7 @@ export default function CourseDetailPage() {
   const createAssessment = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await assessmentsApi.create({ ...assForm, courseId: id, maxScore: Number(assForm.maxScore), weight: Number(assForm.weight) })
+      await assessmentsApi.create({ ...assForm, courseId: course!.id, maxScore: Number(assForm.maxScore), weight: Number(assForm.weight) })
       toast.success('Assessment created')
       setAssOpen(false)
       loadAssessments()
@@ -99,7 +105,7 @@ export default function CourseDetailPage() {
   const enrollStudent = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await enrollmentsApi.enrollToCourse(id, enrollStudentId)
+      await enrollmentsApi.enrollToCourse(course!.id, enrollStudentId)
       toast.success('Student enrolled')
       setEnrollOpen(false)
       setEnrollStudentId('')

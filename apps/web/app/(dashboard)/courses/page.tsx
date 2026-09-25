@@ -101,7 +101,7 @@ function CourseCard({ course, canManage, isAdmin, onStatusChange }: {
 
       {canManage && (
         <div className="flex items-center gap-2 pt-1">
-          <Link href={`/courses/${course.id}`}
+          <Link href={`/courses/${course.slug}`}
             className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
             <ExternalLink className="size-3" /> Ko'rish
           </Link>

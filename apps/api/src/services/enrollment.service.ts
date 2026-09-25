@@ -36,7 +36,7 @@ export const enrollmentService = {
         orderBy: { enrolledAt: 'desc' },
         include: {
           student: { select: { id: true, firstName: true, lastName: true, email: true } },
-          course:  { select: { id: true, title: true, category: true } },
+          course:  { select: { id: true, slug: true, title: true, category: true } },
         },
       }),
       prisma.enrollment.count({ where }),
@@ -53,7 +53,7 @@ export const enrollmentService = {
       where: { id },
       include: {
         student: { select: { id: true, firstName: true, lastName: true, email: true } },
-        course:  { select: { id: true, title: true, category: true, teacherId: true } },
+        course:  { select: { id: true, slug: true, title: true, category: true, teacherId: true } },
         grades:  { include: { assessment: true } },
       },
     })
