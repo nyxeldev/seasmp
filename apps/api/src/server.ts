@@ -5,8 +5,10 @@ import { env } from './config/env'
 import { logger } from './config/logger'
 import { prisma } from './config/prisma'
 import { redis } from './config/redis'
+import { startProfileRefresh } from './jobs/profileRefresh'
 
 let app: FastifyInstance
+let stopProfileRefresh: (() => void) | undefined
 
 async function bootstrap() {
   app = await buildApp()
@@ -28,10 +30,18 @@ async function bootstrap() {
 
   await app.listen({ port: env.API_PORT, host: env.API_HOST })
   logger.info(`🚀 SEASMP API ishga tushdi: http://${env.API_HOST}:${env.API_PORT}`)
+
+  // 2-qatlam uchun xatti-harakat profillarini davriy qurish.
+  // Aniqlash o'chirilgan bo'lsa profil ham kerak emas — bazani bekorga
+  // skanerlab yurmaydi.
+  if (env.DETECTION_ENABLED !== 'false') {
+    stopProfileRefresh = startProfileRefresh()
+  }
 }
 
 const shutdown = async (signal: string) => {
   logger.info(`${signal} — server to'xtatilmoqda...`)
+  stopProfileRefresh?.()
   if (app) await app.close()
   await prisma.$disconnect()
   redis.disconnect()

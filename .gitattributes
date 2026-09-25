@@ -1,0 +1,12 @@
+# Prisma migratsiya fayllari HAR DOIM LF bilan saqlanadi.
+#
+# Sabab: Prisma qo'llangan migratsiyaning sha256 checksumini `_prisma_migrations`
+# jadvalida saqlaydi va har ishga tushirishda fayl bilan solishtiradi. Windows'da
+# `core.autocrlf=true` fayllarni CRLF bilan chiqaradi — mazmuni bir xil bo'lsa ham
+# checksum o'zgaradi va Prisma "migration was modified after it was applied" deb
+# butun bazani reset qilishni talab qiladi.
+*.sql     text eol=lf
+*.prisma  text eol=lf
+
+# Shell skriptlari Linux konteynerlarida ishlaydi — CRLF ularni buzadi
+*.sh      text eol=lf

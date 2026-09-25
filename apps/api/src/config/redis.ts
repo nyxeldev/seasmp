@@ -108,6 +108,11 @@ class SafeRedis implements RedisLike {
   private impl: RedisLike = new MemRedis()
 
   constructor() {
+    // Unit testlar tarmoqqa chiqmaydi: MemRedis deterministik, tez va tashqi
+    // xizmatga bog'liq emas. Ilgari testlar haqiqiy Redis'ga urinardi va
+    // mos kelmagan parol tufayli har yugurishda WRONGPASS xatolari to'kilardi.
+    if (env.REDIS_IN_MEMORY === '1') return // impl MemRedis bo'lib qoladi
+
     if (env.NODE_ENV !== 'development') {
       // Production: real Redis is mandatory
       const r = new Redis(env.REDIS_URL, {

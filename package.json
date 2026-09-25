@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev:api": "npm run dev --workspace=apps/api",
-    "dev:frontend": "npm run dev --workspace=apps/frontend",
+    "dev:web": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces",

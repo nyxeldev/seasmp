@@ -376,6 +376,13 @@ export interface AuditLog {
   statusCode?: number | null
   createdAt: string
   user?: { id: string; firstName: string; lastName: string; email: string; role: string }
+
+  // Aniqlash qatlami maydonlari
+  accessRelation?: 'SELF' | 'OWNER' | 'CUSTODIAN' | 'PRIVILEGED' | 'FOREIGN' | 'UNKNOWN' | null
+  resourceOwnerId?: string | null
+  httpMethod?: string | null
+  path?: string | null
+  durationMs?: number | null
 }
 
 export interface Session {
@@ -398,6 +405,7 @@ export interface ActiveSession {
 
 export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type AlertType     = 'BRUTE_FORCE' | 'MULTI_DEVICE' | 'UNUSUAL_HOUR' | 'BULK_DELETE' | 'RATE_LIMIT'
+  | 'UNAUTHORIZED_OBJECT_ACCESS' | 'PRIVILEGE_ESCALATION' | 'BEHAVIOR_ANOMALY' | 'MASS_DATA_ACCESS'
 
 export interface SecurityAlert {
   id: string
@@ -411,6 +419,11 @@ export interface SecurityAlert {
   resolvedAt?: string | null
   createdAt: string
   user?: { id: string; firstName: string; lastName: string; email: string } | null
+
+  // Qaysi qatlam aniqladi va qanday ishonch bilan
+  layer?: 'AUTHORIZATION' | 'BEHAVIOR' | 'CORRELATED' | null
+  score?: number | string | null
+  detectorVersion?: string | null
 }
 
 export interface AlertStats {

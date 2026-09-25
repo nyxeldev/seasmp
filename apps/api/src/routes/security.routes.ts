@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { securityService } from '../services/security.service'
 import { checkBulkDelete } from '../services/securityMonitor'
+import { refreshProfilesNow } from '../jobs/profileRefresh'
 import type { AuditAction, AlertType, AlertSeverity } from '@prisma/client'
 
 export default async function securityRoutes(app: FastifyInstance) {
@@ -96,6 +97,16 @@ export default async function securityRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string }
     await checkBulkDelete(request.user.sub, request.ip)
     const result = await securityService.forceRevokeSession(id)
+    return reply.send({ success: true, data: result })
+  })
+
+  // ─── Xatti-harakat profillari (2-qatlam) ──────────────────────────────────
+  // Profillar odatda sutkada bir marta fonda quriladi. Bu endpoint yangi
+  // o'rnatishda va namoyishda ularni darhol qurish uchun.
+  app.post('/profiles/refresh', {
+    onRequest: [app.authenticate, app.requireRoles('ADMIN', 'SUPER_ADMIN')],
+  }, async (_request, reply) => {
+    const result = await refreshProfilesNow()
     return reply.send({ success: true, data: result })
   })
 

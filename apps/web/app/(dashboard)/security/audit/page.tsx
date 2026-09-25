@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useState, useCallback } from 'react'
 import { securityApi, type AuditLog, type PaginationMeta } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,11 +12,41 @@ import { toast } from 'sonner'
 import { Download, ChevronDown, ChevronRight, ArrowLeft, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
-const ACTIONS = ['ALL','LOGIN','LOGOUT','LOGIN_FAILED','CREATE','UPDATE','DELETE',
+const ACTIONS = ['ALL','ACCESS','ACCESS_DENIED','LOGIN','LOGOUT','LOGIN_FAILED','CREATE','UPDATE','DELETE',
   'TWO_FA_SETUP','TWO_FA_DISABLE','BACKUP_CODE_USED','IP_BLOCKED',
   'PASSWORD_CHANGE','ROLE_CHANGE','ENROLL','UNENROLL','GRADE_SUBMIT','ATTENDANCE_MARK']
 
 const RESOURCES = ['ALL','users','courses','enrollments','attendance','assessments','security','security_alerts']
+
+/**
+ * Munosabat — aktor va murojaat qilingan obyekt orasidagi bog'liqlik.
+ *
+ * Qatorlarning aksariyati normal bo'ladi. Agar har biriga rangli belgi qo'yilsa,
+ * xavflilari ko'zga tashlanmay qoladi. Shuning uchun normal munosabatlar oddiy
+ * kulrang matn, faqat ikkitasi ajralib turadi:
+ *   Begona   — ruxsatsiz obyektga murojaat, asosiy tahdid signali
+ *   Qoida yo'q — bu resurs turi egalik modelidan tashqarida qolgan
+ */
+const RELATION: Record<string, { label: string; cls: string }> = {
+  SELF:       { label: "o'zi",       cls: 'text-muted-foreground' },
+  OWNER:      { label: 'egasi',      cls: 'text-muted-foreground' },
+  CUSTODIAN:  { label: 'javobgar',   cls: 'text-muted-foreground' },
+  PRIVILEGED: { label: 'admin',      cls: 'text-muted-foreground' },
+  FOREIGN:    { label: 'Begona',     cls: 'rounded-md border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-red-400 font-medium' },
+  UNKNOWN:    { label: "Qoida yo'q", cls: 'rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-amber-400' },
+}
+
+function RelationCell({ relation }: { relation?: string | null }) {
+  if (!relation) return <span className="text-muted-foreground text-xs">—</span>
+  const r = RELATION[relation]
+  if (!r) return <span className="text-muted-foreground text-xs">{relation}</span>
+  return <span className={`inline-flex items-center text-xs whitespace-nowrap ${r.cls}`}>{r.label}</span>
+}
+
+/** Begona obyektga murojaat MUVAFFAQIYATLI bo'lgan qator — eng jiddiy holat */
+function isUnprotected(log: AuditLog) {
+  return log.accessRelation === 'FOREIGN' && (log.statusCode ?? 0) < 400
+}
 
 function actionVariant(action: string) {
   if (['LOGIN_FAILED','IP_BLOCKED'].includes(action)) return 'destructive'
@@ -180,6 +210,7 @@ function AuditLogView() {
                 <TableHead>Foydalanuvchi</TableHead>
                 <TableHead>Harakat</TableHead>
                 <TableHead>Resurs</TableHead>
+                <TableHead>Munosabat</TableHead>
                 <TableHead>ID</TableHead>
                 <TableHead>IP</TableHead>
                 <TableHead>Status</TableHead>
@@ -190,10 +221,14 @@ function AuditLogView() {
                 const isExpanded = expanded.has(log.id)
                 const hasDetail  = log.oldData || log.newData
                 return (
-                  <>
+                  // Kalit fragmentda turishi kerak — ro'yxat elementi aynan u.
+                  // Ichki TableRow'dagi key React'ga ko'rinmasdi.
+                  <Fragment key={log.id}>
                     <TableRow
-                      key={log.id}
-                      className={hasDetail ? 'cursor-pointer hover:bg-muted/40' : ''}
+                      className={[
+                        hasDetail ? 'cursor-pointer hover:bg-muted/40' : '',
+                        isUnprotected(log) ? 'border-l-2 border-l-red-500 bg-red-500/[0.04]' : '',
+                      ].filter(Boolean).join(' ')}
                       onClick={() => hasDetail && toggleExpand(log.id)}
                     >
                       <TableCell>
@@ -216,7 +251,15 @@ function AuditLogView() {
                       <TableCell>
                         <Badge variant={actionVariant(log.action)}>{log.action}</Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{log.resource}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {log.resource}
+                        {log.httpMethod && log.path && (
+                          <div className="text-[11px] font-mono text-muted-foreground/60 truncate max-w-[220px]">
+                            {log.httpMethod} {log.path}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell><RelationCell relation={log.accessRelation} /></TableCell>
                       <TableCell className="text-xs font-mono text-muted-foreground max-w-[80px] truncate">
                         {log.resourceId ?? '—'}
                       </TableCell>
@@ -229,8 +272,8 @@ function AuditLogView() {
                       </TableCell>
                     </TableRow>
                     {isExpanded && hasDetail && (
-                      <TableRow key={`${log.id}-detail`}>
-                        <TableCell colSpan={8} className="bg-muted/30 px-6 py-3">
+                      <TableRow>
+                        <TableCell colSpan={10} className="bg-muted/30 px-6 py-3">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <JsonDiff label="Oldingi holat" data={log.oldData} />
                             <JsonDiff label="Yangi holat"   data={log.newData} />
@@ -243,12 +286,12 @@ function AuditLogView() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 )
               })}
               {logs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                     {loading ? 'Yuklanmoqda...' : 'Audit log topilmadi'}
                   </TableCell>
                 </TableRow>
