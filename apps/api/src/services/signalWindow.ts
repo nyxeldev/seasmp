@@ -1,0 +1,79 @@
+/**
+ * Qatlam signallarining sirpanuvchi oynasi.
+ *
+ * Korrelyatsiya ikkita qatlamning signalini BIR vaqtda ko'rishi kerak, lekin
+ * ular turli so'rovlarda paydo bo'ladi: aktor 16:02 da begona obyektni so'raydi,
+ * 16:05 da esa notanish IP dan kiradi. Har bir so'rovni alohida baholasak,
+ * ikkala signal hech qachon uchrashmaydi.
+ *
+ * Shuning uchun signallar foydalanuvchi bo'yicha qisqa oynada to'planadi va
+ * korrelyatsiya o'sha to'plangan manzaraga qaraydi.
+ *
+ * Redis'da saqlanadi — jarayon qayta ishga tushsa ham oyna yo'qolmaydi va
+ * bir nechta API nusxasi bir xil manzarani ko'radi.
+ */
+import { redis } from '../config/redis'
+import type { LayerSignals } from './correlation'
+
+/** Oyna uzunligi — ogohlantirish sovish oynasi bilan bir xil */
+export const WINDOW_SECONDS = 900 // 15 daqiqa
+
+const keyDenied   = (u: string) => `sig:authz_denied:${u}`
+const keyAllowed  = (u: string) => `sig:authz_allowed:${u}`
+const keyBehavior = (u: string) => `sig:behavior:${u}`
+const keyMass     = (u: string) => `sig:mass:${u}`
+
+/** Hisoblagichni oshiradi va birinchi marta oyna muddatini o'rnatadi */
+async function bump(key: string): Promise<void> {
+  const n = await redis.incr(key)
+  if (n === 1) await redis.expire(key, WINDOW_SECONDS)
+}
+
+/**
+ * 1-QATLAM signali.
+ * ALLOWED — begona obyektga MUVAFFAQIYATLI murojaat (endpointda tekshiruv yo'q).
+ * DENIED  — rad etilgan urinish (himoya ishladi, lekin urinish o'zi dalil).
+ */
+export async function recordAuthz(userId: string, outcome: 'ALLOWED' | 'DENIED'): Promise<void> {
+  await bump(outcome === 'ALLOWED' ? keyAllowed(userId) : keyDenied(userId))
+}
+
+/**
+ * 2-QATLAM signali — oynadagi ENG YUQORI anomaliya bali saqlanadi.
+ *
+ * O'rtacha emas, maksimum: bitta kuchli anomaliyani keyingi o'nlab oddiy
+ * so'rovlar "yuvib" yubormasligi kerak.
+ */
+export async function recordBehavior(userId: string, score: number): Promise<void> {
+  if (!(score > 0)) return
+  const key = keyBehavior(userId)
+  const prev = Number((await redis.get(key)) ?? 0)
+  if (score <= prev) return
+  await redis.setex(key, WINDOW_SECONDS, String(score))
+}
+
+/** 2-QATLAM ning qat'iy qoidasi — ommaviy ma'lumot chiqarish */
+export async function recordMassAccess(userId: string): Promise<void> {
+  await redis.setex(keyMass(userId), WINDOW_SECONDS, '1')
+}
+
+/** Oynadagi to'plangan manzara — korrelyatsiya shunga qaraydi */
+export async function readSignals(userId: string): Promise<LayerSignals> {
+  const [denied, allowed, behavior, mass] = await Promise.all([
+    redis.get(keyDenied(userId)),
+    redis.get(keyAllowed(userId)),
+    redis.get(keyBehavior(userId)),
+    redis.get(keyMass(userId)),
+  ])
+  return {
+    authzDenied:   Number(denied  ?? 0),
+    authzAllowed:  Number(allowed ?? 0),
+    behaviorScore: Number(behavior ?? 0),
+    massAccess:    mass === '1',
+  }
+}
+
+/** Oynani tozalash — testlar va qo'lda aralashuv uchun */
+export async function clearSignals(userId: string): Promise<void> {
+  await redis.del(keyDenied(userId), keyAllowed(userId), keyBehavior(userId), keyMass(userId))
+}

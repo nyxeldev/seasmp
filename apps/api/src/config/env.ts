@@ -1,5 +1,38 @@
-import 'dotenv/config'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import * as dotenv from 'dotenv'
 import { z } from 'zod'
+
+/**
+ * .env monorepo ildizida turadi — .env.example va docker-compose shunday kutadi.
+ * Lekin `npm run dev --workspace=apps/api` jarayonni apps/api/ da boshlaydi va
+ * `dotenv/config` faqat joriy papkaga qaraydi, shuning uchun hech narsa yuklanmasdi.
+ *
+ * Yechim: joriy papkadan va shu fayl joylashgan papkadan yuqoriga qarab birinchi
+ * uchragan .env ni yuklash. Docker'da ham, ildizdan ham, workspace'dan ham ishlaydi.
+ * Mavjud env o'zgaruvchilari ustiga yozilmaydi — konteyner qiymatlari ustun turadi.
+ */
+function loadDotenv(): void {
+  const starts = [process.cwd()]
+  if (typeof __dirname !== 'undefined') starts.push(__dirname)
+
+  for (const start of starts) {
+    let dir = start
+    for (let depth = 0; depth < 6; depth++) {
+      const candidate = path.join(dir, '.env')
+      if (fs.existsSync(candidate)) {
+        dotenv.config({ path: candidate })
+        return
+      }
+      const parent = path.dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+  }
+  dotenv.config()
+}
+
+loadDotenv()
 
 const envSchema = z.object({
   NODE_ENV:             z.enum(['development', 'production', 'test']).default('development'),
@@ -9,6 +42,11 @@ const envSchema = z.object({
   DATABASE_URL:         z.string().url(),
 
   REDIS_URL:            z.string(),
+  /**
+   * '1' bo'lsa Redis'ga umuman ulanilmaydi, in-memory nusxa ishlatiladi.
+   * Unit testlar uchun: ular tashqi xizmatga bog'liq bo'lmasligi kerak.
+   */
+  REDIS_IN_MEMORY:      z.string().optional(),
 
   JWT_ACCESS_SECRET:    z.string().min(32),
   JWT_REFRESH_SECRET:   z.string().min(32),

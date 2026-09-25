@@ -17,6 +17,7 @@ import analyticsRoutes  from './routes/analytics.routes'
 import securityRoutes   from './routes/security.routes'
 import internalRoutes   from './routes/internal.routes'
 import { checkBulkDelete } from './services/securityMonitor'
+import { recordRequest } from './services/requestAudit'
 
 // BigInt serialisation — run once at module load
 ;(BigInt.prototype as any).toJSON = function () { return this.toString() }
@@ -74,6 +75,14 @@ export async function buildApp() {
         await checkBulkDelete(request.user.sub, request.ip)
       }
     }
+  })
+
+  // ─── To'liq hodisa qamrovi ────────────────────────────────────────────────────
+  // Javob yuborilgandan keyin ishlaydi — foydalanuvchi ko'radigan kechikishga
+  // ta'sir qilmaydi. Har bir /v1/ so'rovi audit logga yoziladi, 401/403 esa
+  // ACCESS_DENIED sifatida qayd etiladi.
+  app.addHook('onResponse', async (request, reply) => {
+    await recordRequest(request, reply)
   })
 
   // ─── Health Check ─────────────────────────────────────────────────────────────

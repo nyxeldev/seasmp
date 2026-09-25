@@ -64,6 +64,8 @@ enum AuditAction {
   TWO_FA_DISABLE
   BACKUP_CODE_USED
   IP_BLOCKED
+  ACCESS
+  ACCESS_DENIED
 }
 
 enum AlertSeverity {
@@ -79,6 +81,35 @@ enum AlertType {
   UNUSUAL_HOUR
   BULK_DELETE
   RATE_LIMIT
+  UNAUTHORIZED_OBJECT_ACCESS
+  PRIVILEGE_ESCALATION
+  BEHAVIOR_ANOMALY
+  MASS_DATA_ACCESS
+}
+
+enum OwnershipSource {
+  MANUAL
+  INFERRED
+}
+
+enum OwnerRole {
+  OWNER
+  CUSTODIAN
+}
+
+enum AccessRelation {
+  SELF
+  OWNER
+  CUSTODIAN
+  PRIVILEGED
+  FOREIGN
+  UNKNOWN
+}
+
+enum DetectionLayer {
+  AUTHORIZATION
+  BEHAVIOR
+  CORRELATED
 }
 
 // ─── MODELS ───────────────────────────────────────────────────────────────────
@@ -108,6 +139,7 @@ model User {
   backupCodes       BackupCode[]
   securityAlerts    SecurityAlert[]  @relation("UserAlerts")
   resolvedAlerts    SecurityAlert[]  @relation("ResolvedAlerts")
+  behaviorProfile   UserBehaviorProfile?
 
   @@map("users")
 }
@@ -244,6 +276,13 @@ model AuditLog {
   statusCode Int?        @map("status_code")
   createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
+  // ── Aniqlash qatlami uchun ──────────────────────────────────────────────
+  resourceOwnerId String? @map("resource_owner_id") @db.Uuid
+  httpMethod      String? @map("http_method") @db.VarChar(10)
+  path            String? @map("path") @db.VarChar(255)
+  durationMs      Int?    @map("duration_ms")
+  accessRelation  AccessRelation? @map("access_relation")
+
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
@@ -251,6 +290,9 @@ model AuditLog {
   @@index([resource])
   @@index([createdAt])
   @@index([ipAddress])
+  @@index([resourceOwnerId])
+  @@index([userId, resourceOwnerId])
+  @@index([accessRelation])
   @@map("audit_logs")
 }
 
@@ -279,6 +321,12 @@ model SecurityAlert {
   resolvedAt DateTime?     @map("resolved_at") @db.Timestamptz
   createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
+  // ── Qaysi qatlam aniqladi ───────────────────────────────────────────────
+  layer           DetectionLayer? 
+  score           Decimal?        @db.Decimal(5, 4)
+  detectorVersion String?         @map("detector_version") @db.VarChar(50)
+  auditLogId      BigInt?         @map("audit_log_id")
+
   user     User? @relation("UserAlerts",    fields: [userId],     references: [id], onDelete: SetNull)
   resolver User? @relation("ResolvedAlerts", fields: [resolvedBy], references: [id], onDelete: SetNull)
 
@@ -286,6 +334,8 @@ model SecurityAlert {
   @@index([severity])
   @@index([resolved])
   @@index([createdAt])
+  @@index([layer])
+  @@index([score])
   @@map("security_alerts")
 }
 
@@ -298,4 +348,46 @@ model IpBlock {
 
   @@index([expiresAt])
   @@map("ip_blocks")
+}
+
+model OwnershipRule {
+  id           BigInt          @id @default(autoincrement())
+  resourceType String          @map("resource_type") @db.VarChar(100)
+  ownerPath    String          @map("owner_path") @db.VarChar(255)
+  role         OwnerRole       @default(OWNER)
+  source       OwnershipSource @default(MANUAL)
+  confidence   Decimal?        @db.Decimal(5, 4)
+  supportCount Int             @default(0) @map("support_count")
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([resourceType, ownerPath])
+  @@index([resourceType])
+  @@index([source])
+  @@map("ownership_rules")
+}
+
+model UserBehaviorProfile {
+  id               BigInt    @id @default(autoincrement())
+  userId           String    @unique @map("user_id") @db.Uuid
+  hourHistogram    Json      @default("[]") @map("hour_histogram")
+  weekdayHistogram Json      @default("[]") @map("weekday_histogram")
+  knownIps         Json      @default("[]") @map("known_ips")
+  knownUserAgents  Json      @default("[]") @map("known_user_agents")
+  resourceMix      Json      @default("{}") @map("resource_mix")
+  reqPerHourMean   Decimal?  @map("req_per_hour_mean") @db.Decimal(10, 4)
+  reqPerHourStd    Decimal?  @map("req_per_hour_std") @db.Decimal(10, 4)
+  sampleCount      Int       @default(0) @map("sample_count")
+  windowStart      DateTime? @map("window_start") @db.Timestamptz
+  windowEnd        DateTime? @map("window_end") @db.Timestamptz
+  modelVersion     String?   @map("model_version") @db.VarChar(50)
+  trainedAt        DateTime? @map("trained_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([trainedAt])
+  @@map("user_behavior_profiles")
 }

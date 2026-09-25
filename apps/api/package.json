@@ -11,11 +11,11 @@
     "test:all": "jest",
     "test:coverage": "jest --coverage",
     "lint": "tsc --noEmit",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:generate": "prisma generate"
+    "db:migrate": "node scripts/with-env.js prisma migrate dev",
+    "db:push": "node scripts/with-env.js prisma db push",
+    "db:studio": "node scripts/with-env.js prisma studio",
+    "db:seed": "node scripts/with-env.js tsx prisma/seed.ts",
+    "db:generate": "node scripts/with-env.js prisma generate"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

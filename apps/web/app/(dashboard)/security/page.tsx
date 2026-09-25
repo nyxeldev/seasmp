@@ -32,6 +32,38 @@ const TYPE_LABELS: Record<string, string> = {
   UNUSUAL_HOUR: 'G\'ayrioddiy vaqt',
   BULK_DELETE:  'Ommaviy o\'chirish',
   RATE_LIMIT:   'Rate Limit',
+  UNAUTHORIZED_OBJECT_ACCESS: 'Ruxsatsiz obyekt',
+  PRIVILEGE_ESCALATION:       'Huquq oshirish',
+  BEHAVIOR_ANOMALY:           'Xatti-harakat anomaliyasi',
+  MASS_DATA_ACCESS:           'Ommaviy ma\'lumot chiqarish',
+}
+
+/** Qaysi qatlam aniqladi */
+const LAYER_LABELS: Record<string, string> = {
+  AUTHORIZATION: 'Avtorizatsiya',
+  BEHAVIOR:      'Xatti-harakat',
+  CORRELATED:    'Korrelyatsiya',
+}
+
+/**
+ * Ishonch bali. Raqam yolg'iz o'zi taqqoslash uchun sekin o'qiladi,
+ * shuning uchun yoniga nisbatni ko'rsatadigan ingichka chiziq qo'yilgan.
+ */
+function ScoreCell({ score }: { score?: number | string | null }) {
+  if (score === null || score === undefined) return <span className="text-muted-foreground text-xs">—</span>
+  const n = Math.max(0, Math.min(1, Number(score)))
+  if (Number.isNaN(n)) return <span className="text-muted-foreground text-xs">—</span>
+  return (
+    <div className="flex items-center gap-2 min-w-[72px]">
+      <span className="text-xs tabular-nums w-8">{n.toFixed(2)}</span>
+      <span className="h-1 flex-1 rounded-full bg-muted overflow-hidden">
+        <span
+          className={`block h-full rounded-full ${n >= 0.8 ? 'bg-red-500' : n >= 0.6 ? 'bg-amber-500' : 'bg-muted-foreground/40'}`}
+          style={{ width: `${n * 100}%` }}
+        />
+      </span>
+    </div>
+  )
 }
 
 function SeverityBadge({ severity }: { severity: AlertSeverity }) {
@@ -205,6 +237,8 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                 <TableHead>Vaqt</TableHead>
                 <TableHead>Tur</TableHead>
                 <TableHead>Daraja</TableHead>
+                <TableHead>Qatlam</TableHead>
+                <TableHead>Ball</TableHead>
                 <TableHead>Foydalanuvchi</TableHead>
                 <TableHead>IP</TableHead>
                 <TableHead>Holat</TableHead>
@@ -219,6 +253,10 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   </TableCell>
                   <TableCell className="font-medium text-sm">{TYPE_LABELS[alert.type] ?? alert.type}</TableCell>
                   <TableCell><SeverityBadge severity={alert.severity} /></TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {alert.layer ? LAYER_LABELS[alert.layer] ?? alert.layer : '—'}
+                  </TableCell>
+                  <TableCell><ScoreCell score={alert.score} /></TableCell>
                   <TableCell className="text-sm">
                     {alert.user ? `${alert.user.firstName} ${alert.user.lastName}` : <span className="text-muted-foreground">—</span>}
                   </TableCell>
