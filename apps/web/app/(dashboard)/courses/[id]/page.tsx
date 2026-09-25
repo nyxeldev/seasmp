@@ -8,6 +8,7 @@ import {
   type Course, type Enrollment, type Assessment, type User,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useBreadcrumbTitle } from '@/lib/breadcrumb'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
@@ -38,6 +39,9 @@ export default function CourseDetailPage() {
   const [qrToken, setQrToken]         = useState<string | null>(null)
   const [qrCountdown, setQrCountdown] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Breadcrumb'da xom UUID emas, kursning nomi ko'rinsin
+  useBreadcrumbTitle(course?.title)
 
   const loadCourse     = () => coursesApi.getById(id).then(r => setCourse(r.data)).catch(e => toast.error(e.message))
   const loadEnrollments= () => enrollmentsApi.list(`courseId=${id}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})

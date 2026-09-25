@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { assessmentsApi, enrollmentsApi, type Assessment, type Enrollment, type Grade } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useBreadcrumbTitle } from '@/lib/breadcrumb'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +25,10 @@ export default function CourseGradesPage() {
   const [gradeMap, setGradeMap]       = useState<GradeMap>({})
   const [edits, setEdits]             = useState<Record<string, string>>({})
   const [saving, setSaving]           = useState<Record<string, boolean>>({})
+
+  // Kurs nomi ro'yxatdan o'tishlar bilan birga keladi — breadcrumb'da xom UUID
+  // ko'rinmasligi uchun shundan olinadi, qo'shimcha so'rov qilinmaydi.
+  useBreadcrumbTitle(enrollments[0]?.course?.title)
 
   const load = useCallback(async () => {
     const [assRes, enrollRes] = await Promise.all([

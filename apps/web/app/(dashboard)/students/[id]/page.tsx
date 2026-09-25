@@ -8,6 +8,7 @@ import {
   type User, type Enrollment, type GradeWithAssessment, type PyStudentEnrollmentAnalytics,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useBreadcrumbTitle } from '@/lib/breadcrumb'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -68,6 +69,9 @@ export default function StudentProfilePage() {
   const [analyticsData, setAnalyticsData]     = useState<PyStudentEnrollmentAnalytics | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [analyticsOffline, setAnalyticsOffline] = useState(false)
+
+  // Breadcrumb'da xom UUID emas, talabaning ismi ko'rinsin
+  useBreadcrumbTitle(student ? `${student.firstName} ${student.lastName}` : undefined)
 
   const canView = me?.role === 'ADMIN' || me?.role === 'SUPER_ADMIN' ||
                   me?.role === 'TEACHER' || me?.id === id

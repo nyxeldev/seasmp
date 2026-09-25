@@ -1,3 +1,4 @@
+import { isValidElement } from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -40,15 +41,32 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * Base UI `nativeButton` ni to'g'ri qiymatga o'zi keltiradi.
+ *
+ * Muammo: `nativeButton` standart bo'yicha `true`, ya'ni Base UI haqiqiy
+ * `<button>` kutadi. `render={<Link/>}` esa `<a>` chizadi, shuning uchun
+ * har bir bunday tugma konsolga ogohlantirish yozardi — kurs sahifasining
+ * o'zida beshta joyda.
+ *
+ * Taxmin qilmaymiz: `render` React elementi bo'lsa, uning tipiga QARAB
+ * aniqlanadi. Chaqiruvchi `nativeButton` ni ochiq bersa, uniki ustun turadi
+ * (spread quyida turgani uchun).
+ */
 function Button({
   className,
   variant = "default",
   size = "default",
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  const nativeButton = isValidElement(props.render)
+    ? props.render.type === "button"
+    : undefined
+
   return (
     <ButtonPrimitive
       data-slot="button"
+      nativeButton={nativeButton}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

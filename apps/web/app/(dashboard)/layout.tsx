@@ -17,27 +17,43 @@ import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
 import { useLocale } from '@/store/locale'
 import type { TKey } from '@/store/locale'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { BreadcrumbTitleProvider, useBreadcrumbTitleValue } from '@/lib/breadcrumb'
 
 const SEGMENT_KEYS: Record<string, TKey> = {
   dashboard:   'nav.dashboard',
   courses:     'nav.courses',
   users:       'nav.students',
+  // /students marshruti ham bor — u yetishmagani uchun breadcrumb'da
+  // tarjimasiz "students" ko'rinardi
+  students:    'nav.students',
+  enrollments: 'nav.enrollments',
   attendance:  'nav.attendance',
+  grades:      'nav.grades',
   analytics:   'nav.analytics',
   security:    'nav.security',
   settings:    'nav.settings',
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 // ── Breadcrumb ────────────────────────────────────────────────────────────────
 function Breadcrumb() {
   const pathname = usePathname()
   const { t } = useLocale()
+  const entityTitle = useBreadcrumbTitleValue()
   const segments = pathname.split('/').filter(Boolean)
   return (
     <nav aria-label="breadcrumb" className="flex items-center gap-1 text-sm">
       {segments.map((seg, i) => {
         const key = SEGMENT_KEYS[seg]
-        const label = key ? t(key) : seg
+        // Dinamik segment — bu identifikator. Xom UUID foydalanuvchiga hech
+        // narsa aytmaydi, shuning uchun sahifa bergan nom ko'rsatiladi. Nom
+        // hali yuklanmagan bo'lsa qisqartirilgan ko'rinish chiziladi.
+        const label = key
+          ? t(key)
+          : UUID_RE.test(seg)
+            ? (entityTitle ?? `${seg.slice(0, 8)}…`)
+            : seg
         const isLast = i === segments.length - 1
         return (
           <span key={i} className="flex items-center gap-1">
@@ -128,6 +144,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <SidebarProvider>
+      {/* Provider TopHeader'ni ham, sahifani ham qamrab olishi kerak:
+          sahifa nomni yozadi, breadcrumb esa uni o'qiydi. */}
+      <BreadcrumbTitleProvider>
       <div className="flex h-screen overflow-hidden" style={{ background: 'var(--s-bg)' }}>
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -139,6 +158,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
+      </BreadcrumbTitleProvider>
       <GlobalSearch />
       <KeyboardShortcuts />
     </SidebarProvider>

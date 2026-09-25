@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { attendanceApi, enrollmentsApi, type Attendance, type Enrollment } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useBreadcrumbTitle } from '@/lib/breadcrumb'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,6 +34,10 @@ export default function CourseAttendancePage() {
   const [qrOpen, setQrOpen]           = useState(false)
   const [qrToken, setQrToken]         = useState<string | null>(null)
   const [qrCountdown, setQrCountdown] = useState(0)
+
+  // Kurs nomi ro'yxatdan o'tishlar bilan birga keladi — breadcrumb'da xom UUID
+  // ko'rinmasligi uchun shundan olinadi, qo'shimcha so'rov qilinmaydi.
+  useBreadcrumbTitle(enrollments[0]?.course?.title)
   const [form, setForm]               = useState({ enrollmentId: '', lessonDate: '', status: 'PRESENT' as AttStatus })
   const [qrDate, setQrDate]           = useState(new Date().toISOString().slice(0, 10))
 
