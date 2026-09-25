@@ -24,7 +24,15 @@ import { recordRequest } from './services/requestAudit'
 ;(BigInt.prototype as any).toJSON = function () { return this.toString() }
 
 export async function buildApp() {
-  const app = Fastify({ logger: false })
+  // trustProxy — `request.ip` haqiqiy mijoz IP si bo'lishi uchun. Usiz proksi
+  // ortida ishlaganda chegara, audit va IP bo'yicha aniqlash Nginx IP siga
+  // qarab ishlaydi. Qiymat CIDR ham bo'lishi mumkin ('10.0.0.0/8').
+  const trustProxy =
+    env.TRUST_PROXY === 'true'  ? true  :
+    env.TRUST_PROXY === 'false' ? false :
+    env.TRUST_PROXY
+
+  const app = Fastify({ logger: false, trustProxy })
 
   // ─── Content-Type wildcard (bodyless POST/PATCH routes) ──────────────────────
   app.addContentTypeParser('*', { parseAs: 'string' }, (_req, body, done) => {
@@ -45,7 +53,14 @@ export async function buildApp() {
 
   await registerAuthMiddleware(app)
 
+  // global: false — plagin o'z hookini har bir route'ning MAVJUD onRequest
+  // ro'yxati oxiriga qo'shadi. `onRequest: [app.authenticate]` bo'lgan yo'llarda
+  // bu avval auth ishlashini, 401 qaytarib so'rovni to'xtatishini va chegara
+  // umuman tekshirilmasligini bildirardi: tokensiz trafik cheklanmay qolardi.
+  // Buning o'rniga chegarani quyida instance darajasidagi hook sifatida
+  // qo'shamiz — u route hooklaridan OLDIN ishlaydi.
   await app.register(rateLimit, {
+    global: false,
     max: env.RATE_LIMIT_MAX,
     timeWindow: '1 minute',
     keyGenerator: (request) => request.ip,
@@ -61,6 +76,11 @@ export async function buildApp() {
       },
     }),
   })
+
+  // Chegara har bir so'rovda, autentifikatsiyadan OLDIN tekshiriladi.
+  // Instance darajasidagi onRequest hooklari route darajasidagilaridan oldin
+  // ishlaydi, shuning uchun 401 bilan rad etiladigan so'rov ham hisobga olinadi.
+  app.addHook('onRequest', app.rateLimit())
 
   // ─── Routes ──────────────────────────────────────────────────────────────────
   await app.register(authRoutes,       { prefix: '/v1/auth' })
