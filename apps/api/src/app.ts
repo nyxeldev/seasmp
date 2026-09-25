@@ -5,6 +5,7 @@ import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
 
 import { env } from './config/env'
+import { logger } from './config/logger'
 import { registerAuthMiddleware } from './middlewares/auth.middleware'
 
 import authRoutes       from './routes/auth.routes'
@@ -45,10 +46,14 @@ export async function buildApp() {
   await registerAuthMiddleware(app)
 
   await app.register(rateLimit, {
-    max: 100,
+    max: env.RATE_LIMIT_MAX,
     timeWindow: '1 minute',
     keyGenerator: (request) => request.ip,
+    // statusCode shart: usiz plagin xatosi global error handlerga statusCode'siz
+    // yetib borardi va mijoz 429 o'rniga 500 olardi — ya'ni chegaradan oshgan
+    // so'rov server nosozligidek ko'rinardi va qayta urinish mantiqi ishlamasdi.
     errorResponseBuilder: () => ({
+      statusCode: 429,
       success: false,
       error: {
         code: 'RATE_LIMIT_EXCEEDED',
@@ -81,9 +86,16 @@ export async function buildApp() {
   // Javob yuborilgandan keyin ishlaydi — foydalanuvchi ko'radigan kechikishga
   // ta'sir qilmaydi. Har bir /v1/ so'rovi audit logga yoziladi, 401/403 esa
   // ACCESS_DENIED sifatida qayd etiladi.
-  app.addHook('onResponse', async (request, reply) => {
-    await recordRequest(request, reply)
-  })
+  //
+  // DETECTION_ENABLED=false bo'lsa hook umuman ro'yxatdan o'tmaydi — shart
+  // har so'rovda tekshirilmaydi va qatlamlarning narxi noldan iborat bo'ladi.
+  if (env.DETECTION_ENABLED !== 'false') {
+    app.addHook('onResponse', async (request, reply) => {
+      await recordRequest(request, reply)
+    })
+  } else {
+    logger.warn({ msg: 'Aniqlash qatlamlari O\'CHIRILGAN (DETECTION_ENABLED=false) — audit yozuvi ham yo\'q' })
+  }
 
   // ─── Health Check ─────────────────────────────────────────────────────────────
   app.get('/health', async () => ({

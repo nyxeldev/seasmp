@@ -52,9 +52,18 @@ export async function recordBehavior(userId: string, score: number): Promise<voi
   await redis.setex(key, WINDOW_SECONDS, String(score))
 }
 
-/** 2-QATLAM ning qat'iy qoidasi — ommaviy ma'lumot chiqarish */
-export async function recordMassAccess(userId: string): Promise<void> {
-  await redis.setex(keyMass(userId), WINDOW_SECONDS, '1')
+/**
+ * 2-QATLAM ning qat'iy qoidasi — ommaviy ma'lumot chiqarish.
+ *
+ * Oynada BIRINCHI marta belgilangan bo'lsa `true` qaytaradi. Chaqiruvchi
+ * shunga qarab log yozadi: ommaviy chiqarish paytida har bir so'rov uchun
+ * qator yozilsa, aniqlash tizimining o'zi toshqinni kuchaytirgan bo'lardi.
+ */
+export async function recordMassAccess(userId: string): Promise<boolean> {
+  const key = keyMass(userId)
+  const alreadySet = await redis.get(key)
+  await redis.setex(key, WINDOW_SECONDS, '1')
+  return !alreadySet
 }
 
 /** Oynadagi to'plangan manzara — korrelyatsiya shunga qaraydi */

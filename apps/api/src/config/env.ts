@@ -48,6 +48,24 @@ const envSchema = z.object({
    */
   REDIS_IN_MEMORY:      z.string().optional(),
 
+  /**
+   * Aniqlash qatlamlarini o'chirish tugmasi ('false' bo'lsa o'chadi).
+   *
+   * Bu qatlamlar HAR BIR /v1/ so'rovida qo'shimcha ish bajaradi: egalikni
+   * aniqlash uchun bitta so'rov, audit yozuvi va bir nechta Redis amali.
+   * Ishlab chiqarishda kutilmagan yuk yoki yolg'on ishoralar chiqsa, butun
+   * deployni orqaga qaytarmasdan, faqat shu o'zgaruvchi bilan o'chirish
+   * mumkin bo'lsin. Audit yozuvi ham to'xtaydi, shuni yodda tuting.
+   */
+  DETECTION_ENABLED:    z.string().default('true'),
+
+  /**
+   * IP bo'yicha daqiqadagi so'rovlar chegarasi. Ilgari kodda 100 deb qotib
+   * qolgan edi — yuk testini o'tkazish yoki prod trafikiga moslash uchun
+   * har safar kodni o'zgartirish kerak bo'lardi. Standart qiymat o'zgarmadi.
+   */
+  RATE_LIMIT_MAX:       z.coerce.number().default(100),
+
   JWT_ACCESS_SECRET:    z.string().min(32),
   JWT_REFRESH_SECRET:   z.string().min(32),
   JWT_ACCESS_EXPIRES_IN:  z.string().default('15m'),

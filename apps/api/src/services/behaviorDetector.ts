@@ -74,8 +74,11 @@ export async function inspect(
     // Qo'pol holat — kompozit balldan mustaqil qat'iy qoida
     const massAccess = isMassAccess(reqLastHour, profile.reqPerHourMean)
     if (massAccess) {
-      await recordMassAccess(userId)
-      logger.warn({ msg: 'Ommaviy ma\'lumot chiqarish', userId, reqLastHour })
+      // Faqat oynadagi birinchi hodisa yoziladi — aks holda toshqin davomida
+      // har bir so'rov uchun bitta qator chiqib, logni bosib ketardi.
+      if (await recordMassAccess(userId)) {
+        logger.warn({ msg: 'Ommaviy ma\'lumot chiqarish', userId, reqLastHour })
+      }
       return { score: 1, massAccess: true, reasons: ['MASS_ACCESS'] }
     }
 
