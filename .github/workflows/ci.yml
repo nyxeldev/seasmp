@@ -68,6 +68,30 @@ jobs:
           AES_ENCRYPTION_KEY:   b7dcb02c6342b24134b3a09db4d897c16df22aa9034a757d4d0028118159a756
           DISABLE_2FA_REQUIRED: 'false'
 
+  # ─── Web unit tests ──────────────────────────────────────────────────────────
+  # Bu qadam ilgari yo'q edi: CI web uchun faqat `tsc` va Playwright'ni
+  # ishlatardi, shuning uchun vitest testlari jimgina eskirib qolardi. Login
+  # sahifasi qayta dizayn qilinganda ikkitasi yiqilgan, lekin hech qayerda
+  # ko'rinmagan — nosozlik faqat qo'lda ishga tushirganda topildi.
+  test-web:
+    name: Web Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci --workspace=apps/web
+
+      - name: Run web unit tests
+        working-directory: apps/web
+        run: npm test
+
   # ─── Integration tests ───────────────────────────────────────────────────────
   test-integration:
     name: Integration Tests
@@ -278,7 +302,7 @@ jobs:
   build:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    needs: [test-unit, test-integration, test-python, test-e2e]
+    needs: [test-unit, test-web, test-integration, test-python, test-e2e]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     permissions:
