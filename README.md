@@ -53,7 +53,23 @@ npm --workspace apps/api run db:migrate
 # Ma'lumot. Ikkitasidan birini tanlang:
 npm --workspace apps/api run db:seed        # minimal: 9 foydalanuvchi, 3 kurs
 npm --workspace apps/api run db:seed:demo   # namoyish: 80 talaba, 10 kurs, davomat va baholar
+
+# Xatti-harakat tarixi — 2-QATLAM UCHUN SHART.
+# Xatti-harakat qatlami har foydalanuvchining o'z me'yoriga qaraydi, me'yor esa
+# 30 kunlik audit tarixidan quriladi (kamida 50 kuzatuv). Bu tarixsiz profil
+# qurilmaydi, 2-qatlam jim qoladi va CORRELATED hukm hech qachon chiqmaydi.
+npm --workspace apps/api run db:seed:history
 ```
+
+Tarixdan keyin profillarni qurish kerak (ADMIN tokeni bilan):
+
+```bash
+curl -X POST http://localhost:4000/v1/security/profiles/refresh \
+  -H "authorization: Bearer <ADMIN_ACCESS_TOKEN>"
+```
+
+Javobda `{"built": 95, "skipped": 0}` chiqishi kerak. `skipped` noldan katta
+bo'lsa — o'sha foydalanuvchilarda yetarli tarix yo'q.
 
 ### 5. API ishga tushirish (development)
 ```bash
