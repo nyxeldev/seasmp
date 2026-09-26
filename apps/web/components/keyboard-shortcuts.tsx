@@ -80,7 +80,7 @@ export function KeyboardShortcuts() {
             <div className="flex items-center justify-between px-5 py-4 border-b"
               style={{ borderColor: 'var(--color-border)' }}>
               <div className="flex items-center gap-2">
-                <Keyboard className="size-4" style={{ color: 'var(--color-accent)' }} />
+                <Keyboard className="size-[18px]" style={{ color: 'var(--color-accent)' }} />
                 <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text1)' }}>
                   Klaviatura yorliqlari
                 </h3>
@@ -90,7 +90,7 @@ export function KeyboardShortcuts() {
                 style={{ color: 'var(--color-text3)' }}
                 onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--color-text1)'}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--color-text3)'}>
-                <X className="size-4" />
+                <X className="size-[18px]" />
               </button>
             </div>
 

@@ -37,6 +37,7 @@ export default function CourseDetailPage() {
   const [qrOpen, setQrOpen]           = useState(false)
   const [qrDate, setQrDate]           = useState(new Date().toISOString().slice(0, 10))
   const [qrToken, setQrToken]         = useState<string | null>(null)
+  const [qrImage, setQrImage]         = useState<string | null>(null)
   const [qrCountdown, setQrCountdown] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -67,7 +68,7 @@ export default function CourseDetailPage() {
   useEffect(() => {
     if (qrCountdown <= 0) {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
-      if (qrToken) { setQrToken(null); toast.info('QR token expired') }
+      if (qrToken) { setQrToken(null); setQrImage(null); toast.info('QR token expired') }
       return
     }
     timerRef.current = setInterval(() => setQrCountdown(c => c - 1), 1000)
@@ -78,6 +79,7 @@ export default function CourseDetailPage() {
     try {
       const res = await attendanceApi.generateQr(course!.id, qrDate)
       setQrToken(res.data.token)
+      setQrImage(res.data.qrCodeUrl)
       setQrCountdown(res.data.expiresIn)
       toast.success('QR token generated — 5 minutes')
     } catch (err: any) { toast.error(err.message) }
@@ -124,7 +126,7 @@ export default function CourseDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon-sm" render={<Link href="/courses" />}>
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-[18px]" />
         </Button>
         <h1 className="text-2xl font-semibold">{course.title}</h1>
         <Badge variant={course.status === 'ACTIVE' ? 'default' : 'outline'}>{course.status}</Badge>
@@ -148,9 +150,9 @@ export default function CourseDetailPage() {
       {/* Action buttons */}
       <div className="flex gap-2 flex-wrap">
         {isTeacher && (
-          <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrCountdown(0) } }}>
+          <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrImage(null); setQrCountdown(0) } }}>
             <DialogTrigger render={<Button variant="outline" />}>
-              <QrCode className="size-4" /> QR Attendance
+              <QrCode className="size-[18px]" /> QR Attendance
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>QR Attendance Token</DialogTitle></DialogHeader>
@@ -169,6 +171,14 @@ export default function CourseDetailPage() {
                         {qrFmt}
                       </Badge>
                     </div>
+                    {/* Skanerlanadigan kod. API uni qaytarardi, lekin oyna faqat
+                        matnni ko'rsatardi — "skanerlanganda" deyilsa-da,
+                        skanerlaydigan narsa yo'q edi. */}
+                    {qrImage && (
+                      <div className="flex justify-center bg-white rounded-lg p-3">
+                        <img src={qrImage} alt="QR attendance code" className="size-44" />
+                      </div>
+                    )}
                     <Card size="sm">
                       <CardContent className="pt-3">
                         <p className="font-mono text-xs break-all bg-muted p-3 rounded select-all">{qrToken}</p>
@@ -183,10 +193,10 @@ export default function CourseDetailPage() {
           </Dialog>
         )}
         <Button variant="outline" render={<Link href={`/courses/${id}/attendance`} />}>
-          <ClipboardList className="size-4" /> Attendance
+          <ClipboardList className="size-[18px]" /> Attendance
         </Button>
         <Button variant="outline" render={<Link href={`/courses/${id}/grades`} />}>
-          <Star className="size-4" /> Grades
+          <Star className="size-[18px]" /> Grades
         </Button>
       </div>
 
@@ -200,9 +210,9 @@ export default function CourseDetailPage() {
               tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'students' && <><Users className="inline size-3.5 mr-1" />Students ({enrollments.length})</>}
-            {t === 'attendance' && <><ClipboardList className="inline size-3.5 mr-1" />Attendance</>}
-            {t === 'grades' && <><Star className="inline size-3.5 mr-1" />Grades ({assessments.length})</>}
+            {t === 'students' && <><Users className="inline size-4 mr-1" />Students ({enrollments.length})</>}
+            {t === 'attendance' && <><ClipboardList className="inline size-4 mr-1" />Attendance</>}
+            {t === 'grades' && <><Star className="inline size-4 mr-1" />Grades ({assessments.length})</>}
           </button>
         ))}
       </div>
@@ -215,7 +225,7 @@ export default function CourseDetailPage() {
             {isAdmin && (
               <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
                 <DialogTrigger render={<Button size="sm" />}>
-                  <Plus className="size-4" /> Enroll
+                  <Plus className="size-[18px]" /> Enroll
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader><DialogTitle>Enroll Student</DialogTitle></DialogHeader>
@@ -276,7 +286,7 @@ export default function CourseDetailPage() {
         <div className="space-y-4">
           <p className="text-muted-foreground text-sm">View and manage full attendance records on the dedicated page.</p>
           <Button render={<Link href={`/courses/${id}/attendance`} />}>
-            <ClipboardList className="size-4" /> Open Attendance Page
+            <ClipboardList className="size-[18px]" /> Open Attendance Page
           </Button>
         </div>
       )}
@@ -290,7 +300,7 @@ export default function CourseDetailPage() {
               {isTeacher && (
                 <Dialog open={assOpen} onOpenChange={setAssOpen}>
                   <DialogTrigger render={<Button size="sm" />}>
-                    <Plus className="size-4" /> Add Assessment
+                    <Plus className="size-[18px]" /> Add Assessment
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader><DialogTitle>New Assessment</DialogTitle></DialogHeader>

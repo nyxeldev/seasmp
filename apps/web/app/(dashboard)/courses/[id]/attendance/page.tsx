@@ -33,6 +33,7 @@ export default function CourseAttendancePage() {
   const [open, setOpen]               = useState(false)
   const [qrOpen, setQrOpen]           = useState(false)
   const [qrToken, setQrToken]         = useState<string | null>(null)
+  const [qrImage, setQrImage]         = useState<string | null>(null)
   const [qrCountdown, setQrCountdown] = useState(0)
 
   const [form, setForm]               = useState({ enrollmentId: '', lessonDate: '', status: 'PRESENT' as AttStatus })
@@ -79,8 +80,12 @@ export default function CourseAttendancePage() {
 
   const generateQr = async () => {
     try {
-      const res = await attendanceApi.generateQr(id, qrDate)
+      // `id` — manzildagi qism, u slug bo'lishi mumkin. API bu yerda UUID kutadi,
+      // shuning uchun aniqlangan kursning identifikatori yuboriladi.
+      if (!courseId) return
+      const res = await attendanceApi.generateQr(courseId, qrDate)
       setQrToken(res.data.token)
+      setQrImage(res.data.qrCodeUrl)
       setQrCountdown(res.data.expiresIn)
     } catch (err: any) { toast.error(err.message) }
   }
@@ -105,7 +110,7 @@ export default function CourseAttendancePage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon-sm" render={<Link href={`/courses/${id}`} />}>
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-[18px]" />
         </Button>
         <h1 className="text-2xl font-semibold">Attendance</h1>
       </div>
@@ -144,7 +149,7 @@ export default function CourseAttendancePage() {
           <>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger render={<Button variant="outline" />}>
-                <Plus className="size-4" /> Mark Manual
+                <Plus className="size-[18px]" /> Mark Manual
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
@@ -182,9 +187,9 @@ export default function CourseAttendancePage() {
               </DialogContent>
             </Dialog>
 
-            <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrCountdown(0) } }}>
+            <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrImage(null); setQrCountdown(0) } }}>
               <DialogTrigger render={<Button />}>
-                <QrCode className="size-4" /> QR Attendance
+                <QrCode className="size-[18px]" /> QR Attendance
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader><DialogTitle>QR Attendance Token</DialogTitle></DialogHeader>
@@ -203,6 +208,14 @@ export default function CourseAttendancePage() {
                           {qrFmt}
                         </Badge>
                       </div>
+                      {/* Skanerlanadigan kod. API uni qaytarardi, lekin bu oyna
+                          faqat matnni ko'rsatib, rasmni tashlab yuborardi — ya'ni
+                          "skanerlang" deyilsa-da, skanerlaydigan narsa yo'q edi. */}
+                      {qrImage && (
+                        <div className="flex justify-center bg-white rounded-lg p-3">
+                          <img src={qrImage} alt="QR attendance code" className="size-44" />
+                        </div>
+                      )}
                       <p className="font-mono text-xs break-all bg-muted p-3 rounded select-all">{qrToken}</p>
                       <Button variant="outline" onClick={generateQr} className="w-full">Regenerate</Button>
                     </div>

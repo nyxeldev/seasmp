@@ -166,12 +166,12 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         </h1>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => { loadStats(); loadAlerts(); loadSessions() }} disabled={loading}>
-            <RefreshCw className={`size-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`size-[18px] mr-1.5 ${loading ? 'animate-spin' : ''}`} />
             {t('attendance.refresh')}
           </Button>
           <Link href="/security/audit">
             <Button variant="outline" size="sm">
-              <ExternalLink className="size-4 mr-1.5" />
+              <ExternalLink className="size-[18px] mr-1.5" />
               Audit Log
             </Button>
           </Link>
@@ -186,7 +186,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm text-muted-foreground font-normal">{label}</CardTitle>
-                  <Icon className={`size-4 ${color}`} />
+                  <Icon className={`size-[18px] ${color}`} />
                 </div>
               </CardHeader>
               <CardContent><p className="text-3xl font-bold">{value}</p></CardContent>
@@ -226,7 +226,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <AlertTriangle className="size-4 text-destructive" />
+            <AlertTriangle className="size-[18px] text-destructive" />
             Xavfsizlik Alertlari ({alerts.length})
           </CardTitle>
         </CardHeader>
@@ -270,7 +270,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   <TableCell>
                     {!alert.resolved && (
                       <Button variant="ghost" size="sm" onClick={() => resolveAlert(alert.id)}>
-                        <CheckCircle className="size-4" />
+                        <CheckCircle className="size-[18px]" />
                       </Button>
                     )}
                   </TableCell>
@@ -293,11 +293,11 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <Users className="size-4" />
+              <Users className="size-[18px]" />
               Aktiv Sessionlar ({sessions.length})
             </CardTitle>
             <Button variant="outline" size="sm" onClick={loadSessions} disabled={sessLoading}>
-              <RefreshCw className={`size-4 ${sessLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`size-[18px] ${sessLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
         </CardHeader>
@@ -331,7 +331,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   {isSuperAdmin && (
                     <TableCell>
                       <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => forceRevoke(s.id)}>
-                        <Ban className="size-4" />
+                        <Ban className="size-[18px]" />
                       </Button>
                     </TableCell>
                   )}

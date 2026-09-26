@@ -63,7 +63,7 @@ export default function RiskPage() {
 
   if (!canView) return (
     <div className="flex items-center gap-2 text-muted-foreground">
-      <ArrowLeft className="size-4" />
+      <ArrowLeft className="size-[18px]" />
       <span>Access denied.</span>
     </div>
   )
@@ -72,7 +72,7 @@ export default function RiskPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon-sm" render={<Link href="/analytics" />}>
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-[18px]" />
         </Button>
         <h1 className="text-2xl font-semibold flex items-center gap-2">
           <AlertTriangle className="size-6 text-destructive" />
@@ -100,7 +100,7 @@ export default function RiskPage() {
           </SelectContent>
         </Select>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`size-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`size-[18px] mr-1.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>

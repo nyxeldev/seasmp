@@ -21,7 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 const RAIL_W = 64
 const FULL_W = 220
 const NAV_PAD = 8            // nav elementining px-2 chekkasi
-const ICON_W = 16            // lucide size-4
+const ICON_W = 18            // lucide size-[18px]
 /** Ikonkaning chap chekkadan masofasi — tor holatda markazda turishi uchun */
 const ICON_LEFT = (RAIL_W - NAV_PAD * 2 - ICON_W) / 2
 
@@ -206,7 +206,7 @@ export function Sidebar() {
         <div className="flex items-center gap-2 border-b px-3"
           style={{ borderColor: 'var(--color-border)', height: '56px', minHeight: '56px' }}>
           <div className="size-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-            <Shield className="size-4 text-white" />
+            <Shield className="size-[18px] text-white" />
           </div>
           <AnimatePresence initial={false}>
             {!collapsed && (
@@ -247,7 +247,7 @@ export function Sidebar() {
                 }}}
               >
                 {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-white/60" />}
-                <Icon className="size-4 shrink-0" />
+                <Icon className="size-[18px] shrink-0" />
                 <AnimatePresence initial={false}>
                   {!collapsed && (
                     <motion.span key="text" {...labelMotion}
@@ -297,7 +297,7 @@ export function Sidebar() {
                     (e.currentTarget as HTMLElement).style.color = 'var(--color-text3)'
                     ;(e.currentTarget as HTMLElement).style.background = 'transparent'
                   }}>
-                  <LogOut className="size-4" />
+                  <LogOut className="size-[18px]" />
                 </button>
               </motion.div>
             )}
@@ -308,9 +308,10 @@ export function Sidebar() {
       {/* Tortish tugmasi — yopiq/ochiq holatini o'qning burilishi ko'rsatadi */}
       <button
         onClick={toggle}
+        // aria-label ekran o'quvchilar uchun qoladi, lekin `title` yo'q:
+        // sichqoncha ustiga kelganda brauzer ko'rsatadigan izoh keraksiz edi
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         aria-expanded={!collapsed}
-        title={collapsed ? t('nav.expand') : t('nav.collapse')}
         style={{
           position:       'absolute',
           right:          '-14px',
@@ -347,7 +348,7 @@ export function Sidebar() {
           transition={reduce ? { duration: 0 } : { duration: WIDTH_S, ease: EASE }}
           className="flex"
         >
-          <ChevronLeft className="size-3.5" />
+          <ChevronLeft className="size-4" />
         </motion.span>
       </button>
     </div>

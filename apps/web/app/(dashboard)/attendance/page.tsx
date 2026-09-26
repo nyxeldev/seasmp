@@ -241,7 +241,7 @@ export default function AttendancePage() {
                 style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)', background: 'transparent' }}
               />
             }>
-              <Plus className="size-4" /> {t('attendance.mark')}
+              <Plus className="size-[18px]" /> {t('attendance.mark')}
             </DialogTrigger>
             {/* Guruh varaqasi: kurs → sana → butun ro'yxat bir ekranda.
                 Ilgari bu yerda barcha kurslarning hamma talabasi bitta ochiluvchi
@@ -315,7 +315,7 @@ export default function AttendancePage() {
                                     background:  active ? meta.bg : 'transparent',
                                     color:       active ? meta.color : 'var(--s-muted)',
                                   }}>
-                                  <meta.Icon className="size-3.5" />
+                                  <meta.Icon className="size-4" />
                                 </button>
                               )
                             })}
@@ -419,13 +419,13 @@ export default function AttendancePage() {
           {displayRecs.length > 0 && (
             <div className="flex items-center gap-3 text-xs">
               <span className="flex items-center gap-1" style={{ color: '#22C55E' }}>
-                <CheckCircle className="size-3.5" /> {stats.present}
+                <CheckCircle className="size-4" /> {stats.present}
               </span>
               <span className="flex items-center gap-1" style={{ color: '#F59E0B' }}>
-                <AlertCircle className="size-3.5" /> {stats.late}
+                <AlertCircle className="size-4" /> {stats.late}
               </span>
               <span className="flex items-center gap-1" style={{ color: '#EF4444' }}>
-                <XCircle className="size-3.5" /> {stats.absent}
+                <XCircle className="size-4" /> {stats.absent}
               </span>
             </div>
           )}
@@ -457,12 +457,12 @@ export default function AttendancePage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--s-muted)' }}>
-                    <Clock className="size-3" />
+                    <Clock className="size-3.5" />
                     {new Date(r.lessonDate).toLocaleDateString('uz-UZ', { month: 'short', day: 'numeric' })}
                   </div>
                   <span className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full"
                     style={{ color: meta.color, background: meta.bg }}>
-                    <Icon className="size-3" /> {meta.label}
+                    <Icon className="size-3.5" /> {meta.label}
                   </span>
                 </div>
               </motion.div>
@@ -500,7 +500,7 @@ export default function AttendancePage() {
               }}
             />
           }>
-            <QrCode className="size-4" /> {t('attendance.qr')}
+            <QrCode className="size-[18px]" /> {t('attendance.qr')}
           </DialogTrigger>
 
           <DialogContent className="max-w-sm">
@@ -551,7 +551,7 @@ export default function AttendancePage() {
                     disabled={qrLoading}
                     className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 transition-colors"
                   >
-                    <RefreshCw className="size-3.5" /> {t('attendance.refresh')}
+                    <RefreshCw className="size-4" /> {t('attendance.refresh')}
                   </button>
                 </div>
                 <p className="text-xs text-center" style={{ color: 'var(--s-muted)' }}>

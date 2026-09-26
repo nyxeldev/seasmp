@@ -59,7 +59,7 @@ function Breadcrumb() {
         const isLast = i === segments.length - 1
         return (
           <span key={i} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight className="size-3.5" style={{ color: 'var(--s-muted)' }} />}
+            {i > 0 && <ChevronRight className="size-4" style={{ color: 'var(--s-muted)' }} />}
             <span style={{ color: isLast ? 'var(--s-text)' : 'var(--s-muted)', fontWeight: isLast ? 500 : 400 }}>
               {label}
             </span>

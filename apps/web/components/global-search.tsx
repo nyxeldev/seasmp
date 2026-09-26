@@ -80,7 +80,7 @@ export function GlobalSearch() {
             {/* Input */}
             <div className="flex items-center gap-3 px-4 py-3.5 border-b"
               style={{ borderColor: 'var(--color-border)' }}>
-              <Search className="size-4 shrink-0" style={{ color: 'var(--color-text3)' }} />
+              <Search className="size-[18px] shrink-0" style={{ color: 'var(--color-text3)' }} />
               <input
                 ref={inputRef}
                 value={query}
@@ -115,7 +115,7 @@ export function GlobalSearch() {
                       color: active ? '#3b82f6' : 'var(--color-text1)',
                     }}
                   >
-                    <Icon className="size-4 shrink-0" style={{ color: active ? '#3b82f6' : 'var(--color-text3)' }} />
+                    <Icon className="size-[18px] shrink-0" style={{ color: active ? '#3b82f6' : 'var(--color-text3)' }} />
                     <span className="flex-1">{t(item.key)}</span>
                     {active && (
                       <kbd style={{

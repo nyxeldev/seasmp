@@ -217,12 +217,12 @@ function AdminAnalytics() {
             style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)' }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-            <RefreshCw className={`size-3.5 ${riskLoading ? 'animate-spin' : ''}`} /> {t('attendance.refresh')}
+            <RefreshCw className={`size-4 ${riskLoading ? 'animate-spin' : ''}`} /> {t('attendance.refresh')}
           </button>
           <button onClick={triggerCalc} disabled={triggering || pyOffline}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white seasmp-btn disabled:opacity-50"
             style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
-            <TrendingUp className="size-3.5" /> {triggering ? 'Navbatda...' : 'ETL ishlatish'}
+            <TrendingUp className="size-4" /> {triggering ? 'Navbatda...' : 'ETL ishlatish'}
           </button>
         </div>
       </div>
@@ -240,14 +240,14 @@ function AdminAnalytics() {
               <div className="flex items-start justify-between mb-3">
                 <p className="text-xs font-medium" style={{ color: 'var(--s-muted)' }}>{label}</p>
                 <div className="p-2 rounded-lg" style={{ background: `${color}18` }}>
-                  <Icon className="size-4" style={{ color }} />
+                  <Icon className="size-[18px]" style={{ color }} />
                 </div>
               </div>
               <p className="text-3xl font-bold tabular-nums mb-2" style={{ color: 'var(--s-text)' }}>
                 {value}<span className="text-base font-normal ml-0.5" style={{ color: 'var(--s-muted)' }}>{unit}</span>
               </p>
               <div className="flex items-center gap-1 text-xs" style={{ color: trendUp ? '#22C55E' : '#F59E0B' }}>
-                {trendUp ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+                {trendUp ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
                 <span>{trend}</span>
               </div>
             </DC>
@@ -345,7 +345,7 @@ function AdminAnalytics() {
         <DC>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="size-4" style={{ color: '#EF4444' }} />
+              <AlertTriangle className="size-[18px]" style={{ color: '#EF4444' }} />
               <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Qoldirish xavfi — talabalar</h2>
             </div>
             <Link href="/analytics/risk">
@@ -394,8 +394,8 @@ function AdminAnalytics() {
                 </div>
                 <div className="col-span-1 flex justify-center">
                   {r.trend === 'up'
-                    ? <TrendingUp className="size-4 text-red-400" />
-                    : <TrendingDown className="size-4 text-green-400" />
+                    ? <TrendingUp className="size-[18px] text-red-400" />
+                    : <TrendingDown className="size-[18px] text-green-400" />
                   }
                 </div>
               </motion.div>
@@ -471,7 +471,7 @@ function TeacherAnalytics({ userId }: { userId: string }) {
           style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)' }}
           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'}
           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-          <RefreshCw className={`size-3.5 ${scoring ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`size-4 ${scoring ? 'animate-spin' : ''}`} />
           {scoring ? 'Navbatda...' : 'Xavfni hisoblash'}
         </button>
       </div>
@@ -518,7 +518,7 @@ function TeacherAnalytics({ userId }: { userId: string }) {
           {pyStats.at_risk_students.length > 0 && (
             <DC>
               <h2 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--s-text)' }}>
-                <AlertTriangle className="size-4 text-red-400" />
+                <AlertTriangle className="size-[18px] text-red-400" />
                 Xavf ostidagi talabalar ({pyStats.at_risk_students.length})
               </h2>
               <div className="space-y-2">

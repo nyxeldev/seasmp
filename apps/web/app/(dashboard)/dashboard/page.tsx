@@ -198,7 +198,7 @@ function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, t
         <div className="flex items-start justify-between mb-3">
           <p className="text-sm font-medium" style={{ color: 'var(--s-muted)' }}>{label}</p>
           <div className="p-2 rounded-lg" style={{ background: 'rgba(59,130,246,0.1)' }}>
-            <Icon className="size-4" style={{ color: '#3B82F6' }} />
+            <Icon className="size-[18px]" style={{ color: '#3B82F6' }} />
           </div>
         </div>
 
@@ -217,7 +217,7 @@ function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, t
             className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium"
             style={{ color: trendText, background: trendBg }}
           >
-            <TrendIcon className="size-3" />
+            <TrendIcon className="size-3.5" />
             {trendVal}
           </span>
           <span className="text-xs" style={{ color: 'var(--s-muted)' }}>bu oy</span>
@@ -312,7 +312,7 @@ function AdminDashboard() {
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{t('dashboard.riskStudents')}</h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>Top 5 · qoldirish ehtimoli</p>
               </div>
-              <AlertTriangle className="size-4" style={{ color: '#EF4444' }} />
+              <AlertTriangle className="size-[18px]" style={{ color: '#EF4444' }} />
             </div>
 
             <div className="space-y-3">
@@ -362,7 +362,7 @@ function AdminDashboard() {
                     className="size-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
                     style={{ background: `${color}18` }}
                   >
-                    <Icon className="size-3.5" style={{ color }} />
+                    <Icon className="size-4" style={{ color }} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm leading-snug" style={{ color: 'var(--s-text)' }}>

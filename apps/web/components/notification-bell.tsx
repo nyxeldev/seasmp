@@ -69,6 +69,30 @@ interface Item {
   color:    string
   at:       string
   href:     string
+  /** Bir xil hodisa necha marta takrorlangani; 1 bo'lsa ko'rsatilmaydi */
+  count:    number
+  /** Guruhga kirgan barcha yozuvlar — "o'qildi" belgisi hammasiga qo'yiladi */
+  ids:      string[]
+}
+
+/**
+ * Bir xil turdagi va bir xil odamga tegishli ketma-ket hodisalarni bittaga
+ * yig'adi. Aniqlash qatlami sovish oynasi bilan ishlaydi, shuning uchun uzoq
+ * davom etgan hodisa soatlar davomida o'nlab bir xil yozuv qoldiradi va ular
+ * ro'yxatni bosib ketadi — foydali narsa ko'rinmay qoladi.
+ */
+function groupRepeats(items: Item[]): Item[] {
+  const out: Item[] = []
+  for (const item of items) {
+    const prev = out[out.length - 1]
+    if (prev && prev.title === item.title && prev.subtitle === item.subtitle) {
+      prev.count += 1
+      prev.ids.push(...item.ids)
+      continue
+    }
+    out.push({ ...item, ids: [...item.ids] })
+  }
+  return out
 }
 
 const LOCALE_TAG: Record<Locale, string> = { uz: 'uz-UZ', ru: 'ru-RU', en: 'en-US' }
@@ -76,12 +100,25 @@ const LOCALE_TAG: Record<Locale, string> = { uz: 'uz-UZ', ru: 'ru-RU', en: 'en-U
 /**
  * Nisbiy vaqt. Ilgari bu funksiya tilga qaramay o'zbekcha satr qaytarardi
  * ("5 daqiqa oldin"), ya'ni ruscha va inglizcha interfeysda ham shunday chiqardi.
+ *
+ * Diqqat: `Intl.RelativeTimeFormat` 'uz-UZ' ni qo'llab-quvvatlanganlar ro'yxatida
+ * ko'rsatadi, lekin unda tarjima ma'lumoti yo'q va natija "-22 h" ko'rinishida
+ * chiqadi. Shuning uchun o'zbekcha qo'lda yoziladi, ru/en esa Intl'ga qoldiriladi.
  */
 function timeAgo(date: string, locale: Locale): string {
-  const rtf   = new Intl.RelativeTimeFormat(LOCALE_TAG[locale], { numeric: 'auto' })
-  const secs  = Math.round((new Date(date).getTime() - Date.now()) / 1000)
-  const abs   = Math.abs(secs)
-  if (abs < 60)    return rtf.format(Math.round(secs), 'second')
+  const past = Math.round((Date.now() - new Date(date).getTime()) / 1000)
+  const abs  = Math.abs(past)
+
+  if (locale === 'uz') {
+    if (abs < 60) return 'hozir'
+    if (abs < 3600)  return `${Math.round(abs / 60)} daqiqa oldin`
+    if (abs < 86400) return `${Math.round(abs / 3600)} soat oldin`
+    return `${Math.round(abs / 86400)} kun oldin`
+  }
+
+  const rtf  = new Intl.RelativeTimeFormat(LOCALE_TAG[locale], { numeric: 'auto' })
+  const secs = -past
+  if (abs < 60)    return rtf.format(secs, 'second')
   if (abs < 3600)  return rtf.format(Math.round(secs / 60), 'minute')
   if (abs < 86400) return rtf.format(Math.round(secs / 3600), 'hour')
   return rtf.format(Math.round(secs / 86400), 'day')
@@ -149,6 +186,8 @@ export function NotificationBell() {
   const items: Item[] = useMemo(() => {
     const fromAlerts: Item[] = alerts.map(a => ({
       id:    `alert:${a.id}`,
+      ids:   [`alert:${a.id}`],
+      count: 1,
       kind:  'alert',
       title: say(locale, ALERT_LABEL[a.type] ?? { uz: a.type, ru: a.type, en: a.type }),
       subtitle: a.user ? `${a.user.firstName} ${a.user.lastName}` : (a.ipAddress ?? null),
@@ -159,6 +198,8 @@ export function NotificationBell() {
 
     const fromLogs: Item[] = logs.map(l => ({
       id:    `audit:${l.id}`,
+      ids:   [`audit:${l.id}`],
+      count: 1,
       kind:  'audit',
       title: say(locale, AUDIT_CONFIG[l.action].label),
       subtitle: l.user ? `${l.user.firstName} ${l.user.lastName}` : (l.ipAddress ?? null),
@@ -167,12 +208,15 @@ export function NotificationBell() {
       href:  '/security/audit',
     }))
 
-    return [...fromAlerts, ...fromLogs]
+    const sorted = [...fromAlerts, ...fromLogs]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, 30)
+
+    return groupRepeats(sorted).slice(0, 30)
   }, [alerts, logs, locale])
 
-  const unread = items.filter(i => !readIds.has(i.id)).length
+  // Guruhdagi BARCHA yozuvlar o'qilgan bo'lsagina guruh o'qilgan hisoblanadi
+  const isRead = (item: Item) => item.ids.every(id => readIds.has(id))
+  const unread = items.filter(i => !isRead(i)).length
 
   const persistRead = (next: Set<string>) => {
     // Eng yangi READ_CAP tasini saqlab qolamiz — aks holda ro'yxat cheksiz o'sadi
@@ -181,10 +225,10 @@ export function NotificationBell() {
     try { localStorage.setItem(READ_KEY, JSON.stringify([...trimmed])) } catch { /* private rejim */ }
   }
 
-  const markAllRead = () => persistRead(new Set([...readIds, ...items.map(i => i.id)]))
+  const markAllRead = () => persistRead(new Set([...readIds, ...items.flatMap(i => i.ids)]))
 
   const openItem = (item: Item) => {
-    persistRead(new Set([...readIds, item.id]))
+    persistRead(new Set([...readIds, ...item.ids]))
     setOpen(false)
     router.push(item.href)
   }
@@ -203,14 +247,17 @@ export function NotificationBell() {
         className="relative p-2 rounded-lg outline-none transition-colors hover:bg-[var(--s-hover)] focus-visible:ring-2 focus-visible:ring-blue-500/50"
         style={{ color: open ? 'var(--s-text)' : 'var(--s-muted)' }}
       >
-        <Bell className="size-4" />
+        {/* Qo'ng'iroq boshqa ikonkalardan kattaroq: hisoblagich nishoni uning
+            ustiga tushadi va kichik o'lchamda ikonkaning o'zi deyarli
+            ko'rinmay qolardi. Nishon ham chetga surildi. */}
+        <Bell className="size-5" />
         {unread > 0 && (
           <motion.span
             key={unread}
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            className="absolute top-1 right-1 min-w-[16px] h-4 px-0.5 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+            className="absolute top-0.5 right-0.5 min-w-[17px] h-[17px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold text-white leading-none"
             style={{ background: '#ef4444', border: '2px solid var(--s-header)' }}
           >
             {unread > 9 ? '9+' : unread}
@@ -231,7 +278,7 @@ export function NotificationBell() {
           >
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <div className="flex items-center gap-2">
-                <Bell className="size-4" style={{ color: '#3B82F6' }} />
+                <Bell className="size-[18px]" style={{ color: '#3B82F6' }} />
                 <span className="text-sm font-semibold" style={{ color: 'var(--color-text1)' }}>{title}</span>
                 {unread > 0 && (
                   <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full"
@@ -243,7 +290,7 @@ export function NotificationBell() {
               {unread > 0 && (
                 <button onClick={markAllRead}
                   className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                  <CheckCheck className="size-3.5" />
+                  <CheckCheck className="size-4" />
                   {say(locale, { uz: "Barchasini o'qi", ru: 'Прочитать все', en: 'Mark all read' })}
                 </button>
               )}
@@ -266,7 +313,7 @@ export function NotificationBell() {
                 </div>
               ) : (
                 items.map(item => {
-                  const isRead = readIds.has(item.id)
+                  const read = isRead(item)
                   return (
                     <button
                       key={item.id}
@@ -275,17 +322,23 @@ export function NotificationBell() {
                       className="w-full flex items-start gap-3 px-4 py-3 text-left border-b last:border-0 transition-colors hover:bg-[var(--s-hover)]"
                       style={{
                         borderColor: 'var(--color-border)',
-                        background: isRead ? 'transparent' : 'rgba(59,130,246,0.04)',
+                        background: read ? 'transparent' : 'rgba(59,130,246,0.04)',
                       }}
                     >
                       <div className="size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
                         style={{ background: `${item.color}18`, color: item.color }}>
-                        {item.kind === 'alert' ? <ShieldAlert className="size-4" /> : <Bell className="size-3.5" />}
+                        {item.kind === 'alert' ? <ShieldAlert className="size-[18px]" /> : <Bell className="size-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm leading-snug"
-                          style={{ color: 'var(--color-text1)', fontWeight: isRead ? 400 : 500 }}>
-                          {item.title}
+                        <p className="text-sm leading-snug flex items-center gap-1.5"
+                          style={{ color: 'var(--color-text1)', fontWeight: read ? 400 : 500 }}>
+                          <span className="truncate">{item.title}</span>
+                          {item.count > 1 && (
+                            <span className="shrink-0 text-[10px] font-semibold px-1.5 py-px rounded-full"
+                              style={{ background: `${item.color}22`, color: item.color }}>
+                              ×{item.count}
+                            </span>
+                          )}
                         </p>
                         {item.subtitle && (
                           <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-text3)' }}>{item.subtitle}</p>
@@ -294,7 +347,7 @@ export function NotificationBell() {
                           {timeAgo(item.at, locale)}
                         </p>
                       </div>
-                      {!isRead && <span className="size-2 rounded-full bg-red-500 shrink-0 mt-1.5" />}
+                      {!read && <span className="size-2 rounded-full bg-red-500 shrink-0 mt-1.5" />}
                     </button>
                   )
                 })

@@ -128,7 +128,7 @@ export default function StudentProfilePage() {
 
   if (!canView) return (
     <div className="flex items-center gap-3 text-muted-foreground">
-      <ArrowLeft className="size-4" />
+      <ArrowLeft className="size-[18px]" />
       <span>Access denied.</span>
     </div>
   )
@@ -157,7 +157,7 @@ export default function StudentProfilePage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon-sm" onClick={() => history.back()}>
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-[18px]" />
         </Button>
         <div>
           <h1 className="text-2xl font-semibold">{student.firstName} {student.lastName}</h1>
@@ -192,8 +192,8 @@ export default function StudentProfilePage() {
               tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'overview' && <><BookOpen className="inline size-3.5 mr-1" />Overview</>}
-            {t === 'analytics' && <><BarChart2 className="inline size-3.5 mr-1" />Analytics</>}
+            {t === 'overview' && <><BookOpen className="inline size-4 mr-1" />Overview</>}
+            {t === 'analytics' && <><BarChart2 className="inline size-4 mr-1" />Analytics</>}
           </button>
         ))}
       </div>
