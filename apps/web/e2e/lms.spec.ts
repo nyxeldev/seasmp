@@ -14,7 +14,7 @@ test.describe('Dashboard', () => {
     // Kurslar jadvalda emas, kartalarda ko'rsatiladi — har birida /courses/<slug>
     // havolasi bor. Ilgari bu yerda <table> kutilardi va test hech qachon o'tmasdi.
     const cards = adminPage.locator('a[href^="/courses/"]')
-    const empty = adminPage.getByText(/kurs topilmadi|kurs yo'q|no courses/i)
+    const empty = adminPage.getByText(/kurslar mavjud emas|kurs topilmadi|no courses/i)
     await expect(cards.first().or(empty)).toBeVisible({ timeout: 10000 })
   })
 
