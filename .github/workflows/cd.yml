@@ -28,7 +28,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Deploy manzili sozlanmagan bo'lsa, ish MUVAFFAQIYATSIZ emas, o'tkazib
+      # yuborilgan bo'lishi kerak.
+      #
+      # Nega: PROD_HOST sekreti yo'q bo'lsa appleboy/ssh-action "missing server
+      # host" bilan 5 soniyada yiqiladi. Ya'ni main ga har bir merge qizil
+      # belgi qo'yadi. Doim qizil turadigan CI odamni qizil belgiga befarq
+      # qilib qo'yadi — keyin haqiqiy nosozlik ham e'tibordan qoladi.
+      - name: Deploy manzili sozlanganmi
+        id: target
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+        run: |
+          missing=""
+          [ -z "$PROD_HOST" ]    && missing="$missing PROD_HOST"
+          [ -z "$PROD_USER" ]    && missing="$missing PROD_USER"
+          [ -z "$PROD_SSH_KEY" ] && missing="$missing PROD_SSH_KEY"
+
+          if [ -n "$missing" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy o'tkazib yuborildi::Sozlanmagan sekretlar:$missing — Settings > Secrets and variables > Actions da qo'shing."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy via SSH
+        if: steps.target.outputs.configured == 'true'
         uses: appleboy/ssh-action@v1
         with:
           host:     ${{ secrets.PROD_HOST }}
@@ -39,3 +66,19 @@ jobs:
             export IMAGE_TAG=${{ inputs.image_tag || 'latest' }}
             export IMAGE_OWNER=${{ env.IMAGE_OWNER }}
             bash scripts/deploy.sh
+
+      - name: Natija
+        run: |
+          if [ "${{ steps.target.outputs.configured }}" = "true" ]; then
+            echo "### ✅ Ishlab chiqarishga deploy qilindi" >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### ⏭️ Deploy o'tkazib yuborildi"
+              echo ""
+              echo "Ishlab chiqarish sekretlari sozlanmagan, shuning uchun deploy bajarilmadi."
+              echo "Bu xato emas — hozircha deploy maqsadi yo'q."
+              echo ""
+              echo "Yoqish uchun \`PROD_HOST\`, \`PROD_USER\`, \`PROD_SSH_KEY\` ni qo'shing:"
+              echo "Settings → Secrets and variables → Actions."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
