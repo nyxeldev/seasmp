@@ -51,6 +51,7 @@ function build(
   name: string, attack: boolean, profile: BehaviorProfile,
   ev: { hour: number; ip: string; ua: string; resource: string; req: number },
   authzDenied: number, authzAllowed: number,
+  privilegedOwners = 0,
 ): Case {
   const s = scoreEvent(profile, {
     hour: ev.hour, weekday: 2, ip: ev.ip, userAgent: ev.ua,
@@ -62,6 +63,7 @@ function build(
       authzDenied, authzAllowed,
       behaviorScore: s.score,
       massAccess: isMassAccess(ev.req, profile.reqPerHourMean),
+      privilegedOwners,
     },
   }
 }
@@ -97,6 +99,12 @@ function generate(seed: number, n: number): Case[] {
     out.push(build('Yangi bo\'limga qiziqish (qonuniy)', false, day,
       { hour: 15, ip: '10.0.0.5', ua: 'Chrome', resource: 'users', req: 4 }, 0, 0))
 
+    // Imtiyozli aktor keng qamrov bilan — bu ADMIN UCHUN ODATIY ISH.
+    // 1-qatlam endi bu yerda ham signal beradi, lekin ataylab zaif: yolg'iz
+    // o'zi hech qachon ogohlantira olmaydi.
+    out.push(build('Admin kundalik ko\'rikdan o\'tkazadi', false, night,
+      { hour: pick([22, 23, 0, 1]), ip: '10.0.0.9', ua: 'Firefox', resource: 'users', req: 6 }, 0, 0, 45))
+
     // ── HUJUM ─────────────────────────────────────────────────────────────
     out.push(build('IDOR paypaslash (rad etilgan)', true, day,
       { hour: 13, ip: '10.0.0.5', ua: 'Chrome', resource: 'enrollments', req: 6 }, 8, 0))
@@ -109,6 +117,13 @@ function generate(seed: number, n: number): Case[] {
 
     out.push(build('Ommaviy ma\'lumot chiqarish', true, day,
       { hour: 12, ip: '10.0.0.5', ua: 'Chrome', resource: 'enrollments', req: 250 }, 0, 0))
+
+    // O'g'irlangan ADMIN hisobi: qamrov keng, lekin yolg'iz o'zi yetarli emas —
+    // notanish IP va begona qurilma bilan birga tasdiqlanadi. Ilgari 1-qatlam
+    // imtiyozli aktor uchun umuman jim edi, ya'ni bu holat faqat 2-qatlamga
+    // qolardi.
+    out.push(build('Admin hisobidan ma\'lumot chiqarish', true, night,
+      { hour: 3, ip: '198.51.100.7', ua: 'python-requests', resource: 'users', req: 8 }, 0, 0, 70))
 
     // Eng muhim holat: ikkala signal ham zaif, faqat birgalikda ko'rinadi
     out.push(build('Ehtiyotkor ichki tahdid', true, day,

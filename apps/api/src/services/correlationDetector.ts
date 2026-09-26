@@ -14,7 +14,10 @@ import type { AlertType, AlertSeverity } from '@prisma/client'
 import { prisma } from '../config/prisma'
 import { redis } from '../config/redis'
 import { logger } from '../config/logger'
-import { correlate, type CorrelationVerdict, type LayerSignals } from './correlation'
+import {
+  correlate, privilegedScopeRisk,
+  type CorrelationVerdict, type LayerSignals,
+} from './correlation'
 import { readSignals } from './signalWindow'
 
 export const DETECTOR_VERSION = 'correlation-1.0.0'
@@ -30,6 +33,10 @@ export function alertTypeFor(s: LayerSignals): AlertType {
   if (s.authzAllowed > 0) return 'UNAUTHORIZED_OBJECT_ACCESS'
   if (s.massAccess)       return 'MASS_DATA_ACCESS'
   if (s.authzDenied > 0)  return 'UNAUTHORIZED_OBJECT_ACCESS'
+  // Imtiyozli aktorning keng qamrovi — ruxsatsiz murojaat emas, shuning uchun
+  // UNAUTHORIZED_OBJECT_ACCESS noto'g'ri bo'lardi. Bu ko'p sub'ektning
+  // ma'lumotiga tegish, ya'ni ommaviy murojaat tabiatiga yaqin.
+  if (privilegedScopeRisk(s.privilegedOwners) > 0) return 'MASS_DATA_ACCESS'
   return 'BEHAVIOR_ANOMALY'
 }
 
