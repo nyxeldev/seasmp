@@ -92,7 +92,7 @@ export default function RiskPage() {
             className="w-20 h-8"
           />
         </div>
-        <Select value={courseId} onValueChange={v => { setCourseId(v === 'all' ? '' : (v ?? '')); setPage(0) }}>
+        <Select value={courseId} onValueChange={v => { setCourseId(v === 'all' ? '' : (v ?? '')); setPage(0) }} items={{ all: 'All courses', ...Object.fromEntries(courses.map(c => [c.id, c.title])) }}>
           <SelectTrigger className="w-48 h-8"><SelectValue placeholder="All courses" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All courses</SelectItem>

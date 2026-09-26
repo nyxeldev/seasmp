@@ -104,6 +104,81 @@ export const attendanceService = {
     return record
   },
 
+  /**
+   * Bir kursning bitta darsi uchun butun guruh davomatini bir marta yozadi.
+   *
+   * Nega kerak: `mark()` bitta talabani belgilaydi va allaqachon belgilangan
+   * bo'lsa 409 qaytaradi. Amalda o'qituvchi darsdan keyin butun guruhni bir
+   * o'tirishda belgilaydi va xatosini darhol tuzatadi — bittalab yozishda
+   * 30 kishilik guruh uchun 30 ta so'rov va tuzatishning iloji yo'q.
+   *
+   * Shuning uchun bu yerda upsert ishlatiladi: qayta yuborish holatni
+   * yangilaydi, xato bermaydi.
+   */
+  async markBulk(
+    data: {
+      courseId:   string
+      lessonDate: string
+      records:    { enrollmentId: string; status: AttendanceStatus }[]
+    },
+    actorId: string,
+    actorRole: UserRole,
+    ipAddress: string
+  ) {
+    const course = await prisma.course.findUnique({
+      where: { id: data.courseId },
+      select: { id: true, teacherId: true },
+    })
+    if (!course) throw Object.assign(new Error('Kurs topilmadi'), { statusCode: 404 })
+    if (actorRole === 'TEACHER' && course.teacherId !== actorId) {
+      throw Object.assign(new Error("Bu kurs uchun davomat belgilash ruxsati yo'q"), { statusCode: 403 })
+    }
+
+    // Har bir yozuv HAQIQATAN shu kursga tegishli ekanini tekshiramiz — aks holda
+    // o'qituvchi o'z kursi nomi bilan begona guruh davomatini yozib yuborishi mumkin.
+    const enrollmentIds = data.records.map((r) => r.enrollmentId)
+    const valid = await prisma.enrollment.findMany({
+      where: { id: { in: enrollmentIds }, courseId: data.courseId, status: 'ACTIVE' },
+      select: { id: true },
+    })
+    const validIds = new Set(valid.map((e) => e.id))
+
+    const rejected = enrollmentIds.filter((id) => !validIds.has(id))
+    if (rejected.length > 0) {
+      throw Object.assign(
+        new Error(`${rejected.length} ta yozuv bu kursga tegishli emas yoki talaba faol emas`),
+        { statusCode: 400 },
+      )
+    }
+
+    const lessonDate = new Date(data.lessonDate)
+
+    const saved = await prisma.$transaction(
+      data.records.map((r) =>
+        prisma.attendance.upsert({
+          where:  { enrollmentId_lessonDate: { enrollmentId: r.enrollmentId, lessonDate } },
+          create: {
+            enrollmentId: r.enrollmentId,
+            lessonDate,
+            status:       r.status,
+            markedBy:     actorId,
+            ipAddress,
+          },
+          update: { status: r.status, markedBy: actorId, markedAt: new Date() },
+        }),
+      ),
+    )
+
+    await auditService.log({
+      userId: actorId, action: 'ATTENDANCE_MARK', resource: 'attendance',
+      resourceId: data.courseId,
+      newData: { courseId: data.courseId, lessonDate: data.lessonDate, count: saved.length },
+      ipAddress,
+    })
+
+    return { saved: saved.length, lessonDate: data.lessonDate }
+  },
+
   async generateQrToken(courseId: string, lessonDate: string, actorId: string, actorRole: string): Promise<{ token: string; qrCodeUrl: string; expiresIn: number }> {
     const course = await prisma.course.findUnique({ where: { id: courseId } })
     if (!course) throw Object.assign(new Error('Kurs topilmadi'), { statusCode: 404 })

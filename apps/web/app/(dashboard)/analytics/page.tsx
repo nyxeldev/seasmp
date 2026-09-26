@@ -460,7 +460,7 @@ function TeacherAnalytics({ userId }: { userId: string }) {
           <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Kurs Analitikasi</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>O'qituvchi ko'rinishi</p>
         </div>
-        <Select value={courseId} onValueChange={v => setCourseId(v ?? '')}>
+        <Select value={courseId} onValueChange={v => setCourseId(v ?? '')} items={Object.fromEntries(courses.map(c => [c.id, c.title]))}>
           <SelectTrigger className="w-56"><SelectValue placeholder="Kursni tanlang" /></SelectTrigger>
           <SelectContent>
             {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
