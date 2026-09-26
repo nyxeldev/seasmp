@@ -11,9 +11,11 @@ test.describe('Dashboard', () => {
     await adminPage.goto('/courses')
     await expect(adminPage).toHaveURL(/courses/)
     await adminPage.waitForSelector('aside', { timeout: 8000 }).catch(() => {})
-    const hasTable = await adminPage.locator('table').isVisible().catch(() => false)
-    const hasEmpty = await adminPage.getByText(/kurs yo'q|no courses/i).isVisible().catch(() => false)
-    expect(hasTable || hasEmpty).toBe(true)
+    // Kurslar jadvalda emas, kartalarda ko'rsatiladi — har birida /courses/<slug>
+    // havolasi bor. Ilgari bu yerda <table> kutilardi va test hech qachon o'tmasdi.
+    const cards = adminPage.locator('a[href^="/courses/"]')
+    const empty = adminPage.getByText(/kurs topilmadi|kurs yo'q|no courses/i)
+    await expect(cards.first().or(empty)).toBeVisible({ timeout: 10000 })
   })
 
   test('student can see active courses', async ({ studentPage }) => {

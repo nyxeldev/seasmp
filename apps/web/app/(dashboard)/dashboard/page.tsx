@@ -315,6 +315,13 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Sahifaning h1 i. Talaba va o'qituvchi variantlarida bor edi, admin
+          variantida esa umuman yo'q edi — ya'ni asosiy sahifa sarlavhasiz
+          qolardi. Ekran o'quvchilar sahifani shundan aniqlaydi. */}
+      <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>
+        {t('dashboard.title')}
+      </h1>
+
       {/* KPI cards */}
       <motion.div
         className="kpi-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
