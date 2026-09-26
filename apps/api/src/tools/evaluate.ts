@@ -14,7 +14,11 @@ import {
   scoreEvent, isMassAccess, emptyProfile, ALERT_THRESHOLD,
   type BehaviorProfile,
 } from '../services/behaviorScoring'
-import { correlate, singleLayerVerdict, type LayerSignals } from '../services/correlation'
+import {
+  correlate, singleLayerVerdict,
+  SINGLE_THRESHOLD, CORRELATED_THRESHOLD,
+  type LayerSignals,
+} from '../services/correlation'
 
 // ── Takrorlanadigan tasodifiy sonlar ────────────────────────────────────────
 function rng(seed: number) {
@@ -190,6 +194,81 @@ function emitJson(cases: Case[], seed: number, attacks: number): void {
   }, null, 2))
 }
 
+// ── Ishlash nuqtasi: AYNAN ishlab chiqarishdagi qaror ───────────────────────
+//
+// ROC butun egri chiziqni beradi, ya'ni "chegara eng yaxshi qilib tanlansa"
+// degan taxminda. Ishlab chiqarishda esa chegara qat'iy: correlation.ts dagi
+// SINGLE_THRESHOLD va CORRELATED_THRESHOLD. Ikkisi bir xil narsa emas —
+// AUC 1.000 bo'lsa ham qat'iy chegarada yolg'on ishora chiqishi mumkin.
+//
+// Shuning uchun yozma ishda AYNAN shu jadval keltirilishi kerak: u tizim
+// haqiqatan qanday qaror qabul qilishini ko'rsatadi.
+
+interface Confusion { tp: number; fp: number; fn: number; tn: number }
+
+type Decider = (s: LayerSignals) => boolean
+
+const DECIDERS: Array<[string, Decider]> = [
+  ['Faqat 1-qatlam (avtorizatsiya)', (s) => singleLayerVerdict(s, 'AUTHORIZATION')],
+  ['Faqat 2-qatlam (xatti-harakat)', (s) => singleLayerVerdict(s, 'BEHAVIOR')],
+  ['Gibrid (korrelyatsiya)',          (s) => correlate(s).alert],
+]
+
+function confusion(cases: Case[], decide: Decider): Confusion {
+  const c: Confusion = { tp: 0, fp: 0, fn: 0, tn: 0 }
+  for (const x of cases) {
+    const alert = decide(x.signals)
+    if (x.attack) { if (alert) c.tp++; else c.fn++ }
+    else          { if (alert) c.fp++; else c.tn++ }
+  }
+  return c
+}
+
+function prf(c: Confusion): { precision: number; recall: number; f1: number } {
+  const precision = c.tp + c.fp > 0 ? c.tp / (c.tp + c.fp) : 0
+  const recall    = c.tp + c.fn > 0 ? c.tp / (c.tp + c.fn) : 0
+  const f1        = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0
+  return { precision, recall, f1 }
+}
+
+/** Qaysi stsenariylar noto'g'ri baholanadi — chegarani muhokama qilish uchun */
+function misclassified(cases: Case[], decide: Decider): { fp: string[]; fn: string[] } {
+  const fp = new Set<string>(), fn = new Set<string>()
+  for (const x of cases) {
+    const alert = decide(x.signals)
+    if (!x.attack && alert) fp.add(x.name)
+    if (x.attack && !alert) fn.add(x.name)
+  }
+  return { fp: [...fp], fn: [...fn] }
+}
+
+function reportOperatingPoint(cases: Case[]): void {
+  console.log(`
+Ishlash nuqtasi (yolg'iz qatlam >= ${SINGLE_THRESHOLD}, korrelyatsiya >= ${CORRELATED_THRESHOLD}):
+`)
+  console.log('konfiguratsiya'.padEnd(34), '  TP    FP    FN   aniqlik  qamrov      F1')
+  console.log('-'.repeat(34), '-'.repeat(46))
+  for (const [name, decide] of DECIDERS) {
+    const c = confusion(cases, decide)
+    const m = prf(c)
+    console.log(
+      name.padEnd(34),
+      String(c.tp).padStart(4), String(c.fp).padStart(5), String(c.fn).padStart(5),
+      m.precision.toFixed(3).padStart(9), m.recall.toFixed(3).padStart(8), m.f1.toFixed(3).padStart(8),
+    )
+  }
+
+  for (const [name, decide] of DECIDERS) {
+    const { fp, fn } = misclassified(cases, decide)
+    if (fp.length === 0 && fn.length === 0) continue
+    console.log(`
+  ${name}:`)
+    for (const x of fp) console.log(`    yolg'on ishora  : ${x}`)
+    for (const x of fn) console.log(`    o'tkazib yubordi: ${x}`)
+  }
+  console.log()
+}
+
 function main(): void {
   const args = process.argv.slice(2)
   const seed = Number(args.find((a) => a.startsWith('--seed='))?.split('=')[1] ?? 42)
@@ -220,6 +299,7 @@ function main(): void {
     )
   }
 
+  reportOperatingPoint(cases)
   console.log('\nTahdid sinflari bo\'yicha o\'rtacha ball:\n')
   const byName = new Map<string, { attack: boolean; sums: number[]; n: number }>()
   for (const c of cases) {
