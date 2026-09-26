@@ -211,7 +211,26 @@ export const assessmentsApi = {
 }
 
 // ─── Analytics (via Node.js proxy → Python) ───────────────────────────────────
+export interface AnalyticsOverview {
+  windowDays: number
+  students: number
+  activeCourses: number
+  attendanceRate: number | null
+  attendanceDelta: number | null
+  attendanceTrend: { date: string; rate: number; total: number }[]
+  avgGrade: number | null
+  gradesByType: { type: string; avg: number; count: number }[]
+  highRisk: number
+  avgRisk: number | null
+  topRisk: {
+    enrollmentId: string; score: number
+    studentId: string; studentName: string
+    courseId: string; courseSlug: string; courseTitle: string
+  }[]
+}
+
 export const analyticsApi = {
+  overview: (days = 30) => api.get<{ success: boolean; data: AnalyticsOverview }>(`/v1/analytics/overview?days=${days}`),
   dashboard:          () => api.get<{ success: boolean; data: DashboardStats }>('/v1/analytics/dashboard'),
   courseSimple:       (id: string) => api.get<{ success: boolean; data: CourseStats }>(`/v1/analytics/courses/${id}/simple`),
   student:            (id: string) => api.get<{ success: boolean; data: StudentStats }>(`/v1/analytics/students/${id}`),
