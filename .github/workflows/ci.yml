@@ -196,7 +196,6 @@ jobs:
       JWT_ACCESS_SECRET:    test-access-secret-that-is-long-enough-for-zod
       JWT_REFRESH_SECRET:   test-refresh-secret-that-is-long-enough-for-zod
       AES_ENCRYPTION_KEY:   b7dcb02c6342b24134b3a09db4d897c16df22aa9034a757d4d0028118159a756
-      NODE_ENV:             development
       API_PORT:             4000
       API_HOST:             0.0.0.0
       CORS_ORIGIN:          http://localhost:3000
@@ -226,6 +225,12 @@ jobs:
 
       - name: Start API
         working-directory: apps/api
+        # NODE_ENV faqat SHU bosqichda beriladi. Job darajasida bo'lsa uni
+        # "next build" ham oladi va Next development rejimida quriladi —
+        # natijada prerender paytida React nusxalari mos kelmay,
+        # "Cannot read properties of null (reading 'useContext')" chiqadi.
+        env:
+          NODE_ENV: development
         run: |
           npx tsx src/server.ts > /tmp/api.log 2>&1 &
           for i in $(seq 1 60); do
