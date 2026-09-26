@@ -1,3 +1,8 @@
+# Loyiha nomi papka nomidan olinmasin: volume nomlari shundan yasaladi
+# (seasmp_postgres_data, seasmp_analytics_models). Papka boshqa nom bilan
+# klon qilinsa, nomni qotirmasak volumelar mos kelmay, baza bo'sh ko'rinadi.
+name: seasmp
+
 services:
 
   # ─── PostgreSQL ─────────────────────────────────────────────────────────────

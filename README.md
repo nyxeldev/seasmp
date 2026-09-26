@@ -4,7 +4,6 @@
 
 ### Talablar
 - Node.js v22+
-- Python 3.13+
 - Docker Desktop ([yuklab olish](https://www.docker.com/products/docker-desktop/))
 - Git
 
@@ -12,7 +11,7 @@
 
 ### 1. Repozitoriyani klonlash
 ```bash
-git clone https://github.com/your-org/seasmp.git
+git clone https://github.com/nyxeldev/seasmp.git
 cd seasmp
 ```
 
@@ -43,17 +42,70 @@ docker compose up -d
 
 ### 4. Ma'lumotlar bazasini sozlash
 ```bash
-cd apps/api
-npm install
-npx prisma migrate dev --name init
-npx prisma db seed     # Test ma'lumotlar (ixtiyoriy)
+# Root papkadan — monorepo, shuning uchun bitta npm ci yetarli
+npm ci
+npm --workspace apps/api run db:generate
+
+# Migratsiyalar. `migrate dev` EMAS: u tayyor migratsiyalar ustiga yana
+# bittasini yasashga urinadi va bazani tozalashni so'raydi.
+npm --workspace apps/api run db:migrate
+
+# Ma'lumot. Ikkitasidan birini tanlang:
+npm --workspace apps/api run db:seed        # minimal: 9 foydalanuvchi, 3 kurs
+npm --workspace apps/api run db:seed:demo   # namoyish: 80 talaba, 10 kurs, davomat va baholar
 ```
 
 ### 5. API ishga tushirish (development)
 ```bash
-# Root papkadan
-npm run dev:api
+# Root papkadan, ikki alohida terminalda
+npm run dev:api    # http://localhost:4000
+npm run dev:web    # http://localhost:3000
 ```
+
+Analitika servisi konteynerda ishlaydi (`http://localhost:5000`).
+Modelni birinchi marta o'qitish kerak — aks holda `/health` javobida
+`rule_based_fallback` turadi:
+
+```bash
+curl -X POST http://localhost:5000/v1/analytics/train
+```
+
+---
+
+## 💾 Boshqa kompyuterga ko'chirish
+
+Kod GitHub'da, lekin repoda turmagan uchta narsa bor:
+
+| Nima | Qayerda | Kerakmi |
+|---|---|---|
+| `.env` | repodan tashqarida | **Ha.** `AES_ENCRYPTION_KEY` bazadagi 2FA kalitlarini shifrlaydi — baza nusxasi bilan bir xil kalit ko'chishi shart |
+| Baza | `seasmp_postgres_data` volumi | Namoyish ma'lumoti, audit jurnali va xavfsizlik ogohlantirishlari shu yerda |
+| ML modeli | `seasmp_analytics_models` volumi | Yo'q — yangi joyda qayta o'qitish mumkin, lekin AUC boshqacha chiqadi |
+
+Redis ko'chirilmaydi: unda faqat sessiya, rate-limit hisoblagichlari va
+xatti-harakat oynalari — hammasi o'zi qayta yig'iladi.
+
+**Eski kompyuterda** (postgres ko'tarilgan holatda):
+
+```bash
+./scripts/migrate-machine.sh export ../seasmp-transfer
+```
+
+Hosil bo'lgan papkada ochiq sirlar bor. Ochiq kanal bilan yubormang —
+USB yoki parol bilan arxivlangan fayl.
+
+**Yangi kompyuterda** Docker va Node o'rnatilgandan keyin:
+
+```bash
+git clone https://github.com/nyxeldev/seasmp.git
+cd seasmp
+./scripts/migrate-machine.sh import ../seasmp-transfer
+npm ci
+npm --workspace apps/api run db:generate
+```
+
+Import `.env` ni joyiga qo'yadi, postgres va redis'ni ko'taradi, bazani
+tiklaydi, ML modelini o'z volumiga yoyadi va analitikani quradi.
 
 ---
 
