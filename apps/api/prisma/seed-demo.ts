@@ -301,9 +301,19 @@ async function main() {
       const risk = Math.max(0.01, Math.min(0.99,
         dropoutRisk(rate, avgScore) + between(-0.04, 0.04),
       ))
+
+      // Haqiqiy natija — ML modeli aynan shuni o'rganadi.
+      // Xavf yuqori bo'lgan talabalarning bir qismi kursni tashlab ketadi;
+      // hammasi emas, aks holda yorliq xavf balining nusxasi bo'lib qolardi va
+      // model hech narsa o'rganmasdi. Kursni tugatganlar ham belgilanadi.
+      const status =
+        risk > 0.78 && rnd() < 0.55 ? 'DROPPED'
+        : risk < 0.25 && rnd() < 0.30 ? 'COMPLETED'
+        : 'ACTIVE'
+
       await prisma.enrollment.update({
         where: { id: enrollment.id },
-        data:  { dropoutRiskScore: Math.round(risk * 10000) / 10000 },
+        data:  { dropoutRiskScore: Math.round(risk * 10000) / 10000, status },
       })
     }
   }
@@ -313,7 +323,9 @@ async function main() {
   console.log(`   baholar: ${gradeCount}`)
 
   const highRisk = await prisma.enrollment.count({ where: { dropoutRiskScore: { gte: 0.7 } } })
+  const byStatus = await prisma.enrollment.groupBy({ by: ['status'], _count: { status: true } })
   console.log(`   yuqori xavfdagi (>=0.70): ${highRisk}`)
+  for (const r of byStatus) console.log(`   ${r.status}: ${r._count.status}`)
 
   console.log('\n🎉 Namoyish ma\'lumoti tayyor.')
   console.log('   Kirish: teacher1@demo.seasmp.uz / Teacher@1234')
