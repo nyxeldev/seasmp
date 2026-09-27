@@ -10,3 +10,9 @@
 
 # Shell skriptlari Linux konteynerlarida ishlaydi — CRLF ularni buzadi
 *.sh      text eol=lf
+
+# requirements.txt ni Linux konteyneri o'qiydi (apps/analytics/Dockerfile).
+# Fayl ilgari UTF-16 edi va grep, diff, Dependabot uni o'qiy olmasdi; UTF-8 ga
+# o'tkazilgandan keyin Windows'da CRLF bilan chiqa boshladi. Pip ikkalasini ham
+# hazm qiladi, lekin fayl bitta ko'rinishda saqlangani afzal.
+requirements.txt text eol=lf
