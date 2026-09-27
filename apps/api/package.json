@@ -17,7 +17,8 @@
     "db:seed": "node scripts/with-env.js tsx prisma/seed.ts",
     "db:generate": "node scripts/with-env.js prisma generate",
     "db:seed:demo": "node scripts/with-env.js tsx prisma/seed-demo.ts",
-    "db:seed:history": "node scripts/with-env.js tsx prisma/seed-history.ts"
+    "db:seed:history": "node scripts/with-env.js tsx prisma/seed-history.ts",
+    "demo:behavior": "node scripts/with-env.js tsx src/tools/behaviorDemo.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
