@@ -7,6 +7,7 @@ import { prisma } from '../config/prisma'
 import { logger } from '../config/logger'
 import { auditService } from './audit.service'
 import { emailService } from './emailService'
+import { emitSecurityAlert } from '../realtime/gateway'
 
 // ─── Rule 1: Brute Force ─────────────────────────────────────────────────────
 
@@ -155,7 +156,7 @@ async function _createAlert(
   details: Record<string, unknown>
 ): Promise<void> {
   try {
-    await prisma.securityAlert.create({
+    const created = await prisma.securityAlert.create({
       data: {
         type,
         severity,
@@ -163,6 +164,18 @@ async function _createAlert(
         ipAddress: typeof details.ip === 'string' ? details.ip : null,
         details:   details as any,
       },
+    })
+    // Eski qoidalar ham panelga jonli tushsin — aks holda xavfsizlik
+    // sahifasida ogohlantirishlarning bir qismi jonli, bir qismi faqat
+    // sahifa yangilanganda paydo bo'lardi.
+    emitSecurityAlert({
+      id:        created.id.toString(),
+      type:      created.type,
+      severity:  created.severity,
+      layer:     created.layer ?? null,
+      score:     created.score === null ? null : Number(created.score),
+      userId:    created.userId,
+      createdAt: created.createdAt.toISOString(),
     })
   } catch (err) {
     logger.error({ msg: 'Failed to create security alert', err })

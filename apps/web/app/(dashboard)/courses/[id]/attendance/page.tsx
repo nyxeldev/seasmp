@@ -15,6 +15,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { useRealtime, useRealtimeEvent, type AttendanceMarkedEvent } from '@/lib/realtime'
 import { ArrowLeft, Plus, QrCode } from 'lucide-react'
 
 const STATUS_OPTS = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'] as const
@@ -54,6 +55,22 @@ export default function CourseAttendancePage() {
     if (!courseId) return
     enrollmentsApi.list(`courseId=${courseId}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
   }, [courseId])
+
+  // Kurs xonasiga qo'shilish. Server ruxsatni O'ZI tekshiradi — xonaga
+  // faqat shu kursning o'qituvchisi, yozilgan talabasi yoki admin kiradi.
+  const { socket } = useRealtime()
+  useEffect(() => {
+    if (!socket || !courseId) return
+    socket.emit('join:course', courseId)
+    return () => { socket.emit('leave:course', courseId) }
+  }, [socket, courseId])
+
+  // Boshqa birov (yoki QR bilan talabaning o'zi) davomat belgilasa, jadval
+  // sahifani yangilamasdan to'ldiriladi.
+  useRealtimeEvent<AttendanceMarkedEvent>('attendance:marked', (e) => {
+    if (e.courseId !== courseId) return
+    load()
+  })
 
   // QR countdown
   useEffect(() => {

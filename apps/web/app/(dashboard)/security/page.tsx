@@ -8,6 +8,7 @@ import {
   type AlertSeverity,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useRealtimeEvent, type SecurityAlertEvent } from '@/lib/realtime'
 import { RoleGuard } from '@/components/RoleGuard'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -130,6 +131,18 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     loadAlerts()
     loadSessions()
   }, [loadStats, loadAlerts, loadSessions])
+
+  // Jonli ogohlantirish. Ro'yxatga qo'lda qo'shmaymiz, balki qayta yuklaymiz:
+  // amaldagi filtr (tur, daraja, hal qilinganlari) serverda qo'llanadi, mijoz
+  // tomonda takrorlansa ikkita manba bir-biridan ajrab ketardi.
+  useRealtimeEvent<SecurityAlertEvent>('security:alert', (e) => {
+    toast.warning(
+      `${TYPE_LABELS[e.type] ?? e.type} — ${e.severity}`,
+      { description: e.layer ? `Qatlam: ${LAYER_LABELS[e.layer] ?? e.layer}` : undefined },
+    )
+    loadStats()
+    loadAlerts()
+  })
 
   const resolveAlert = async (id: string) => {
     try {

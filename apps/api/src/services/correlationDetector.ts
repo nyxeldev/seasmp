@@ -19,6 +19,7 @@ import {
   type CorrelationVerdict, type LayerSignals,
 } from './correlation'
 import { readSignals } from './signalWindow'
+import { emitSecurityAlert } from '../realtime/gateway'
 
 export const DETECTOR_VERSION = 'correlation-1.0.0'
 
@@ -59,7 +60,7 @@ async function shouldAlert(userId: string, layer: string): Promise<boolean> {
 async function persist(
   userId: string, ip: string, verdict: CorrelationVerdict, signals: LayerSignals,
 ): Promise<void> {
-  await prisma.securityAlert.create({
+  const created = await prisma.securityAlert.create({
     data: {
       type:            alertTypeFor(signals),
       severity:        severityFor(verdict.risk),
@@ -75,6 +76,18 @@ async function persist(
         correlated:    verdict.layer === 'CORRELATED',
       } as any,
     },
+  })
+
+  // Xavfsizlik paneli ogohlantirishni sahifani yangilamasdan ko'rsin.
+  // Faqat imtiyozli rollarga boradi — batafsili realtime/gateway.ts da.
+  emitSecurityAlert({
+    id:        created.id.toString(),
+    type:      created.type,
+    severity:  created.severity,
+    layer:     created.layer ?? null,
+    score:     created.score === null ? null : Number(created.score),
+    userId:    created.userId,
+    createdAt: created.createdAt.toISOString(),
   })
 }
 

@@ -1,4 +1,3 @@
-import { Server } from 'socket.io'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from './app'
 import { env } from './config/env'
@@ -6,6 +5,7 @@ import { logger } from './config/logger'
 import { prisma } from './config/prisma'
 import { redis } from './config/redis'
 import { startProfileRefresh } from './jobs/profileRefresh'
+import { initRealtime, closeRealtime } from './realtime/gateway'
 
 let app: FastifyInstance
 let stopProfileRefresh: (() => void) | undefined
@@ -13,19 +13,9 @@ let stopProfileRefresh: (() => void) | undefined
 async function bootstrap() {
   app = await buildApp()
 
-  // ─── Socket.io ───────────────────────────────────────────────────────────────
-  const io = new Server(app.server, {
-    cors: { origin: env.CORS_ORIGIN, credentials: true },
-    path: '/ws',
-  })
-
-  io.on('connection', (socket) => {
-    logger.info(`WebSocket ulanish: ${socket.id}`)
-    socket.on('join:course',    (courseId: string) => socket.join(`course:${courseId}`))
-    socket.on('join:dashboard', (userId: string)   => socket.join(`user:${userId}`))
-    socket.on('disconnect',     ()                 => logger.info(`WebSocket uzildi: ${socket.id}`))
-  })
-
+  // ─── Real vaqt ───────────────────────────────────────────────────────────────
+  // Xonalar tekshirilgan tokendan olinadi — batafsili realtime/gateway.ts da.
+  const io = initRealtime(app.server)
   app.decorate('io', io)
 
   await app.listen({ port: env.API_PORT, host: env.API_HOST })
@@ -42,6 +32,7 @@ async function bootstrap() {
 const shutdown = async (signal: string) => {
   logger.info(`${signal} — server to'xtatilmoqda...`)
   stopProfileRefresh?.()
+  closeRealtime()
   if (app) await app.close()
   await prisma.$disconnect()
   redis.disconnect()

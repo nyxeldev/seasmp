@@ -18,7 +18,8 @@
     "db:generate": "node scripts/with-env.js prisma generate",
     "db:seed:demo": "node scripts/with-env.js tsx prisma/seed-demo.ts",
     "db:seed:history": "node scripts/with-env.js tsx prisma/seed-history.ts",
-    "demo:behavior": "node scripts/with-env.js tsx src/tools/behaviorDemo.ts"
+    "demo:behavior": "node scripts/with-env.js tsx src/tools/behaviorDemo.ts",
+    "check:realtime": "node scripts/with-env.js tsx src/tools/realtimeCheck.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -38,6 +39,7 @@
     "otplib": "^12.0.1",
     "qrcode": "^1.5.3",
     "socket.io": "^4.2.0",
+    "socket.io-client": "^4.8.4",
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },

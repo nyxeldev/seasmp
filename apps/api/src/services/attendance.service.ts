@@ -3,6 +3,7 @@ import * as QRCode from 'qrcode'
 import { prisma } from '../config/prisma'
 import { redis } from '../config/redis'
 import { auditService } from './audit.service'
+import { emitAttendanceMarked } from '../realtime/gateway'
 import type { AttendanceStatus, UserRole } from '@prisma/client'
 
 const QR_TTL_SECONDS = 300 // QR token 5 daqiqa amal qiladi
@@ -99,6 +100,16 @@ export const attendanceService = {
       resourceId: record.id,
       newData: { enrollmentId: data.enrollmentId, lessonDate: data.lessonDate, status: data.status },
       ipAddress,
+    })
+
+    emitAttendanceMarked({
+      attendanceId: record.id,
+      courseId:     enrollment.courseId,
+      enrollmentId: data.enrollmentId,
+      studentId:    enrollment.studentId,
+      lessonDate:   data.lessonDate,
+      status:       data.status,
+      markedBy:     actorId,
     })
 
     return record
@@ -220,6 +231,16 @@ export const attendanceService = {
     })
 
     await redis.del(`qr_attendance:${token}`)
+
+    emitAttendanceMarked({
+      attendanceId: record.id,
+      courseId,
+      enrollmentId: enrollment.id,
+      studentId:    actorId,
+      lessonDate,
+      status:       'PRESENT',
+      markedBy:     actorId,
+    })
 
     return record
   },
