@@ -36,7 +36,18 @@ export interface AnomalyScore {
 /** Profil ishonchli bo'lishi uchun minimal kuzatuv soni */
 export const MIN_SAMPLES = 50
 
-/** Ogohlantirish chiqariladigan chegara */
+/**
+ * DIQQAT: bu QAROR chegarasi EMAS.
+ *
+ * Nomi shunday bo'lgani bilan hukm bu yerda chiqarilmaydi. Xatti-harakat
+ * qatlami faqat ball beradi, qarorni esa correlation.ts qabul qiladi:
+ * yolg'iz qatlam uchun SINGLE_THRESHOLD, ikkala qatlam tasdiqlaganda
+ * CORRELATED_THRESHOLD. Kodni o'qiyotgan odam 0.6 ni chegara deb o'ylab
+ * qolmasligi uchun shu izoh yozildi.
+ *
+ * Qiymatning o'zi qoldirildi: u "bu ball sezilarli anomaliya" degan
+ * tayanch daraja sifatida testlarda ishlatiladi.
+ */
 export const ALERT_THRESHOLD = 0.6
 
 /**

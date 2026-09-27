@@ -91,19 +91,6 @@ class MemRedis {
     return removed
   }
 
-  // ── Pipeline stub — checkRateLimit is never called, just needs to type-check ─
-  pipeline() {
-    const pipe = {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      zremrangebyscore: (..._: any[]) => pipe,
-      zadd:             (..._: any[]) => pipe,
-      zcard:            (..._: any[]) => pipe,
-      expire:           (..._: any[]) => pipe,
-      exec: async () => [[null, 0], [null, 0], [null, 0], [null, 0]] as [null, number][],
-    }
-    return pipe
-  }
-
   disconnect() { /* no-op */ }
 }
 
@@ -120,7 +107,6 @@ type RedisLike = {
   sadd(k: string, ...members: string[]): Promise<number>
   scard(k: string): Promise<number>
   srem(k: string, ...members: string[]): Promise<number>
-  pipeline(): ReturnType<MemRedis['pipeline']>
   disconnect(): void
 }
 
@@ -193,7 +179,6 @@ class SafeRedis implements RedisLike {
   sadd(k: string, ...m: string[])        { return this.impl.sadd(k, ...m) }
   scard(k: string)                       { return this.impl.scard(k) }
   srem(k: string, ...m: string[])        { return this.impl.srem(k, ...m) }
-  pipeline()                             { return this.impl.pipeline() }
   disconnect()                           { this.impl.disconnect() }
 }
 

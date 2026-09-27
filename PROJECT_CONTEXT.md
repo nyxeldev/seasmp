@@ -55,16 +55,27 @@ seasmp/
 - Components import from `@base-ui/react/button`, `@base-ui/react/dialog`, etc.
 - Animation uses `data-open` / `data-closed` (not `data-[state=open]`)
 
-### Analytics (`apps/analytics`) — **FULLY BUILT, port 5000**
+### Analytics (`apps/analytics`) — port 5000, **konteynerda ishlaydi**
 | Layer | Technology |
 |---|---|
 | Framework | FastAPI 0.136.1 |
 | DB | SQLAlchemy 2.0 sync + psycopg2-binary (PostgreSQL 17) |
 | ML | scikit-learn 1.8 (RandomForestClassifier), numpy 2.4, joblib 1.5 |
-| Queue | Celery 5.6 + Redis broker (nightly beat at 02:00 UTC) |
-| Settings | `os.environ` + python-dotenv (`pydantic-settings` not installed) |
-| Python | 3.14.0 (venv at `apps/analytics/venv/`) |
-| Packages | All installed in venv. See `requirements.txt`. |
+| Queue | Celery 5.6 + Redis broker |
+| Settings | `os.environ` + python-dotenv (`pydantic-settings` o'rnatilmagan) |
+| Python | 3.13 (konteynerda; `docker compose up analytics -d`) |
+
+**Ikkita ML yo'li bor, ular BIR XIL EMAS** — bu joy chalg'itadi:
+
+| yo'l | xususiyatlar | model fayli |
+|---|---|---|
+| `src/services/ml_model.py` + `ml/train.py` (yangi, `/v1/...`) | `etl.FEATURE_COLS` — 8 ta, scaler bilan | `ml/models/latest_model.pkl` |
+| `src/services/dropout_service.py` (eski, `/dropout/...`) | o'z SQL i — 7 ta, scalersiz | `ml/models/legacy_dropout_model.pkl` |
+
+Ilgari ikkalasi bitta faylga yozardi va qaysi biri oxirgi o'qitgan bo'lsa,
+boshqasi noto'g'ri o'lchamli vektor bilan chaqirilardi. Endi yo'llar ajratilgan.
+
+O'qitilgan model `analytics_models` volumida (`/app/ml/models`), repoda emas.
 
 ---
 
@@ -513,19 +524,36 @@ Note: `apps/api/.env` has `ANALYTICS_API_URL=http://localhost:8000` — update t
 
 ## 10. Known Issues / Quirks
 
-1. **Root `package.json`** references `apps/frontend` (wrong — it's `apps/web`) and `packages/*` (doesn't exist). Scripts `dev:frontend` and `build` are broken at root level. Each app is run independently.
+Avvalgi ro'yxatdagi yettita band (root `package.json` dagi `apps/frontend`,
+ichma-ich `apps/web/.git`, jingalak qavsli axlat papkalar, create-next-app
+qoldiqlari, compose dagi `apps/frontend`) HAL QILINGAN. Hozirgi holat:
 
-2. **`apps/web/.git/`** — `create-next-app` created a nested git repo. Root project has no `.git`. One or the other needs to be resolved.
+1. **Xatti-harakat profili muvaffaqiyatli so'rovlardan o'rganadi.** Imtiyozli
+   aktorning muvaffaqiyatli murojaati keyingi `profiles/refresh` da me'yor
+   sifatida qabul qilinadi. Ya'ni sabrli ichki tahdid o'zini asta me'yorga
+   aylantira oladi. Tizimning haqiqiy cheklovi, hujjatlashtirilgan.
 
-3. **Junk directories** at root: `{apps` and `{apps/{api,analytics,frontend},packages/shared,nginx,docker}` — literal brace-named dirs from a failed PowerShell mkdir. Safe to delete.
+2. **2-qatlam tarixsiz ishlamaydi.** Profil uchun 30 kunlik oyna va kamida 50
+   kuzatuv kerak. Toza o'rnatishda `npm run db:seed:history` va keyin
+   `POST /v1/security/profiles/refresh` bajarilmasa, CORRELATED hukm hech
+   qachon chiqmaydi.
 
-4. **`apps/web/public/`** contains 5 unused SVG placeholders from create-next-app (next.svg, vercel.svg, etc.).
+3. **Imtiyozli qamrov chegaralari o'lchanmagan.** `PRIVILEGED_SCOPE_FLOOR`
+   (20), `SATURATION` (60), `CAP` (0.5) — boshlang'ich qiymatlar, haqiqiy
+   trafikda qayta tekshirilishi kerak.
 
-5. **`docker-compose.yml`** references `apps/frontend` (should be `apps/web`). Analytics `Dockerfile` now exists at `apps/analytics/Dockerfile`.
+4. **Tezlik chegarasi jarayon xotirasida** (`@fastify/rate-limit`). Bir nechta
+   API nusxasi ishlatilsa chegara har nusxada alohida hisoblanadi.
 
-6. **Refresh token in test script**: `test-api.ps1` sends `refreshToken` in the JSON body for login because PowerShell can't easily read HttpOnly cookies. The `authApi.login()` in the web frontend also returns only `accessToken` from the body (refreshToken goes to cookie automatically).
+5. **Eksperiment stendi 12 ta qo'lda yozilgan stsenariyga tayanadi.**
+   `src/tools/evaluate.ts` dagi F1=1.000 "gibrid mukammal" degani emas —
+   faqat shu holatlarda alohida qatlamlar yiqilishini bildiradi.
 
-7. **Analytics service not yet called by the Node API**: `ANALYTICS_API_URL=http://localhost:5000` is set in `apps/api/.env` but no Fastify routes currently proxy to it. The frontend dashboard hits the analytics service directly if needed, or it can be called from the browser against port 5000.
+6. **CD hech qachon ishlamagan**: `PROD_HOST`, `PROD_USER`, `SSH_KEY` yo'q.
+
+7. **Git Bash tuzog'i**: `docker exec ... /app/...` va load-test ning
+   `--path` argumenti MSYS_NO_PATHCONV=1 talab qiladi, aks holda yo'l
+   Windows ko'rinishiga aylantiriladi va xato jimgina yuz beradi.
 
 ---
 
@@ -570,3 +598,75 @@ cd ../../    # back to root
 Covers: health, auth (login/2FA/logout/bad creds), users CRUD, courses CRUD+status, enrollments, attendance (manual mark + QR generate/scan/reuse), assessments + grades, analytics (all 3 roles), security (audit logs + sessions + cleanup).
 
 Test data isolation: unique emails via `$ts = [int64](Get-Date -UFormat %s)`, unique attendance dates via `(Get-Date "2200-01-01").AddDays($ts % 50000)`, unique QR dates via `(Get-Date "2300-01-01").AddDays($ts % 50000)`.
+
+---
+
+## 13. Aniqlash qatlamlari (loyihaning yadrosi)
+
+Bu bo'lim ilgari umuman yo'q edi, holbuki ishning ilmiy qismi shu yerda.
+
+### Gipoteza
+
+Avtorizatsiya qatlami "noto'g'ri obyekt" ni, xatti-harakat qatlami "noto'g'ri
+namuna" ni tutadi. Ular turli tahdid sinflarini ko'radi, birgalikda esa
+yolg'on ishoralar kamayadi. Mexanizm: yolg'iz qatlam ogohlantirishi uchun
+KUCHLI dalil kerak (`SINGLE_THRESHOLD` 0.75), ikkala qatlam tasdiqlasa past
+chegara yetarli (`CORRELATED_THRESHOLD` 0.50).
+
+### 1-qatlam — avtorizatsiya
+
+`services/ownershipResolver.ts`. Egalik `ownership_rules` jadvalidagi
+deklarativ qoidalardan hisoblanadi: resurs turi + nuqtali yo'l
+(`enrollment.course.teacherId`) + rol (OWNER / CUSTODIAN). Yo'l Prisma
+`include` daraxtiga aylantiriladi.
+
+Natija: `SELF | OWNER | CUSTODIAN | PRIVILEGED | FOREIGN | UNKNOWN`.
+
+**Imtiyozli aktorlar uchun alohida yo'l.** Admin uchun begona obyekt
+tushunchasi yo'q — hammasi unga ochiq, shuning uchun FOREIGN deb belgilash
+jurnalni yolg'on signalga to'ldirardi. Uning o'rniga QAMROV o'lchanadi:
+oynada nechta HAR XIL egaga tegdi (`signalWindow.recordPrivilegedScope`).
+Qamrov riskining tepa chegarasi (`PRIVILEGED_SCOPE_CAP` 0.5) ataylab
+`SINGLE_THRESHOLD` dan past — ya'ni keng qamrov yolg'iz o'zi hech qachon
+ogohlantira olmaydi, faqat 2-qatlam tasdiqlasa hukm chiqadi.
+
+### 2-qatlam — xatti-harakat
+
+`services/behaviorScoring.ts` (sof mantiq) va `behaviorProfiler.ts` (profil).
+Qattiq chegaralar o'rniga HAR BIR FOYDALANUVCHINING o'z profili: soat va
+hafta kuni histogrammasi, tanish IP va qurilmalar, resurs aralashmasi,
+soatiga so'rovlar o'rtachasi.
+
+- soat doiraviy Gauss yadrosi bilan silliqlanadi (`HOUR_KERNEL`, ±5 soat)
+- "kutilmaganlik" Laplace silliqlash bilan
+- signallar noisy-OR bilan qo'shiladi
+- chastota z-ball emas, logarifmik nisbat orqali
+- profil `MIN_SAMPLES` (50) dan kam bo'lsa ball 0 — yangi foydalanuvchi ayblanmaydi
+
+### Qaror — bitta nuqta
+
+Qatlamlar ogohlantirish YARATMAYDI. Ular Redis'dagi 15 daqiqalik oynaga
+(`signalWindow.ts`) faqat dalil yozadi; hukmni `correlationDetector.ts`
+`correlate()` orqali bir marta chiqaradi. Bir qatlam bo'yicha 15 daqiqada
+bitta ogohlantirish (sovish oynasi).
+
+### Hodisa qamrovi
+
+`services/requestAudit.ts` — `onResponse` hooki. Har bir `/v1/` so'rovi audit
+logga yoziladi, 401/403 esa `ACCESS_DENIED` sifatida. `/v1/security` ataylab
+chetda: aniqlash tizimining o'z sahifalarini qayd etsak, jurnalni ochishning
+o'zi yangi yozuvlar yaratib, o'zini oziqlantirardi.
+
+`DETECTION_ENABLED=false` butun qatlamni o'chiradi — audit yozuvi ham
+to'xtaydi, shuni yodda tuting.
+
+### Vositalar
+
+| buyruq | nima qiladi |
+|---|---|
+| `npm run db:seed:history -w apps/api` | 2-qatlam uchun 30 kunlik tarix (ONSIZ qatlam jim) |
+| `POST /v1/security/profiles/refresh` | profillarni qurish |
+| `npx tsx src/tools/evaluate.ts` | ROC va ishlash nuqtasi jadvali |
+| `npm run demo:behavior -w apps/api` | jonli profillar ustida namoyish |
+| `npm run check:realtime -w apps/api` | soket shlyuzi tekshiruvi |
+| `scripts/detection-demo.sql` | 1-qatlamning SQL namoyishi |

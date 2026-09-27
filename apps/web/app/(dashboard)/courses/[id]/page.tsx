@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { useLocale } from '@/store/locale'
 import {
   coursesApi, enrollmentsApi, assessmentsApi, attendanceApi, usersApi,
   type Course, type Enrollment, type Assessment, type User,
@@ -29,6 +30,7 @@ export default function CourseDetailPage() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [students, setStudents]       = useState<User[]>([])
+  const { t } = useLocale()
   const [tab, setTab]                 = useState<Tab>('students')
   const [assOpen, setAssOpen]         = useState(false)
   const [assForm, setAssForm]         = useState({ title: '', type: 'QUIZ', maxScore: 100, weight: 0.2 })
@@ -135,10 +137,10 @@ export default function CourseDetailPage() {
       {/* Info cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Category',  value: course.category },
-          { label: 'Teacher',   value: `${course.teacher.firstName} ${course.teacher.lastName}` },
-          { label: 'Duration',  value: `${course.durationWeeks} weeks` },
-          { label: 'Students',  value: `${course._count?.enrollments ?? 0} / ${course.maxStudents}` },
+          { label: t('courses.category'), value: course.category },
+          { label: t('courses.teacher'),  value: `${course.teacher.firstName} ${course.teacher.lastName}` },
+          { label: t('courses.duration'), value: `${course.durationWeeks} ${t('courses.weeks')}` },
+          { label: t('courses.students'), value: `${course._count?.enrollments ?? 0} / ${course.maxStudents}` },
         ].map(({ label, value }) => (
           <Card key={label} size="sm">
             <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground font-normal">{label}</CardTitle></CardHeader>
@@ -152,7 +154,7 @@ export default function CourseDetailPage() {
         {isTeacher && (
           <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrImage(null); setQrCountdown(0) } }}>
             <DialogTrigger render={<Button variant="outline" />}>
-              <QrCode className="size-[18px]" /> QR Attendance
+              <QrCode className="size-[18px]" /> {t('courses.qrAttendance')}
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>QR Attendance Token</DialogTitle></DialogHeader>
@@ -202,17 +204,17 @@ export default function CourseDetailPage() {
 
       {/* Tabs */}
       <div className="flex border-b">
-        {(['students', 'attendance', 'grades'] as Tab[]).map(t => (
+        {(['students', 'attendance', 'grades'] as Tab[]).map(tabKey => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 transition-colors ${
-              tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            key={tabKey}
+            onClick={() => setTab(tabKey)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'students' && <><Users className="inline size-4 mr-1" />Students ({enrollments.length})</>}
-            {t === 'attendance' && <><ClipboardList className="inline size-4 mr-1" />Attendance</>}
-            {t === 'grades' && <><Star className="inline size-4 mr-1" />Grades ({assessments.length})</>}
+            {tabKey === 'students' && <><Users className="inline size-4 mr-1" />{t('courses.students')} ({enrollments.length})</>}
+            {tabKey === 'attendance' && <><ClipboardList className="inline size-4 mr-1" />{t('courses.attendance')}</>}
+            {tabKey === 'grades' && <><Star className="inline size-4 mr-1" />{t('courses.grades')} ({assessments.length})</>}
           </button>
         ))}
       </div>
@@ -221,7 +223,7 @@ export default function CourseDetailPage() {
       {tab === 'students' && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Enrolled Students</CardTitle>
+            <CardTitle>{t('courses.enrolled')}</CardTitle>
             {isAdmin && (
               <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
                 <DialogTrigger render={<Button size="sm" />}>
@@ -242,7 +244,7 @@ export default function CourseDetailPage() {
                       </Select>
                     </div>
                     <DialogFooter showCloseButton>
-                      <Button type="submit" disabled={!enrollStudentId}>Enroll</Button>
+                      <Button type="submit" disabled={!enrollStudentId}>{t('courses.enroll')}</Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>

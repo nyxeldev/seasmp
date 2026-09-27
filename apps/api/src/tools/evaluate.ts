@@ -11,7 +11,7 @@
  * shu jadval keltiriladi.
  */
 import {
-  scoreEvent, isMassAccess, emptyProfile, ALERT_THRESHOLD,
+  scoreEvent, isMassAccess, emptyProfile,
   type BehaviorProfile,
 } from '../services/behaviorScoring'
 import {

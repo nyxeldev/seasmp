@@ -124,29 +124,16 @@ export async function checkBulkDelete(userId: string, ip: string): Promise<void>
   }
 }
 
-// ─── Rule 5: App-level Rate Limit (sliding window) ───────────────────────────
-
-const RL_LIMIT  = 100
-const RL_WINDOW = 60 // seconds
-
-export async function checkRateLimit(ip: string): Promise<void> {
-  const now = Date.now()
-  const key  = `rl:${ip}`
-  const pipe = redis.pipeline()
-  pipe.zremrangebyscore(key, 0, now - RL_WINDOW * 1000)
-  pipe.zadd(key, now, `${now}`)
-  pipe.zcard(key)
-  pipe.expire(key, RL_WINDOW)
-  const results = await pipe.exec()
-  const count = results?.[2]?.[1] as number ?? 0
-
-  if (count > RL_LIMIT) {
-    throw Object.assign(
-      new Error("So'rovlar soni chegarasidan oshdi."),
-      { statusCode: 429 }
-    )
-  }
-}
+// ─── Rule 5: tezlik chegarasi ────────────────────────────────────────────────
+//
+// Bu yerda `checkRateLimit` degan Redis ustidagi sirpanuvchi oyna bor edi.
+// U HECH QAYERDAN chaqirilmasdi — redis.ts dagi izoh ham shuni ochiq aytardi
+// ("checkRateLimit is never called, just needs to type-check"), va MemRedis da
+// uni tipdan o'tkazish uchun atayin soxta `pipeline()` saqlanardi.
+//
+// Haqiqiy chegara ikki joyda: @fastify/rate-limit (app.ts, RATE_LIMIT_MAX) va
+// Nginx (limit_req zone). Uchinchi, ishlamaydigan nusxa kodni o'qiyotgan
+// odamni chalg'itardi, shuning uchun olib tashlandi.
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 

@@ -66,6 +66,16 @@ const envSchema = z.object({
    */
   RATE_LIMIT_MAX:       z.coerce.number().default(100),
 
+  /**
+   * ADMIN/TEACHER uchun 2FA majburiyligini o'chiradi ('true' bo'lsa o'chadi).
+   *
+   * Ilgari bu yagona o'zgaruvchi edi, qolganlari zoddan o'tsa-da, u
+   * to'g'ridan-to'g'ri process.env dan o'qilardi. Ya'ni xato yozilgan nom
+   * (masalan DISABLE_2FA) jimgina e'tiborsiz qolardi va 2FA kutilmaganda
+   * yoqilib turardi. Endi sxemada.
+   */
+  DISABLE_2FA_REQUIRED: z.string().optional(),
+
   JWT_ACCESS_SECRET:    z.string().min(32),
   JWT_REFRESH_SECRET:   z.string().min(32),
   JWT_ACCESS_EXPIRES_IN:  z.string().default('15m'),
