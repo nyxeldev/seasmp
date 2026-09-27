@@ -196,6 +196,18 @@ Jadvallar:
 
 ---
 
+## 🛠 Foydali buyruqlar
+
+```bash
+# Aniqlash qatlamlari
+npx tsx apps/api/src/tools/evaluate.ts        # ROC va ishlash nuqtasi jadvali
+npm run demo:behavior  --workspace=apps/api   # jonli profillar ustida namoyish
+npm run check:realtime --workspace=apps/api   # soket shlyuzi (API ishlab turishi kerak)
+
+# Ma'lumot
+npm run db:seed:history --workspace=apps/api  # 2-qatlam uchun 30 kunlik tarix
+```
+
 ## 🧪 Testlar
 
 ```bash

@@ -670,3 +670,61 @@ to'xtaydi, shuni yodda tuting.
 | `npm run demo:behavior -w apps/api` | jonli profillar ustida namoyish |
 | `npm run check:realtime -w apps/api` | soket shlyuzi tekshiruvi |
 | `scripts/detection-demo.sql` | 1-qatlamning SQL namoyishi |
+
+---
+
+## 14. Real vaqt, bildirishnomalar va xato monitoringi
+
+### Real vaqt (`apps/api/src/realtime/gateway.ts`)
+
+Socket.io ulangan edi, lekin birorta `emit` yo'q edi — va ulanish umuman
+autentifikatsiya qilinmasdi: xona nomi MIJOZ bergan identifikatordan
+yasalardi, ya'ni istalgan odam istalgan kursning xonasiga kirardi.
+
+Endi:
+
+| xona | qanday qo'shiladi |
+|---|---|
+| `user:<sub>` | handshake dagi tekshirilgan tokendan, avtomatik |
+| `role:<ROLE>` | tokendagi roldan, avtomatik |
+| `course:<id>` | server tomonda tasdiqlangandan keyin: admin hammasiga, o'qituvchi o'zinikiga, talaba yozilganiga |
+
+Hodisalar: `attendance:marked` (kurs xonasiga va talabaga),
+`security:alert` (faqat imtiyozli rollarga), `notification:new` (faqat egasiga).
+
+Tekshirish: `npm run check:realtime --workspace=apps/api` — ishlab turgan
+serverga qarshi 12 ta tekshiruv. Soket qatlami jest bilan sinalmaydi: unit
+testlar tashqi xizmatga ulanmaydi, integration to'plami esa Fastify'ni
+`inject` bilan chaqiradi va WebSocket u yerdan o'tmaydi.
+
+### Bildirishnomalar (`notifications` jadvali)
+
+Qo'ng'iroq ilgari audit jurnalidan yasalardi va faqat ADMIN uchun ishlardi.
+Sababi tub: audit jurnali harakatni KIM qilganini yozadi, bildirishnoma esa
+xabar KIMGA tegishli ekanini talab qiladi.
+
+Manbalar: baho qo'yilganda -> talabaga; davomat belgilanganda -> talabaga
+(QR bilan O'ZI belgilagan holat bundan tashqari); kursga yozilganda ->
+talaba va o'qituvchiga; xavfsizlik ogohlantirishi -> barcha faol adminlarga.
+
+**Egalik marshrutda emas, tokenda.** `/v1/notifications` da `:userId` YO'Q —
+kimniki ekani `request.user.sub` dan olinadi. Begona bildirishnomani
+o'qilgan deb belgilashga urinish **404** qaytaradi (403 emas: boshqa odamda
+bunday yozuv BOR ekanini bilib olish imkoni qolmasin).
+
+### Xato monitoringi (`config/errorReporter.ts`)
+
+Ikkita nosozlik yopildi:
+
+1. `app.setErrorHandler(...)` marshrutlardan KEYIN turardi. Fastify bola
+   kontekstga ro'yxatdan o'tish paytidagi ishlovchini beradi, shuning uchun
+   maxsus ishlovchi `/v1` marshrutlarining BIRORTASIGA ham qo'llanmagan.
+   500 xatolar Fastify ning standart ko'rinishida qaytardi va ichki xabarni
+   oshkor qilardi. Ishlovchi endi marshrutlardan OLDIN o'rnatiladi.
+
+2. 500 xatolar hech qayerda qayd etilmasdi. Endi metod, yo'l, foydalanuvchi
+   va stack bilan yoziladi. 4xx lar qayd etilmaydi — ular kutilgan holat.
+
+Sentry ATAYLAB majburiy emas: `SENTRY_DSN` bo'lmasa modul jim ishlaydi va
+xatolar faqat Winston orqali yoziladi. Brauzer xatolari ham shu yo'ldan
+o'tadi: `ErrorBoundary` -> `POST /v1/telemetry/client-error`.

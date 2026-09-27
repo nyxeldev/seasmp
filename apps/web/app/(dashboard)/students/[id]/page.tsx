@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { useLocale } from '@/store/locale'
 import {
   usersApi, enrollmentsApi, analyticsApi,
   type User, type Enrollment, type PyStudentEnrollmentAnalytics,
@@ -34,10 +35,10 @@ interface EnrollmentStats {
   dropoutRisk: number | null
 }
 
-function RiskGauge({ score }: { score: number }) {
+function RiskGauge({ score, labels }: { score: number; labels: [string, string, string] }) {
   const pct = Math.round(score * 100)
   const color = pct >= 65 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#22c55e'
-  const label = pct >= 65 ? 'High Risk' : pct >= 40 ? 'Medium Risk' : 'Low Risk'
+  const label = pct >= 65 ? labels[0] : pct >= 40 ? labels[1] : labels[2]
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="relative size-24">
@@ -65,6 +66,7 @@ export default function StudentProfilePage() {
   const [student, setStudent]         = useState<User | null>(null)
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [stats, setStats]             = useState<EnrollmentStats[]>([])
+  const { t } = useLocale()
   const [tab, setTab]                 = useState<Tab>('overview')
   const [loading, setLoading]         = useState(true)
   const [selEnrollmentId, setSelEnrollmentId] = useState('')
@@ -164,10 +166,10 @@ export default function StudentProfilePage() {
       {/* Overview cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { icon: BookOpen,      label: 'Courses enrolled',  value: enrollments.length },
-          { icon: CalendarCheck, label: 'Avg attendance',    value: overallAtt === '—' ? '—' : `${overallAtt}%` },
-          { icon: Star,          label: 'Avg grade',         value: overallGrade },
-          { icon: BookOpen,      label: 'High-risk courses', value: highRiskCount },
+          { icon: BookOpen,      label: t('student.coursesEnrolled'), value: enrollments.length },
+          { icon: CalendarCheck, label: t('student.avgAttendance'),   value: overallAtt === '—' ? '—' : `${overallAtt}%` },
+          { icon: Star,          label: t('student.avgGrade'),        value: overallGrade },
+          { icon: BookOpen,      label: t('student.highRisk'),        value: highRiskCount },
         ].map(({ label, value }) => (
           <Card key={label} size="sm">
             <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground font-normal">{label}</CardTitle></CardHeader>
@@ -178,16 +180,16 @@ export default function StudentProfilePage() {
 
       {/* Tabs */}
       <div className="flex border-b">
-        {(['overview', 'analytics'] as Tab[]).map(t => (
+        {(['overview', 'analytics'] as Tab[]).map(tabKey => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tabKey}
+            onClick={() => setTab(tabKey)}
             className={`px-4 py-2 text-sm font-medium capitalize border-b-2 transition-colors ${
-              tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'overview' && <><BookOpen className="inline size-4 mr-1" />Overview</>}
-            {t === 'analytics' && <><BarChart2 className="inline size-4 mr-1" />Analytics</>}
+            {tabKey === 'overview' && <><BookOpen className="inline size-4 mr-1" />{t('student.overview')}</>}
+            {tabKey === 'analytics' && <><BarChart2 className="inline size-4 mr-1" />{t('student.analytics')}</>}
           </button>
         ))}
       </div>
@@ -195,16 +197,16 @@ export default function StudentProfilePage() {
       {/* Tab: Overview */}
       {tab === 'overview' && (
         <Card>
-          <CardHeader><CardTitle>Enrolled Courses</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('student.enrolledCourses')}</CardTitle></CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Course</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Attendance</TableHead>
-                  <TableHead>Avg Grade</TableHead>
-                  <TableHead>Dropout Risk</TableHead>
+                  <TableHead>{t('student.course')}</TableHead>
+                  <TableHead>{t('student.status')}</TableHead>
+                  <TableHead>{t('student.attendance')}</TableHead>
+                  <TableHead>{t('student.avgGrade')}</TableHead>
+                  <TableHead>{t('student.dropoutRisk')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -279,10 +281,10 @@ export default function StudentProfilePage() {
               {/* KPI row */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { label: 'Attendance (overall)', value: `${analyticsData.attendance_rate.toFixed(1)}%` },
-                  { label: 'Attendance (2 weeks)', value: `${analyticsData.attendance_rate_2w.toFixed(1)}%` },
-                  { label: 'Avg Grade',            value: `${analyticsData.avg_grade.toFixed(1)}%` },
-                  { label: 'Assignments done',     value: `${analyticsData.assignments_completion.toFixed(1)}%` },
+                  { label: t('student.attendanceOverall'), value: `${analyticsData.attendance_rate.toFixed(1)}%` },
+                  { label: t('student.attendance2w'),      value: `${analyticsData.attendance_rate_2w.toFixed(1)}%` },
+                  { label: t('student.avgGrade'),          value: `${analyticsData.avg_grade.toFixed(1)}%` },
+                  { label: t('student.assignmentsDone'),   value: `${analyticsData.assignments_completion.toFixed(1)}%` },
                 ].map(({ label, value }) => (
                   <Card key={label} size="sm">
                     <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground font-normal">{label}</CardTitle></CardHeader>
@@ -295,7 +297,7 @@ export default function StudentProfilePage() {
                 {/* Grade trend */}
                 {analyticsData.grade_trend.length > 0 && (
                   <Card className="lg:col-span-2">
-                    <CardHeader><CardTitle className="text-base">Grade Trend</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-base">{t('student.gradeTrend')}</CardTitle></CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={180}>
                         <LineChart data={analyticsData.grade_trend}>
@@ -312,9 +314,10 @@ export default function StudentProfilePage() {
 
                 {/* Risk gauge */}
                 <Card>
-                  <CardHeader><CardTitle className="text-base">Dropout Risk</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-base">{t('student.dropoutRisk')}</CardTitle></CardHeader>
                   <CardContent className="flex flex-col items-center gap-3 pt-2">
-                    <RiskGauge score={analyticsData.dropout_risk_score} />
+                    <RiskGauge score={analyticsData.dropout_risk_score}
+                      labels={[t('student.riskHigh'), t('student.riskMedium'), t('student.riskLow')]} />
                     <div className="text-xs text-muted-foreground text-center">
                       Last login {analyticsData.days_since_login.toFixed(0)} days ago
                     </div>
