@@ -6,11 +6,17 @@ import { prisma } from './config/prisma'
 import { redis } from './config/redis'
 import { startProfileRefresh } from './jobs/profileRefresh'
 import { initRealtime, closeRealtime } from './realtime/gateway'
+import { initErrorReporter, installProcessHandlers } from './config/errorReporter'
 
 let app: FastifyInstance
 let stopProfileRefresh: (() => void) | undefined
 
 async function bootstrap() {
+  // Monitoring birinchi ishga tushadi — qurish bosqichidagi xato ham
+  // ushlanishi uchun.
+  initErrorReporter()
+  installProcessHandlers()
+
   app = await buildApp()
 
   // ─── Real vaqt ───────────────────────────────────────────────────────────────

@@ -87,6 +87,14 @@ const envSchema = z.object({
   ANALYTICS_API_URL:    z.string().url().default('http://localhost:5000'),
   ANALYTICS_INTERNAL_KEY: z.string().default('internal-dev-key-change-in-prod'),
 
+  /**
+   * Xato monitoringi. Berilmasa Sentry umuman ishga tushmaydi va xatolar
+   * faqat log faylga yoziladi — loyihani ishga tushirish uchun tashqi
+   * hisob talab qilinmasligi kerak.
+   */
+  SENTRY_DSN:     z.string().optional(),
+  SENTRY_RELEASE: z.string().optional(),
+
   // Email (optional — dev can be empty)
   SMTP_HOST:  z.string().optional(),
   SMTP_PORT:  z.string().default('587'),
