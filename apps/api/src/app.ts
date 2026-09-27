@@ -17,6 +17,7 @@ import assessmentRoutes from './routes/assessment.routes'
 import analyticsRoutes  from './routes/analytics.routes'
 import securityRoutes   from './routes/security.routes'
 import internalRoutes   from './routes/internal.routes'
+import notificationRoutes from './routes/notification.routes'
 import { checkBulkDelete } from './services/securityMonitor'
 import { recordRequest } from './services/requestAudit'
 
@@ -72,6 +73,7 @@ export async function buildApp() {
   await app.register(analyticsRoutes,  { prefix: '/v1/analytics' })
   await app.register(securityRoutes,   { prefix: '/v1/security' })
   await app.register(internalRoutes,   { prefix: '/v1/internal' })
+  await app.register(notificationRoutes, { prefix: '/v1/notifications' })
 
   // ─── Bulk Delete Guard ────────────────────────────────────────────────────────
   app.addHook('preHandler', async (request) => {

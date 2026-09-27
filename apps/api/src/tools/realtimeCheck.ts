@@ -120,6 +120,66 @@ async function main(): Promise<void> {
       ev ? `${ev.status} ${ev.lessonDate}` : `javob ${res.status}`)
   }
 
+  // ── Shaxsiy bildirishnoma ──────────────────────────────────────────────
+  const studentTok = await login('student1@seasmp.uz', process.env.CHECK_STUDENT_PASSWORD ?? 'Student@1234')
+  const student = await connect(studentTok)
+  check('talaba ulanadi', student.ok, student.why)
+
+  if (student.socket) {
+    const meStudent: any = await fetch(`${API}/v1/users/me`, {
+      headers: { authorization: `Bearer ${studentTok}` },
+    }).then((r) => r.json())
+
+    const enr: any = await fetch(
+      `${API}/v1/enrollments?studentId=${meStudent.data.id}&limit=1`, { headers: H },
+    ).then((r) => r.json())
+    const e0 = (enr.data ?? [])[0]
+
+    if (!e0) {
+      check('talabaga baho bildirishnomasi', false, "ro'yxatga olish topilmadi")
+    } else {
+      const asm: any = await fetch(
+        `${API}/v1/assessments/course/${e0.course.id}`, { headers: H },
+      ).then((r) => r.json())
+      const a0 = (asm.data ?? [])[0]
+
+      if (!a0) {
+        check('talabaga baho bildirishnomasi', false, 'baholash topilmadi')
+      } else {
+        const notifWait = waitEvent<any>(student.socket, 'notification:new')
+        await fetch(`${API}/v1/assessments/${a0.id}/grades`, {
+          method: 'POST', headers: { ...H, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enrollmentId: e0.id, score: 70 + Math.floor(Math.random() * 25) }),
+        })
+        const n = await notifWait
+        check("baho qo'yilganda talabaga bildirishnoma keladi",
+          n !== null && n?.type === 'GRADE_POSTED', n ? n.title : 'kelmadi')
+
+        // EGALIK: endigina yaratilgan bildirishnoma TALABANIKI. O'qituvchi
+        // uni o'qilgan deb belgilay olmasligi kerak — marshrutda :userId
+        // yo'q, egalik tokendan olinadi.
+        const mine: any = await fetch(`${API}/v1/notifications?limit=1`, {
+          headers: { authorization: `Bearer ${studentTok}` },
+        }).then((r) => r.json())
+        const ownId = (mine.data ?? [])[0]?.id
+
+        if (!ownId) {
+          check('begona bildirishnoma himoyalangan', false, "talabada bildirishnoma yo'q")
+        } else {
+          const denied = await fetch(`${API}/v1/notifications/${ownId}/read`, {
+            method: 'PATCH', headers: { authorization: `Bearer ${teacherTok}` },
+          })
+          check("begona bildirishnomani o'qib bo'lmaydi", denied.status === 404, `javob ${denied.status}`)
+
+          const allowed = await fetch(`${API}/v1/notifications/${ownId}/read`, {
+            method: 'PATCH', headers: { authorization: `Bearer ${studentTok}` },
+          })
+          check("o'z bildirishnomasini o'qilgan deb belgilaydi", allowed.status === 200, `javob ${allowed.status}`)
+        }
+      }
+    }
+  }
+
   const alertWait = waitEvent<any>(admin.socket, 'security:alert', 15000)
   for (let i = 0; i < 12; i++) {
     await fetch(`${API}/v1/auth/login`, {
@@ -133,6 +193,7 @@ async function main(): Promise<void> {
 
   admin.socket.close()
   teacher.socket.close()
+  student?.socket?.close()
 
   // Brute-force sinovi bloklagan IP ni ochamiz — aks holda muhit 30 daqiqa
   // yaroqsiz bo'lib qoladi va sabab tushunarsiz ko'rinadi.

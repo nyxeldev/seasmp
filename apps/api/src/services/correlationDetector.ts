@@ -20,6 +20,7 @@ import {
 } from './correlation'
 import { readSignals } from './signalWindow'
 import { emitSecurityAlert } from '../realtime/gateway'
+import { notifyAdmins } from './notification.service'
 
 export const DETECTOR_VERSION = 'correlation-1.0.0'
 
@@ -76,6 +77,17 @@ async function persist(
         correlated:    verdict.layer === 'CORRELATED',
       } as any,
     },
+  })
+
+  // Adminlarning qo'ng'irog'iga tushsin. Bu audit jurnalidan yasalgan eski
+  // manbadan farqli: qator aynan qabul qiluvchi uchun yoziladi va o'qilgani
+  // belgilanadi.
+  await notifyAdmins({
+    type:  'SECURITY_ALERT',
+    title: `Xavfsizlik: ${created.type}`,
+    body:  `${created.severity}${created.layer ? ` — ${created.layer}` : ''}`,
+    link:  '/security',
+    data:  { alertId: created.id.toString(), type: created.type, severity: created.severity },
   })
 
   // Xavfsizlik paneli ogohlantirishni sahifani yangilamasdan ko'rsin.

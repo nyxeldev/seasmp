@@ -15,6 +15,7 @@ import {
   createContext, useContext, useEffect, useRef, useState, useCallback,
 } from 'react'
 import { io, type Socket } from 'socket.io-client'
+import { useAuth } from './auth-context'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -49,10 +50,19 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(false)
   const [socket, setSocket] = useState<Socket | null>(null)
 
+  // Ulanish AUTENTIFIKATSIYA HOLATIGA bog'lanadi, localStorage ga emas.
+  //
+  // Ilgari token faqat mount paytida o'qilardi. Kirish sahifasi mount
+  // bo'lganda token hali yo'q edi, shuning uchun effekt darhol chiqib
+  // ketardi va kirgandan keyin HECH QACHON qayta ulanmasdi: brauzerda
+  // birorta /ws so'rovi ko'rinmasdi va jonli yangilanish jimgina ishlamasdi.
+  // Chiqib qayta kirganda ham xuddi shunday.
+  const { user } = useAuth()
+  const userId = user?.id ?? null
+
   useEffect(() => {
+    if (!userId) { setSocket(null); setConnected(false); return }
     const token = typeof window === 'undefined' ? null : localStorage.getItem('accessToken')
-    // Token yo'q — hali kirilmagan. Ulanmaymiz: serverda handshake baribir
-    // rad etilardi va konsol xato bilan to'lardi.
     if (!token) return
 
     const s = io(API, {
@@ -75,7 +85,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       setSocket(null)
       setConnected(false)
     }
-  }, [])
+  }, [userId])
 
   return (
     <RealtimeContext.Provider value={{ connected, socket }}>

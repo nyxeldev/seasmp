@@ -8,6 +8,7 @@ import { logger } from '../config/logger'
 import { auditService } from './audit.service'
 import { emailService } from './emailService'
 import { emitSecurityAlert } from '../realtime/gateway'
+import { notifyAdmins } from './notification.service'
 
 // ─── Rule 1: Brute Force ─────────────────────────────────────────────────────
 
@@ -152,6 +153,16 @@ async function _createAlert(
         details:   details as any,
       },
     })
+    // Adminlarning qo'ng'irog'i uchun. Korrelyatsiya detektori ham xuddi
+    // shunday qiladi — ikkala manba bitta joyga tushsin.
+    await notifyAdmins({
+      type:  'SECURITY_ALERT',
+      title: `Xavfsizlik: ${created.type}`,
+      body:  String(created.severity),
+      link:  '/security',
+      data:  { alertId: created.id.toString(), type: created.type, severity: created.severity },
+    })
+
     // Eski qoidalar ham panelga jonli tushsin — aks holda xavfsizlik
     // sahifasida ogohlantirishlarning bir qismi jonli, bir qismi faqat
     // sahifa yangilanganda paydo bo'lardi.

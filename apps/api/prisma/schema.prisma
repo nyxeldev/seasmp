@@ -112,6 +112,14 @@ enum DetectionLayer {
   CORRELATED
 }
 
+enum NotificationType {
+  ATTENDANCE_MARKED
+  GRADE_POSTED
+  ENROLLED
+  DROPOUT_RISK
+  SECURITY_ALERT
+}
+
 // ─── MODELS ───────────────────────────────────────────────────────────────────
 
 model User {
@@ -140,6 +148,7 @@ model User {
   securityAlerts    SecurityAlert[]  @relation("UserAlerts")
   resolvedAlerts    SecurityAlert[]  @relation("ResolvedAlerts")
   behaviorProfile   UserBehaviorProfile?
+  notifications     Notification[]
 
   @@map("users")
 }
@@ -392,4 +401,28 @@ model UserBehaviorProfile {
 
   @@index([trainedAt])
   @@map("user_behavior_profiles")
+}
+
+/// Foydalanuvchiga tegishli bildirishnoma.
+///
+/// Audit jurnali harakatni KIM qilganini yozadi, bu jadval esa xabar KIMGA
+/// tegishli ekanini. Ikkalasi almashtirib bo'lmaydigan narsa: qo'ng'iroq
+/// ilgari audit jurnalidan yasalgani uchun faqat adminlar uchun ishlardi.
+model Notification {
+  id        BigInt           @id @default(autoincrement())
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(255)
+  body      String?
+  /// Ilovadagi ichki manzil, masalan /courses/<slug>/attendance
+  link      String?          @db.VarChar(255)
+  data      Json             @default("{}")
+  readAt    DateTime?        @map("read_at") @db.Timestamptz
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }

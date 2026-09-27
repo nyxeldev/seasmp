@@ -173,3 +173,17 @@ export interface SecurityAlertEvent {
 export function emitSecurityAlert(e: SecurityAlertEvent): void {
   for (const role of PRIVILEGED) emit(ROOM.role(role), 'security:alert', e)
 }
+
+export interface NotificationEvent {
+  id:        string
+  type:      string
+  title:     string
+  body:      string | null
+  link:      string | null
+  createdAt: string
+}
+
+/** Shaxsiy bildirishnoma — faqat egasiga */
+export function emitNotification(userId: string, e: NotificationEvent): void {
+  emit(ROOM.user(userId), 'notification:new', e)
+}

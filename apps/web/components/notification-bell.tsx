@@ -21,7 +21,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import { securityApi, type AuditLog, type SecurityAlert } from '@/lib/api'
+import {
+  securityApi, notificationsApi,
+  type AuditLog, type AppNotification,
+} from '@/lib/api'
+import { useRealtimeEvent } from '@/lib/realtime'
 import { useAuth } from '@/lib/auth-context'
 import { useLocale, type Locale } from '@/store/locale'
 import { Bell, CheckCheck, ShieldAlert } from 'lucide-react'
@@ -44,26 +48,19 @@ const AUDIT_CONFIG: Record<string, { color: string; label: L10n }> = {
   DELETE:           { color: '#ef4444', label: { uz: "Yozuv o'chirildi",       ru: 'Запись удалена',        en: 'Record deleted'     } },
 }
 
-const ALERT_LABEL: Record<string, L10n> = {
-  UNAUTHORIZED_OBJECT_ACCESS: { uz: "Ruxsatsiz obyektga murojaat", ru: 'Доступ к чужому объекту', en: 'Unauthorized object access' },
-  BEHAVIOR_ANOMALY:           { uz: "Xatti-harakat anomaliyasi",   ru: 'Аномалия поведения',      en: 'Behaviour anomaly'          },
-  MASS_DATA_ACCESS:           { uz: "Ommaviy ma'lumot chiqarish",  ru: 'Массовая выгрузка',       en: 'Mass data access'           },
-  PRIVILEGE_ESCALATION:       { uz: "Huquqlarni oshirish",         ru: 'Повышение привилегий',    en: 'Privilege escalation'       },
-  BRUTE_FORCE:                { uz: "Parol tanlash urinishi",      ru: 'Подбор пароля',           en: 'Brute force'                },
-  MULTI_DEVICE:               { uz: "Bir vaqtda ko'p qurilma",     ru: 'Много устройств',         en: 'Multiple devices'           },
-  UNUSUAL_HOUR:               { uz: "G'ayrioddiy vaqtda kirish",   ru: 'Вход в необычное время',  en: 'Unusual hour sign-in'       },
-  BULK_DELETE:                { uz: "Ommaviy o'chirish",           ru: 'Массовое удаление',       en: 'Bulk deletion'              },
-  RATE_LIMIT:                 { uz: "So'rovlar chegarasi",         ru: 'Превышен лимит',          en: 'Rate limit'                 },
-}
-
-const SEVERITY_COLOR: Record<string, string> = {
-  CRITICAL: '#ef4444', HIGH: '#f97316', MEDIUM: '#f59e0b', LOW: '#64748b',
+/** Shaxsiy bildirishnoma turlarining rangi */
+const PERSONAL_COLOR: Record<string, string> = {
+  ATTENDANCE_MARKED: '#3b82f6',
+  GRADE_POSTED:      '#22c55e',
+  ENROLLED:          '#8b5cf6',
+  DROPOUT_RISK:      '#f59e0b',
+  SECURITY_ALERT:    '#ef4444',
 }
 
 /** Ro'yxatga tushadigan yagona ko'rinish — manbasi qanday bo'lishidan qat'i nazar */
 interface Item {
   id:       string
-  kind:     'alert' | 'audit'
+  kind:     'audit' | 'personal'
   title:    string
   subtitle: string | null
   color:    string
@@ -73,6 +70,17 @@ interface Item {
   count:    number
   /** Guruhga kirgan barcha yozuvlar — "o'qildi" belgisi hammasiga qo'yiladi */
   ids:      string[]
+  /**
+   * Shaxsiy bildirishnomalar uchun o'qilgan holati SERVERDA saqlanadi
+   * (`notifications.read_at`). Ogohlantirish va audit yozuvlarida bunday
+   * ustun yo'q, shuning uchun ular localStorage ga tayanadi — o'sha
+   * vaqtinchalik yechim faqat shu ikki manba uchun qoladi.
+   */
+  read?:    boolean
+  /** Server tomonidagi id — o'qilgan deb belgilash uchun */
+  notificationId?: string
+  /** Qalqon belgisi: xavfsizlikka oid xabarlar ajralib tursin */
+  security?: boolean
 }
 
 /**
@@ -134,13 +142,15 @@ export function NotificationBell() {
   const { user } = useAuth()
   const router = useRouter()
 
-  // Qo'ng'iroq audit jurnali va ogohlantirishlarga tayanadi, ular esa faqat
-  // adminlarga ochiq. Boshqa rollarda so'rov har daqiqada 401 qaytarardi va
-  // qo'ng'iroq baribir bo'sh turardi — shuning uchun umuman ko'rsatilmaydi.
-  const canSee = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
+  // Shaxsiy bildirishnomalar HAMMA uchun. Ogohlantirish va audit jurnali
+  // esa imtiyozli manbalar bo'lib qoladi — ular rolga tegishli, shaxsga emas.
+  //
+  // Ilgari butun qo'ng'iroq shu ikki manbadan yasalgani uchun talaba va
+  // o'qituvchi uni umuman ko'rmasdi.
+  const isPrivileged = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
 
   const [open, setOpen]       = useState(false)
-  const [alerts, setAlerts]   = useState<SecurityAlert[]>([])
+  const [personal, setPersonal] = useState<AppNotification[]>([])
   const [logs, setLogs]       = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(false)
   const [readIds, setReadIds] = useState<Set<string>>(() => {
@@ -150,26 +160,36 @@ export function NotificationBell() {
   const ref = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
-    if (!canSee) return
+    if (!user) return
     setLoading(true)
     try {
-      const [alertRes, logRes] = await Promise.all([
-        securityApi.alerts('resolved=false&limit=20').catch(() => ({ data: [] as SecurityAlert[] })),
-        securityApi.auditLogs('limit=50').catch(() => ({ data: [] as AuditLog[] })),
-      ])
-      setAlerts(Array.isArray(alertRes.data) ? alertRes.data : [])
+      const notifRes = await notificationsApi.list('limit=30')
+        .catch(() => ({ data: [] as AppNotification[] }))
+      setPersonal(Array.isArray(notifRes.data) ? notifRes.data : [])
+
+      if (!isPrivileged) return
+      // Xavfsizlik ogohlantirishlari ENDI bildirishnoma sifatida keladi
+      // (notifyAdmins), shuning uchun bu yerdan alohida o'qilmaydi — aks
+      // holda admin ularni ikki marta ko'rardi. Audit jurnali esa boshqa
+      // narsa: unda o'qilgan holati yo'q va u rolga tegishli.
+      const logRes = await securityApi.auditLogs('limit=50')
+        .catch(() => ({ data: [] as AuditLog[] }))
       setLogs((Array.isArray(logRes.data) ? logRes.data : []).filter(l => l.action in AUDIT_CONFIG))
     } finally {
       setLoading(false)
     }
-  }, [canSee])
+  }, [user, isPrivileged])
 
   useEffect(() => {
-    if (!canSee) return
+    if (!user) return
     load()
     const id = setInterval(load, POLL_MS)
     return () => clearInterval(id)
-  }, [load, canSee])
+  }, [load, user])
+
+  // Jonli xabar — so'rovni kutmasdan. Davriy yuklash baribir qoladi:
+  // soket uzilib qolsa qo'ng'iroq jimjit eskirib qolmasligi kerak.
+  useRealtimeEvent('notification:new', () => { load() })
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
@@ -184,18 +204,6 @@ export function NotificationBell() {
 
   // Ogohlantirishlar birinchi — ular audit yozuvidan muhimroq
   const items: Item[] = useMemo(() => {
-    const fromAlerts: Item[] = alerts.map(a => ({
-      id:    `alert:${a.id}`,
-      ids:   [`alert:${a.id}`],
-      count: 1,
-      kind:  'alert',
-      title: say(locale, ALERT_LABEL[a.type] ?? { uz: a.type, ru: a.type, en: a.type }),
-      subtitle: a.user ? `${a.user.firstName} ${a.user.lastName}` : (a.ipAddress ?? null),
-      color: SEVERITY_COLOR[a.severity] ?? '#64748b',
-      at:    a.createdAt,
-      href:  '/security',
-    }))
-
     const fromLogs: Item[] = logs.map(l => ({
       id:    `audit:${l.id}`,
       ids:   [`audit:${l.id}`],
@@ -208,14 +216,32 @@ export function NotificationBell() {
       href:  '/security/audit',
     }))
 
-    const sorted = [...fromAlerts, ...fromLogs]
+    const fromPersonal: Item[] = personal.map(n => ({
+      id:    `notif:${n.id}`,
+      ids:   [`notif:${n.id}`],
+      count: 1,
+      kind:  'personal',
+      title: n.title,
+      subtitle: n.body,
+      color: PERSONAL_COLOR[n.type] ?? '#3b82f6',
+      at:    n.createdAt,
+      href:  n.link ?? '/dashboard',
+      read:  n.readAt !== null,
+      notificationId: n.id,
+      security: n.type === 'SECURITY_ALERT',
+    }))
+
+    const sorted = [...fromPersonal, ...fromLogs]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
 
     return groupRepeats(sorted).slice(0, 30)
-  }, [alerts, logs, locale])
+  }, [logs, personal, locale])
 
-  // Guruhdagi BARCHA yozuvlar o'qilgan bo'lsagina guruh o'qilgan hisoblanadi
-  const isRead = (item: Item) => item.ids.every(id => readIds.has(id))
+  // Shaxsiy bildirishnomada holat SERVERDAN keladi; ogohlantirish va audit
+  // yozuvlarida bunday ustun yo'q, ular localStorage ga tayanadi.
+  // Guruhdagi BARCHA yozuvlar o'qilgan bo'lsagina guruh o'qilgan hisoblanadi.
+  const isRead = (item: Item) =>
+    item.read ?? item.ids.every(id => readIds.has(id))
   const unread = items.filter(i => !isRead(i)).length
 
   const persistRead = (next: Set<string>) => {
@@ -225,15 +251,28 @@ export function NotificationBell() {
     try { localStorage.setItem(READ_KEY, JSON.stringify([...trimmed])) } catch { /* private rejim */ }
   }
 
-  const markAllRead = () => persistRead(new Set([...readIds, ...items.flatMap(i => i.ids)]))
+  const markAllRead = async () => {
+    persistRead(new Set([...readIds, ...items.flatMap(i => i.ids)]))
+    // Shaxsiylar serverda belgilanadi. Xato bo'lsa jim o'tamiz: keyingi
+    // yuklashda haqiqiy holat qaytadi va noto'g'ri ko'rinish tuzaladi.
+    setPersonal(prev => prev.map(n => n.readAt ? n : { ...n, readAt: new Date().toISOString() }))
+    try { await notificationsApi.markAllRead() } catch { load() }
+  }
 
   const openItem = (item: Item) => {
     persistRead(new Set([...readIds, ...item.ids]))
+    if (item.notificationId) {
+      const id = item.notificationId
+      setPersonal(prev => prev.map(n =>
+        n.id === id && !n.readAt ? { ...n, readAt: new Date().toISOString() } : n))
+      notificationsApi.markRead(id).catch(() => load())
+    }
     setOpen(false)
     router.push(item.href)
   }
 
-  if (!canSee) return null
+  // Kirilmagan bo'lsa qo'ng'iroq umuman ko'rsatilmaydi
+  if (!user) return null
 
   const title = say(locale, { uz: 'Bildirishnomalar', ru: 'Уведомления', en: 'Notifications' })
 
@@ -327,7 +366,7 @@ export function NotificationBell() {
                     >
                       <div className="size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
                         style={{ background: `${item.color}18`, color: item.color }}>
-                        {item.kind === 'alert' ? <ShieldAlert className="size-[18px]" /> : <Bell className="size-4" />}
+                        {item.security ? <ShieldAlert className="size-[18px]" /> : <Bell className="size-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm leading-snug flex items-center gap-1.5"

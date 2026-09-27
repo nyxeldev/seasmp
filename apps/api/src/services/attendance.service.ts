@@ -3,10 +3,19 @@ import * as QRCode from 'qrcode'
 import { prisma } from '../config/prisma'
 import { redis } from '../config/redis'
 import { auditService } from './audit.service'
+import { notificationService } from './notification.service'
 import { emitAttendanceMarked } from '../realtime/gateway'
 import type { AttendanceStatus, UserRole } from '@prisma/client'
 
 const QR_TTL_SECONDS = 300 // QR token 5 daqiqa amal qiladi
+
+/** Davomat holati bo'yicha bildirishnoma sarlavhasi */
+const ATTENDANCE_TITLE: Record<string, string> = {
+  PRESENT: "Darsda bo'ldingiz deb belgilandi",
+  ABSENT:  'Darsni qoldirdingiz deb belgilandi',
+  LATE:    'Darsga kech qoldingiz deb belgilandi',
+  EXCUSED: 'Sababli deb belgilandi',
+}
 
 export const attendanceService = {
   async list(params: {
@@ -111,6 +120,20 @@ export const attendanceService = {
       status:       data.status,
       markedBy:     actorId,
     })
+
+    // Faqat BOSHQA birov belgilaganda xabar beriladi. QR bilan o'zi
+    // belgilagan talabaga "davomatingiz belgilandi" deyishning ma'nosi yo'q —
+    // u buni ayni daqiqada o'zi qildi.
+    if (enrollment.studentId !== actorId) {
+      await notificationService.create({
+        userId: enrollment.studentId,
+        type:   'ATTENDANCE_MARKED',
+        title:  ATTENDANCE_TITLE[data.status] ?? 'Davomat belgilandi',
+        body:   `${data.lessonDate}`,
+        link:   '/attendance',
+        data:   { attendanceId: record.id, status: data.status, lessonDate: data.lessonDate },
+      })
+    }
 
     return record
   },
