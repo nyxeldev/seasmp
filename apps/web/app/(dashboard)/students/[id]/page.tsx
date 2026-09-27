@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
-  usersApi, enrollmentsApi, attendanceApi, assessmentsApi, analyticsApi,
-  type User, type Enrollment, type GradeWithAssessment, type PyStudentEnrollmentAnalytics,
+  usersApi, enrollmentsApi, analyticsApi,
+  type User, type Enrollment, type PyStudentEnrollmentAnalytics,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { useBreadcrumbTitle } from '@/lib/breadcrumb'
@@ -26,7 +26,8 @@ interface EnrollmentStats {
   enrollmentId: string
   courseTitle: string
   courseId: string
-  courseSlug: string
+  /** Slug bo'lmasligi mumkin (eski kurslar) — havola UUID ga qaytadi */
+  courseSlug: string | null
   status: string
   attendanceRate: number
   avgGrade: string
@@ -79,39 +80,32 @@ export default function StudentProfilePage() {
 
   useEffect(() => {
     if (!canView) return
+    // Bitta so'rov. Ilgari bu yerda 1 + 2N so'rov bor edi: har bir ro'yxatga
+    // olish uchun alohida davomat statistikasi va baholar. Ellikta kurs =
+    // yuzdan ortiq so'rov. Server ayni agregatni bitta javobda beradi —
+    // `analytics.service.ts` dagi studentStats.
     Promise.all([
       usersApi.getById(id).then(r => setStudent(r.data)),
-      enrollmentsApi.list(`studentId=${id}&limit=50`).then(r => {
-        setEnrollments(r.data)
-        return r.data
-      }),
+      enrollmentsApi.list(`studentId=${id}&limit=50`).then(r => setEnrollments(r.data)),
+      analyticsApi.student(id),
     ])
-    .then(([, enrolls]) =>
-      Promise.all(enrolls.map(async e => {
-        const [attRes, gradeRes] = await Promise.all([
-          attendanceApi.stats(e.id).catch(() => ({ data: { attendanceRate: 0, rate: 0 } })),
-          assessmentsApi.gradesByEnrollment(e.id).catch(() => ({ data: [] as GradeWithAssessment[] })),
-        ])
-        const grades = gradeRes.data
-        let avgGrade = '—'
-        if (grades.length > 0) {
-          const total = grades.reduce((s, g) => s + (Number(g.score) / Number(g.assessment.maxScore)) * 100, 0)
-          avgGrade = `${(total / grades.length).toFixed(1)}%`
-        }
-        const rate = attRes.data.attendanceRate ?? attRes.data.rate ?? 0
-        return {
-          enrollmentId: e.id,
-          courseTitle:  e.course.title,
-          courseId:     e.course.id,
-          courseSlug:   e.course.slug,
-          status:       e.status,
-          attendanceRate: Number(rate),
-          avgGrade,
-          dropoutRisk: e.dropoutRiskScore ?? null,
-        } satisfies EnrollmentStats
-      }))
-    )
-    .then(s => { setStats(s); if (s[0]) setSelEnrollmentId(s[0].enrollmentId) })
+    .then(([, , statsRes]) => {
+      const rows = statsRes.data.courses.map(c => ({
+        enrollmentId:   c.enrollmentId,
+        courseTitle:    c.course.title,
+        courseId:       c.course.id,
+        courseSlug:     c.course.slug,
+        status:         c.status,
+        attendanceRate: c.attendanceRate ?? 0,
+        // Server topshiriq VAZNLARI bo'yicha hisoblaydi; bu yerda ilgari
+        // oddiy o'rtacha olinardi. Vaznli variant to'g'riroq — `weight`
+        // ustuni aynan shuning uchun bor.
+        avgGrade:       c.finalGrade === null ? '—' : `${c.finalGrade.toFixed(1)}%`,
+        dropoutRisk:    c.dropoutRisk,
+      } satisfies EnrollmentStats))
+      setStats(rows)
+      if (rows[0]) setSelEnrollmentId(rows[0].enrollmentId)
+    })
     .catch(e => toast.error(e.message))
     .finally(() => setLoading(false))
   }, [id, canView]) // eslint-disable-line
@@ -217,7 +211,7 @@ export default function StudentProfilePage() {
                 {stats.map(s => (
                   <TableRow key={s.enrollmentId}>
                     <TableCell className="font-medium">
-                      <Link href={`/courses/${s.courseSlug}`} className="hover:underline">{s.courseTitle}</Link>
+                      <Link href={`/courses/${s.courseSlug ?? s.courseId}`} className="hover:underline">{s.courseTitle}</Link>
                     </TableCell>
                     <TableCell>
                       <Badge variant={s.status === 'ACTIVE' ? 'default' : 'outline'}>{s.status}</Badge>

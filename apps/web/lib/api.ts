@@ -386,11 +386,29 @@ export interface CourseStats {
   avgGrade: number
 }
 
+/**
+ * GET /v1/analytics/students/:id javobi.
+ *
+ * Bu tip ilgari `{user, enrollments, avgAttendanceRate, avgGrade}` deb
+ * yozilgan edi — server esa hech qachon bunday javob qaytarmagan. Tip
+ * yolg'on gapirgani uchun talaba sahifasi undan foydalanmay, har bir
+ * ro'yxatga olish uchun alohida ikkita so'rov yuborardi (N+1).
+ */
+export interface StudentCourseStats {
+  enrollmentId: string
+  course: { id: string; slug: string | null; title: string; category: string }
+  status: string
+  /** Foizda, 0–100. Davomat yozuvi bo'lmasa null */
+  attendanceRate: number | null
+  /** Topshiriq vaznlari bo'yicha o'rtacha, 0–100. Baho yo'q bo'lsa null */
+  finalGrade: number | null
+  /** 0–1 oralig'ida, Python servisi yozadi */
+  dropoutRisk: number | null
+}
+
 export interface StudentStats {
-  user: User
-  enrollments: number
-  avgAttendanceRate: number
-  avgGrade: number
+  student: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'role'>
+  courses: StudentCourseStats[]
 }
 
 export interface AuditLog {
