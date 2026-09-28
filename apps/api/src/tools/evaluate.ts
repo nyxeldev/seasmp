@@ -92,9 +92,16 @@ function generate(seed: number, n: number): Case[] {
     out.push(build('O\'qituvchi ko\'p talabani ko\'radi', false, day,
       { hour: 11, ip: '10.0.0.5', ua: 'Chrome', resource: 'enrollments', req: 12 }, 0, 0))
 
-    // Shovqinli zararsiz holatlar — bir nechta zaif signal, lekin hujum emas
+    // Shovqinli zararsiz holatlar — bir nechta zaif signal, lekin hujum emas.
+    //
+    // Bu ssenariy ilgari QATTIQ YOZILGAN edi (hour:20, req:3, tasodifsiz),
+    // shuning uchun ko'p yugurishli barqarorlik tekshiruvida uning bali HAR
+    // DOIM bir xil chiqardi va std=0 ko'rsatardi — bu chegara qanchalik
+    // barqaror emasligini yashirardi. Endi soat va chastota bir oz suzadi:
+    // aynan shu ssenariy SINGLE_THRESHOLD ga eng yaqin turadigan zararsiz
+    // holat (bal ~0.7), shuning uchun uning haqiqiy tarqalishi muhim.
     out.push(build('Uydan, yangi qurilmada, kechqurun', false, day,
-      { hour: 20, ip: '78.40.1.55', ua: 'Safari-Mobile', resource: 'courses', req: 3 }, 0, 0))
+      { hour: 19 + Math.floor(r() * 3), ip: '78.40.1.55', ua: 'Safari-Mobile', resource: 'courses', req: 2 + Math.floor(r() * 3) }, 0, 0))
 
     out.push(build('Yangi bo\'limga qiziqish (qonuniy)', false, day,
       { hour: 15, ip: '10.0.0.5', ua: 'Chrome', resource: 'users', req: 4 }, 0, 0))
@@ -112,8 +119,11 @@ function generate(seed: number, n: number): Case[] {
     out.push(build('Muvaffaqiyatli IDOR', true, day,
       { hour: 14, ip: '10.0.0.5', ua: 'Chrome', resource: 'grades', req: 4 }, 0, 2))
 
+    // Bu ham ilgari qattiq yozilgan edi (hour:3, req:5) — aynan shu bal
+    // yuqoridagi zararsiz holat bilan SINGLE_THRESHOLD ni ikki tomondan
+    // siqib turadi. Endi u ham suzadi.
     out.push(build('O\'g\'irlangan hisob', true, day,
-      { hour: 3, ip: '203.0.113.9', ua: 'curl/8.0', resource: 'courses', req: 5 }, 0, 0))
+      { hour: pick([2, 3, 4]), ip: '203.0.113.9', ua: 'curl/8.0', resource: 'courses', req: 4 + Math.floor(r() * 3) }, 0, 0))
 
     out.push(build('Ommaviy ma\'lumot chiqarish', true, day,
       { hour: 12, ip: '10.0.0.5', ua: 'Chrome', resource: 'enrollments', req: 250 }, 0, 0))
@@ -284,10 +294,152 @@ Ishlash nuqtasi (yolg'iz qatlam >= ${SINGLE_THRESHOLD}, korrelyatsiya >= ${CORRE
   console.log()
 }
 
+// ── Ko'p yugurishli barqarorlik: chegaralarni asoslash ──────────────────────
+//
+// Bitta seed = bitta raqam muammosi: F1=1.000 degan da'vo bitta tasodifiy
+// chizishga tayangan bo'lishi mumkin. Bu qism bir xil ishlash nuqtasini ko'p
+// marta, har safar boshqa seed bilan hisoblaydi va natijaning qanchalik
+// BARQAROR ekanini (standart og'ish orqali) ko'rsatadi. Yozma ishda
+// "F1=1.000" o'rniga "F1=1.000±0.000, N=30 yugurish" deyish mumkin bo'ladi —
+// bu ancha kuchli da'vo.
+
+function mean(xs: number[]): number {
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0
+}
+function stdev(xs: number[]): number {
+  if (xs.length === 0) return 0
+  const m = mean(xs)
+  return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)))
+}
+
+interface TrialStats { precision: number[]; recall: number[]; f1: number[]; fp: number[]; fn: number[] }
+
+/** Katta tub son bilan siljitish — ketma-ket seedlar bir-biriga o'xshab qolmasin */
+const SEED_STRIDE = 7919
+
+function runTrials(baseSeed: number, trials: number, n: number): Map<string, TrialStats> {
+  const stats = new Map<string, TrialStats>()
+  for (const [name] of DECIDERS) stats.set(name, { precision: [], recall: [], f1: [], fp: [], fn: [] })
+
+  for (let t = 0; t < trials; t++) {
+    const cases = generate(baseSeed + t * SEED_STRIDE, n)
+    for (const [name, decide] of DECIDERS) {
+      const c = confusion(cases, decide)
+      const m = prf(c)
+      const s = stats.get(name)!
+      s.precision.push(m.precision); s.recall.push(m.recall); s.f1.push(m.f1)
+      s.fp.push(c.fp); s.fn.push(c.fn)
+    }
+  }
+  return stats
+}
+
+function reportTrials(stats: Map<string, TrialStats>, trials: number, n: number): void {
+  console.log("")
+  console.log(`${trials} MARTA TAKRORLANGAN ISHLASH NUQTASI (har safar boshqa seed, holat/yugurish=${n * 12})`)
+  console.log("")
+  console.log("Standart og'ish qancha kichik bo'lsa, ishlash nuqtasi shuncha barqaror —")
+  console.log("ya'ni natija tasodifiy chizishga emas, tizimning o'ziga tegishli.")
+  console.log("")
+  console.log("konfiguratsiya".padEnd(34), "aniqlik (o'rt±std)", "qamrov (o'rt±std)", "   F1 (o'rt±std)", "  FP (o'rt, min-max)")
+  console.log("-".repeat(34), "-".repeat(95))
+  for (const [name, s] of stats) {
+    console.log(
+      name.padEnd(34),
+      `${mean(s.precision).toFixed(3)}±${stdev(s.precision).toFixed(3)}`.padStart(20),
+      `${mean(s.recall).toFixed(3)}±${stdev(s.recall).toFixed(3)}`.padStart(20),
+      `${mean(s.f1).toFixed(3)}±${stdev(s.f1).toFixed(3)}`.padStart(20),
+      `${mean(s.fp).toFixed(1)} (${Math.min(...s.fp)}-${Math.max(...s.fp)})`.padStart(20),
+    )
+  }
+  console.log("")
+}
+
+// ── Chegara grid-qidiruvi ────────────────────────────────────────────────────
+//
+// SINGLE_THRESHOLD=0.75 va CORRELATED_THRESHOLD=0.50 correlation.ts da
+// QOTIRILGAN qiymatlar edi — hech qachon boshqa nuqta bilan solishtirilmagan.
+// Bu funksiya ikkala chegarani mustaqil o'zgartirib, har nuqtada jami
+// (FP+FN) ni ko'p yugurish bo'yicha o'rtachalab beradi. correlate() ning o'zi
+// TEGILMAYDI — mantiq shu yerda authzRisk/behaviorRisk/combineRisk dan qayta
+// yig'iladi, faqat chegara qiymati parametr bo'ladi.
+
+function decideWithThresholds(s: LayerSignals, singleT: number, corrT: number): boolean {
+  const a = authzRisk(s)
+  const b = behaviorRisk(s)
+  if (a <= 0 && b <= 0) return false
+  const both = a > 0 && b > 0
+  const risk = combineRisk([a, b])
+  return risk >= (both ? corrT : singleT)
+}
+
+function sweepThresholds(baseSeed: number, trials: number, n: number): void {
+  const singleGrid = [0.60, 0.65, 0.70, 0.75, 0.80, 0.85]
+  const corrGrid   = [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60]
+
+  const allTrials: Case[][] = []
+  for (let t = 0; t < trials; t++) allTrials.push(generate(baseSeed + t * SEED_STRIDE, n))
+  const totalCases = allTrials.reduce((a, c) => a + c.length, 0)
+
+  console.log("")
+  console.log(`CHEGARA GRID-QIDIRUVI (${trials} yugurish x ${n} takror, jami ${totalCases} holat/nuqta)`)
+  console.log("")
+  console.log("Har katakcha: jami FP+FN (kichikroq — yaxshiroq). '-' — korrelyatsiya chegarasi")
+  console.log("yolg'iz chegaradan past bo'lishi SHART (gipoteza: birgalikda past chegara")
+  console.log("yetarli), shuning uchun teskarisi sinalmaydi. Joriy ishlab chiqarish qiymati [*].")
+  console.log("")
+
+  const header = ["korrelyatsiya \\ yolg'iz"].concat(singleGrid.map((v) => v.toFixed(2)))
+  console.log(header.map((h, i) => (i === 0 ? h.padEnd(24) : h.padStart(8))).join(""))
+
+  let best: { s: number; c: number; cost: number } | null = null
+
+  for (const corrT of corrGrid) {
+    const row: string[] = [corrT.toFixed(2).padEnd(24)]
+    for (const singleT of singleGrid) {
+      if (corrT >= singleT) { row.push("-".padStart(8)); continue }
+      let totalFp = 0, totalFn = 0
+      for (const cases of allTrials) {
+        for (const c of cases) {
+          const alert = decideWithThresholds(c.signals, singleT, corrT)
+          if (!c.attack && alert) totalFp++
+          if (c.attack && !alert) totalFn++
+        }
+      }
+      const cost = totalFp + totalFn
+      const isProd = Math.abs(singleT - SINGLE_THRESHOLD) < 1e-9 && Math.abs(corrT - CORRELATED_THRESHOLD) < 1e-9
+      row.push((isProd ? `${cost}*` : String(cost)).padStart(8))
+      if (!best || cost < best.cost) best = { s: singleT, c: corrT, cost }
+    }
+    console.log(row.join(""))
+  }
+
+  console.log("")
+  console.log(`Eng kam xato: SINGLE=${best?.s.toFixed(2)}, CORRELATED=${best?.c.toFixed(2)} (jami xato: ${best?.cost})`)
+  console.log(`Joriy ishlab chiqarish:  SINGLE=${SINGLE_THRESHOLD}, CORRELATED=${CORRELATED_THRESHOLD}`)
+  console.log("")
+  console.log("DIQQAT: bu grid ATAYLAB ishlab chiqarish qiymatini o'zgartirmaydi — faqat")
+  console.log("tanlovni asoslaydi yoki muqobil nuqtani ko'rsatadi. Chegarani shu stend")
+  console.log("natijasiga moslashtirish o'sha stendning o'zi o'lchayotgan narsaga")
+  console.log("moslashtirish bo'lardi — haqiqiy o'zgartirish haqiqiy trafik talab qiladi.")
+  console.log("")
+}
+
 function main(): void {
   const args = process.argv.slice(2)
   const seed = Number(args.find((a) => a.startsWith('--seed='))?.split('=')[1] ?? 42)
   const n    = Number(args.find((a) => a.startsWith('--n='))?.split('=')[1] ?? 100)
+
+  // --trials=K: bitta seed emas, K ta seed bilan barqarorlikni tekshiradi.
+  // --sweep: shu yordamida chegara grid-qidiruvini ham ishga tushiradi.
+  const trialsArg = args.find((a) => a.startsWith('--trials='))
+  if (trialsArg) {
+    const trials = Number(trialsArg.split('=')[1])
+    const stats = runTrials(seed, trials, n)
+    reportTrials(stats, trials, n)
+    if (args.includes('--sweep')) sweepThresholds(seed, trials, n)
+    return
+  }
 
   const cases = generate(seed, n)
   const attacks = cases.filter((c) => c.attack).length
