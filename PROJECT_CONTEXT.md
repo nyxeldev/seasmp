@@ -524,9 +524,19 @@ Note: `apps/api/.env` has `ANALYTICS_API_URL=http://localhost:8000` — update t
 
 ## 10. Known Issues / Quirks
 
-Avvalgi ro'yxatdagi yettita band (root `package.json` dagi `apps/frontend`,
-ichma-ich `apps/web/.git`, jingalak qavsli axlat papkalar, create-next-app
-qoldiqlari, compose dagi `apps/frontend`) HAL QILINGAN. Hozirgi holat:
+Avvalgi ro'yxatdagi yettita band HAL QILINGAN (tekshirildi):
+
+1. ✅ Root `package.json` dagi `apps/frontend` — endi `apps/web` to'g'ri
+2. ✅ `apps/web/.git` ichma-ich repo — yo'q, bitta repo (`.git` faqat ildizda)
+3. ✅ Jingalak qavsli axlat papkalar (`{apps...`) — mavjud emas
+4. ✅ `apps/web/public/` — faqat `.gitkeep`, create-next-app qoldiqlari yo'q
+5. ✅ `docker-compose.yml` dagi `apps/frontend` — `apps/web` ga tuzatilgan
+6. ✅ `test-api.ps1` dagi refresh token izohi — endi README'da hujjatlashtirilgan
+7. ✅ API→Analytics proksi — `apps/api/src/routes/analytics.routes.ts` da
+   `PY_BASE = env.ANALYTICS_API_URL` orqali ishlaydi, `/v1/analytics/*`
+   marshrutlari Python servisiga proksilanadi
+
+Hozirgi holat — yangi topilgan cheklovlar:
 
 1. **Xatti-harakat profili muvaffaqiyatli so'rovlardan o'rganadi.** Imtiyozli
    aktorning muvaffaqiyatli murojaati keyingi `profiles/refresh` da me'yor
@@ -728,3 +738,89 @@ Ikkita nosozlik yopildi:
 Sentry ATAYLAB majburiy emas: `SENTRY_DSN` bo'lmasa modul jim ishlaydi va
 xatolar faqat Winston orqali yoziladi. Brauzer xatolari ham shu yo'ldan
 o'tadi: `ErrorBoundary` -> `POST /v1/telemetry/client-error`.
+
+---
+
+## 15. Ilmiy validatsiya — E1 (tashqi benchmark) va E2 (ko'r baholash)
+
+`evaluate.ts` dagi eng katta metodologik zaiflik: hujum/zararsiz stsenariylar
+HAM, ularni baholovchi tizim (chegaralar, vaznlar) HAM bir xil loyihada, bir
+xil odam tomonidan yozilgan — bu aylanma dalil, BMI himoyasida "tizim o'zi
+yozgan testni o'tadi" degan e'tirozga ochiq. Ikkita mustaqil tekshiruv
+qo'shildi.
+
+### E2 — Ko'r baholash (`apps/api/src/tools/blindEval.ts`)
+
+Ssenariylar FAQAT tahdid modeli nuqtai nazaridan yozilgan — yozish
+jarayonida `correlation.ts` yoki `behaviorScoring.ts` fayllariga murojaat
+qilinmagan. Har biri HAQIQIY HTTP so'rov bilan ishlab turgan API'ga
+yuborilgan, natija esa productiondagi HAQIQIY `correlate()` funksiyasi
+orqali o'qilgan (yangi hisoblash yo'q — deploy qilingan tizim o'lchandi).
+
+**MUHIM CHEKLOV:** server real vaqtdan (`new Date()`) foydalanadi, skript
+soatni sun'iy o'zgartira olmaydi — shuning uchun soat signali bu testda
+ishtirok etmaydi. Faqat vaqtdan mustaqil signallar sinaldi: avtorizatsiya
+(FOREIGN), notanish IP/qurilma, qamrov, chastota.
+
+**Natija (N=14, 7 hujum / 7 zararsiz, `npm run eval:blind --workspace=apps/api`):**
+
+| | |
+|---|---|
+| Confusion matrix | TP=6, FP=0, FN=1, TN=7 |
+| Aniqlik (precision) | **1.000** |
+| Qamrov (recall) | **0.857** |
+| F1 | **0.923** |
+| ROC AUC | **0.980** |
+
+Yagona o'tkazib yuborilgan holat: "Vakolatdan tashqari resurslarga sayohat"
+(o'qituvchi `/v1/users` ga ikki marta urinib, ikkalasida ham 403 oldi) —
+zaif rad etish signali (2 ta, to'yinish 5 ta) + o'rtacha xatti-harakat bali
+(0.47) birlashib ham `CORRELATED_THRESHOLD` (0.50) dan o'tolmadi. Haqiqiy,
+hujjatlashtirilgan cheklov.
+
+**Yo'l davomida topilgan metodologik xato:** birinchi yugurishlarda skript
+o'zi yaratgan HTTP trafigi audit jurnaliga yozilib qolib, KEYINGI
+`profiles/refresh` da aktorning me'yoriga qo'shilib ketgan — bu esa
+"Ommaviy ma'lumot chiqarish" ssenariysini ikkinchi yugurishda aniqlanmay
+qoldirgan (o'lchandi: reqPerHourMean 8.0/soat → MASS_ACCESS_FLOOR=160, 130
+so'rov yetmadi; tozalangandan keyin 3.4/soat → chegara 100, to'g'ri
+aniqlandi). Skript endi o'zini avtomatik tozalaydi (`--no-cleanup` bilan
+o'chirish mumkin).
+
+### E1 — Tashqi benchmark (`apps/api/src/tools/externalBenchmark.ts`)
+
+Manba: **CMU CERT Insider Threat Test Dataset, release r4.2**
+(https://kilthub.cmu.edu/articles/dataset/Insider_Threat_Test_Dataset/12841247,
+DOI 10.1184/R1/12841247, CC BY 4.0). To'g'ridan-to'g'ri yuklanadi —
+ro'yxatdan o'tish yoki so'rov formasi TALAB QILINMAYDI (dastlab shunday
+deb taxmin qilingan edi, amalda tekshirilib rad etildi).
+
+**Nega r4.2:** barcha versiyalar bo'yicha 191 ta belgilangan insayderdan 70
+tasi (36.6%) aynan shu versiyada — boshqa versiyalar (r2: 1 ta, r3.x: 2
+tadan, r4.1: 3 ta) statistik jihatdan ishonchsiz natija berardi.
+
+**Xaritalash:** CERT `logon.csv` (foydalanuvchi, sana, PC, Logon/Logoff)
+bizning HTTP so'rov oqimiga mos keladi; PC — IP+qurilma birlashtirilgan
+holda; foydalanuvchining eng ko'p ishlatgan PC'si — OWNER (tanish IP)
+ekvivalenti; boshqa PC'dan kirish — FOREIGN (1-qatlam signali). Baholovchi
+kod productiondan O'ZGARTIRMASDAN import qilingan: `scoreEvent`,
+`correlate`, `authzRisk`, `behaviorRisk` — maqsad yangi algoritm emas,
+MAVJUDINI tashqi ma'lumotda o'lchash.
+
+**Ochiq aytilgan soddalashtirishlar:**
+- productionda signal 15 daqiqalik oynada to'planadi; CERT foydalanuvchisi
+  kuniga 1-4 marta kiradi — shuning uchun har bir belgilangan SESSIYA
+  (answers faylidagi boshlanish-tugash) bitta holat sifatida olinadi
+- CERT da "rad etilgan urinish" tushunchasi yo'q (domenga kirish ochiq) —
+  boshqa PC'dan kirish har doim `authzAllowed=1` (to'liq risk) sifatida
+  hisoblanadi, `authzDenied` (qisman risk) ishlatilmaydi
+- Salbiy sinf uchun ~4000 foydalanuvchidan 300 tasi tasodifiy tanlanadi
+  (down-sampling) — hisoblash vaqtini tejash uchun, natija TO'LIQ
+  populyatsiya emas, tasodifiy namuna ustida
+
+**Natija:** [TO'LDIRILADI — skript ishga tushirilgandan keyin]
+
+Ishlatish:
+```bash
+npx tsx apps/api/src/tools/externalBenchmark.ts --dir=<r4.2 papkasi>
+```

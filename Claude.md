@@ -18,8 +18,19 @@ Hujjatni o'qish: `cat SEASMP_TechSpec_v2.pdf` yoki `docs/` papkasida.
 - seasmp-network — ichki private network
 
 ## Boshlash tartibi
-Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5
-Hozir: Phase 1 (Docker setup, auth, DB migrations)
+
+| Bosqich | Mazmuni | Holat |
+|---|---|---|
+| **Phase 1** | Docker Compose, autentifikatsiya (JWT + 2FA), DB migratsiyalari | ✅ tugallangan |
+| **Phase 2** | Asosiy LMS: kurslar, ro'yxatga olish, davomat (qo'lda + QR), baholar, RBAC middleware | ✅ tugallangan |
+| **Phase 3** | Analitika servisi (FastAPI): xavf tahlili, ML dropout bashorati (RandomForest), Celery kechasi hisob-kitob | ✅ tugallangan |
+| **Phase 4** | Ikki qatlamli xavfsizlik aniqlash: 1-qatlam avtorizatsiya (SELF/OWNER/CUSTODIAN/PRIVILEGED/FOREIGN/UNKNOWN), 2-qatlam xatti-harakat (UEBA, 30 kunlik profil), korrelyatsiya qatlami | ✅ tugallangan |
+| **Phase 5** | Real vaqt (autentifikatsiyalangan Socket.io), foydalanuvchi bildirishnomalari, xato monitoringi (Sentry, ixtiyoriy), N+1 optimallashtirish | ✅ tugallangan |
+| **Phase 6** | Ilmiy validatsiya (BMI uchun): E1 — tashqi benchmark (CMU CERT Insider Threat r4.2) ustida haqiqiy ROC/AUC; E2 — ko'r baholash (threshold/vaznlardan mustaqil yozilgan ssenariylar, haqiqiy DB orqali) | 🔄 ishlanmoqda — `claude/e1-e2-experiments` shoxida |
+
+**Hozir:** Phase 6 — natijalar `apps/api/src/tools/blindEval.ts` (E2, tugallangan) va
+tashqi CMU CERT dataset asosidagi baholash skriptida (E1) hisoblanmoqda. Batafsil:
+[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) 13- va 15-bo'limlar.
 
 ## Muhim eslatmalar
 - Versiyalarni o'zgartirma — barchasi tekshirilgan
