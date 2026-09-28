@@ -814,11 +814,50 @@ MAVJUDINI tashqi ma'lumotda o'lchash.
 - CERT da "rad etilgan urinish" tushunchasi yo'q (domenga kirish ochiq) —
   boshqa PC'dan kirish har doim `authzAllowed=1` (to'liq risk) sifatida
   hisoblanadi, `authzDenied` (qisman risk) ishlatilmaydi
-- Salbiy sinf uchun ~4000 foydalanuvchidan 300 tasi tasodifiy tanlanadi
-  (down-sampling) — hisoblash vaqtini tejash uchun, natija TO'LIQ
-  populyatsiya emas, tasodifiy namuna ustida
+- Salbiy sinf uchun tasodifiy 300 foydalanuvchi tanlanadi (down-sampling
+  bosqichi kodda saqlandi, lekin amalda logon.csv da bor-yo'g'i 1000 ta
+  noyob foydalanuvchi chiqdi — dastlab taxmin qilingan ~4000 emas; ya'ni
+  salbiy sinf populyatsiyaning ~32%, kichik tasodifiy namuna emas)
 
-**Natija:** [TO'LDIRILADI — skript ishga tushirilgandan keyin]
+**Natija (70 insayder + 300 tasodifiy zararsiz, jami 367 holat):**
+
+| | |
+|---|---|
+| Confusion matrix | TP=19, FP=67, FN=51, TN=230 |
+| Aniqlik | **0.221** |
+| Qamrov | **0.271** |
+| F1 | **0.244** |
+| ROC AUC | **0.627** |
+
+E2 dan (0.980) sezilarli past. Diagnostika: TP bo'lgan 19 ta holatning
+HAMMASI risk=1 oldi (authzAllowed=1 -- sessiyada boshqa PC ishlatilgan),
+bitta ham faqat xatti-harakat signali orqali tutilmagan. Matematik jihatdan
+aniq: 19 / 70 = 0.2714 -- bu qamrov bilan bitta xonagacha mos keladi.
+
+Sabab: bu yugurish FAQAT logon.csv dan foydalandi (hisoblash vaqtini
+tejash uchun ataylab tanlangan qamrov qarori). CERT insayder
+ssenariylarining aksariyati boshqa PC'ga jismoniy kirish bilan
+CHEKLANMAYDI -- ular email orqali tashqariga yuborish, tashqi ish-qidiruv
+saytlariga tashrif, USB orqali fayl ko'chirish kabi KANALLARDA namoyon
+bo'ladi (email.csv, http.csv, device.csv -- bu yugurishda ishlatilmagan).
+Qolgan 51 ta insayder logon.csv nuqtai nazaridan zararsiz ko'rinadi --
+ularning haqiqiy zararli faoliyati boshqa kanalda.
+
+FP tomonida ham xuddi shu mexanizm teskarisiga ishladi: 67 ta yolg'on
+ishoraning aksariyati ham anyForeign=true dan kelib chiqadi -- ba'zi
+zararsiz xodimlar ham vaqti-vaqti bilan boshqa PC ishlatadi (umumiy
+kompyuter, IT yordami). Bizning LMS'da begona obyektga muvaffaqiyatli
+murojaat hech qachon qonuniy bo'lmaydi, CERT'da boshqa PC ishlatish
+bunday kafolatga ega emas -- xuddi shu vaznni ko'chirib olish noaniq
+proksi yaratdi.
+
+Xulosa (BMI muhokamasi uchun): past AUC gibrid-korrelyatsiya
+gipotezasining o'zi noto'g'ri ekanini ko'rsatmaydi -- E2 aynan shu
+gipotezani boy, ko'p signalli ma'lumotda tasdiqladi (AUC=0.980). E1 past
+natijasi ma'lumot boyligi cheklovini ko'rsatadi: bitta zaif proksi-signal
+(faqat PC identifikatori) productionda 5 xil signal bilan ishlaydigan
+behaviorScoring.ts ni to'liq almashtira olmaydi. Kelgusi ish yo'nalishi:
+email.csv/http.csv/device.csv ni ham qo'shib qayta o'lchash.
 
 Ishlatish:
 ```bash
