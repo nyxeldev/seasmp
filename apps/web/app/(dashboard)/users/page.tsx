@@ -14,8 +14,17 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { toast } from 'sonner'
 import { Plus, Search, ToggleLeft } from 'lucide-react'
 import { useLocale } from '@/store/locale'
+import { RoleGuard } from '@/components/RoleGuard'
 
 export default function UsersPage() {
+  return (
+    <RoleGuard allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+      <UsersPageInner />
+    </RoleGuard>
+  )
+}
+
+function UsersPageInner() {
   const { user: me } = useAuth()
   const { t } = useLocale()
   const [users, setUsers]     = useState<User[]>([])

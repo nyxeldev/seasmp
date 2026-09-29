@@ -12,6 +12,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { toast } from 'sonner'
 import { ArrowLeft, RefreshCw, AlertTriangle } from 'lucide-react'
+import { RoleGuard } from '@/components/RoleGuard'
 
 function RiskBar({ score }: { score: number }) {
   const pct = Math.round(score * 100)
@@ -27,6 +28,14 @@ function RiskBar({ score }: { score: number }) {
 }
 
 export default function RiskPage() {
+  return (
+    <RoleGuard allowedRoles={['ADMIN', 'SUPER_ADMIN', 'TEACHER']}>
+      <RiskPageInner />
+    </RoleGuard>
+  )
+}
+
+function RiskPageInner() {
   const { user } = useAuth()
   const [data, setData]         = useState<PyRiskStudent[]>([])
   const [total, setTotal]       = useState(0)

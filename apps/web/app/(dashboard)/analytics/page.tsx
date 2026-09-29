@@ -14,6 +14,7 @@ import { useLocale } from '@/store/locale'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { RoleGuard } from '@/components/RoleGuard'
 import {
   TrendingUp, AlertTriangle, RefreshCw, TrendingDown,
   GraduationCap, CalendarCheck, ShieldAlert,
@@ -604,6 +605,14 @@ function TeacherAnalytics({ userId }: { userId: string }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
+  return (
+    <RoleGuard allowedRoles={['ADMIN', 'SUPER_ADMIN', 'TEACHER']}>
+      <AnalyticsPageInner />
+    </RoleGuard>
+  )
+}
+
+function AnalyticsPageInner() {
   const { user } = useAuth()
   if (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') return <AdminAnalytics />
   if (user?.role === 'TEACHER') return <TeacherAnalytics userId={user.id} />
