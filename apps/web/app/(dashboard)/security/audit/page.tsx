@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { RoleGuard } from '@/components/RoleGuard'
 import { Download, ChevronDown, ChevronRight, ArrowLeft, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
@@ -68,6 +69,14 @@ function JsonDiff({ label, data }: { label: string; data: Record<string, unknown
 }
 
 export default function AuditPage() {
+  return (
+    <RoleGuard allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+      <AuditPageInner />
+    </RoleGuard>
+  )
+}
+
+function AuditPageInner() {
   const { user } = useAuth()
 
   if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {

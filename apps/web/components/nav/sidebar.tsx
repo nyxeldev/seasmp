@@ -60,7 +60,7 @@ const ALL_NAV: {
   { href: '/courses',    key: 'nav.courses',    icon: BookOpen,         roles: ['ADMIN','TEACHER','STUDENT','SUPER_ADMIN'] },
   { href: '/users',      key: 'nav.students',   icon: Users,            roles: ['ADMIN','SUPER_ADMIN'] },
   { href: '/attendance', key: 'nav.attendance', icon: CalendarCheck,    roles: ['ADMIN','TEACHER','STUDENT'] },
-  { href: '/analytics',  key: 'nav.analytics',  icon: TrendingUp,       roles: ['ADMIN','TEACHER'] },
+  { href: '/analytics',  key: 'nav.analytics',  icon: TrendingUp,       roles: ['ADMIN','SUPER_ADMIN','TEACHER'] },
   { href: '/security',   key: 'nav.security',   icon: ShieldCheck,      roles: ['ADMIN','SUPER_ADMIN'] },
   { href: '/settings',   key: 'nav.settings',   icon: Settings,         roles: ['ADMIN','TEACHER','STUDENT','SUPER_ADMIN'] },
 ]
