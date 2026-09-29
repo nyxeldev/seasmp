@@ -67,6 +67,22 @@ const envSchema = z.object({
   RATE_LIMIT_MAX:       z.coerce.number().default(100),
 
   /**
+   * API teskari proksi ortida turganda 'true' qilinadi.
+   *
+   * Nginx X-Forwarded-For yuboradi, lekin Fastify uni ISHONCHSIZ deb hisoblab
+   * e'tiborsiz qoldiradi — natijada `request.ip` har doim proksi konteynerining
+   * IP si bo'ladi. Bu butun tizimga ta'sir qiladi: chegara barcha foydalanuvchi
+   * uchun bitta chelakka tushadi, audit jurnalida haqiqiy IP saqlanmaydi,
+   * 2-qatlamning "notanish IP" signali hech qachon ishlamaydi, IP bloklash esa
+   * Nginx'ni — ya'ni hammani — bloklaydi.
+   *
+   * Standart 'false': API to'g'ridan-to'g'ri ochiq bo'lsa, X-Forwarded-For ni
+   * mijoz o'zi to'qib, chegarani va IP bo'yicha aniqlashni chetlab o'tardi.
+   * Docker'da API faqat ichki tarmoqda, shuning uchun compose'da 'true'.
+   */
+  TRUST_PROXY:          z.string().default('false'),
+
+  /**
    * ADMIN/TEACHER uchun 2FA majburiyligini o'chiradi ('true' bo'lsa o'chadi).
    *
    * Ilgari bu yagona o'zgaruvchi edi, qolganlari zoddan o'tsa-da, u
