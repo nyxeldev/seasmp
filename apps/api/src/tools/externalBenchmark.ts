@@ -123,13 +123,27 @@ function loadInsiders(answersDir: string): InsiderLabel[] {
   return out
 }
 
-// ── logon.csv dan foydalanuvchi profili va hodisalar ────────────────────────────
+// ── Uch manba (logon/http/email) dan yagona hodisa oqimi ────────────────────────
+//
+// Boshlang'ich yugurish FAQAT logon.csv dan foydalandi va 70 insayderdan
+// atigi 19 tasini (27%) tutdi — sabab aniq o'lchandi: qolgan 51 tasining
+// zararli faoliyati boshqa kanalda (email orqali tashqariga yuborish, tashqi
+// veb-saytlarga tashrif) edi, logon.csv da umuman ko'rinmasdi. Bu boyitilgan
+// versiya uchta manbani BIR profilga birlashtiradi.
 
-interface LogonEvent { date: Date; pc: string; activity: string }
+const COMPANY_DOMAIN = 'dtaa.com' // LDAP snapshotidan tasdiqlangan
 
-/** Foydalanuvchi -> uning barcha Logon hodisalari (xotira tejash uchun faqat kerakli userlar saqlanadi) */
-async function loadLogonsForUsers(logonCsv: string, wantedUsers: Set<string>): Promise<Map<string, LogonEvent[]>> {
-  const byUser = new Map<string, LogonEvent[]>()
+interface SourceEvent {
+  date: Date
+  pc: string
+  resource: 'logon' | 'http' | 'email'
+  /** Faqat email uchun: qabul qiluvchilardan biri kompaniya domenidan tashqarida */
+  external: boolean
+}
+
+/** Foydalanuvchi -> uning barcha hodisalari (xotira tejash uchun faqat kerakli userlar saqlanadi) */
+async function loadLogonsForUsers(logonCsv: string, wantedUsers: Set<string>): Promise<Map<string, SourceEvent[]>> {
+  const byUser = new Map<string, SourceEvent[]>()
   let rows = 0
   for await (const row of readCsvLines(logonCsv)) {
     rows++
@@ -137,7 +151,7 @@ async function loadLogonsForUsers(logonCsv: string, wantedUsers: Set<string>): P
     if (!wantedUsers.has(user)) continue
     if (activity !== 'Logon') continue // faqat kirish hodisalari — soat/PC signali uchun yetarli
     const list = byUser.get(user) ?? []
-    list.push({ date: new Date(dateStr), pc, activity })
+    list.push({ date: new Date(dateStr), pc, resource: 'logon', external: false })
     byUser.set(user, list)
     if (rows % 2_000_000 === 0) console.log(`  ... ${(rows / 1e6).toFixed(1)}M qator o'qildi`)
   }
@@ -145,8 +159,43 @@ async function loadLogonsForUsers(logonCsv: string, wantedUsers: Set<string>): P
   return byUser
 }
 
-/** Foydalanuvchining eng ko'p ishlatgan PC'si — OWNER ekvivalenti */
-function primaryPc(events: LogonEvent[]): string {
+/** http.csv: id,date,user,pc,url,content — faqat resurs xilma-xilligi va soat/PC signali uchun */
+async function loadHttpForUsers(httpCsv: string, wantedUsers: Set<string>, into: Map<string, SourceEvent[]>): Promise<void> {
+  let rows = 0, matched = 0
+  for await (const row of readCsvLines(httpCsv)) {
+    rows++
+    const [, dateStr, user, pc] = row
+    if (wantedUsers.has(user)) {
+      const list = into.get(user) ?? []
+      list.push({ date: new Date(dateStr), pc, resource: 'http', external: false })
+      into.set(user, list)
+      matched++
+    }
+    if (rows % 5_000_000 === 0) console.log(`  ... ${(rows / 1e6).toFixed(0)}M qator (http.csv, 14.5 GB — eng katta fayl)`)
+  }
+  console.log(`  http.csv: jami ${rows} qator o'qildi, ${matched} ta mos hodisa qo'shildi`)
+}
+
+/** email.csv: id,date,user,pc,to,cc,bcc,from,size,attachments,content */
+async function loadEmailForUsers(emailCsv: string, wantedUsers: Set<string>, into: Map<string, SourceEvent[]>): Promise<void> {
+  let rows = 0, matched = 0, externalCount = 0
+  for await (const row of readCsvLines(emailCsv)) {
+    rows++
+    const [, dateStr, user, pc, to, cc, bcc] = row
+    if (!wantedUsers.has(user)) continue
+    const recipients = `${to};${cc};${bcc}`.split(';').map((s) => s.trim()).filter(Boolean)
+    const external = recipients.some((addr) => !addr.toLowerCase().endsWith(`@${COMPANY_DOMAIN}`))
+    if (external) externalCount++
+    const list = into.get(user) ?? []
+    list.push({ date: new Date(dateStr), pc, resource: 'email', external })
+    into.set(user, list)
+    matched++
+  }
+  console.log(`  email.csv: jami ${rows} qator o'qildi, ${matched} ta mos hodisa (${externalCount} ta tashqi qabul qiluvchi bilan)`)
+}
+
+/** Foydalanuvchining eng ko'p ishlatgan PC'si — OWNER ekvivalenti (barcha manbalar bo'yicha) */
+function primaryPc(events: SourceEvent[]): string {
   const counts = new Map<string, number>()
   for (const e of events) counts.set(e.pc, (counts.get(e.pc) ?? 0) + 1)
   let best = '', bestN = -1
@@ -161,9 +210,12 @@ function parts(d: Date): { hour: number; weekday: number } {
 
 /**
  * Trening oynasidagi hodisalardan profil quradi — behaviorProfiler.ts dagi
- * rowsToProfile bilan bir xil mantiq, faqat manba CERT logon.csv.
+ * rowsToProfile bilan bir xil mantiq. Endi uch manba (logon/http/email)
+ * birlashtirilgan holda keladi — resourceMix endi haqiqiy xilma-xillik
+ * ko'rsatadi (bitta 'logon' emas), bu esa "surpriseMap" signalini
+ * ma'noli qiladi.
  */
-function buildProfile(events: LogonEvent[]): BehaviorProfile {
+function buildProfile(events: SourceEvent[]): BehaviorProfile {
   const p = emptyProfile()
   const pcCounts = new Map<string, number>()
   const rateByDay = new Map<string, number>()
@@ -173,6 +225,7 @@ function buildProfile(events: LogonEvent[]): BehaviorProfile {
     p.hourHistogram[hour] = (p.hourHistogram[hour] ?? 0) + 1
     p.weekdayHistogram[weekday] = (p.weekdayHistogram[weekday] ?? 0) + 1
     pcCounts.set(e.pc, (pcCounts.get(e.pc) ?? 0) + 1)
+    p.resourceMix[e.resource] = (p.resourceMix[e.resource] ?? 0) + 1
     const dayKey = e.date.toISOString().slice(0, 10)
     rateByDay.set(dayKey, (rateByDay.get(dayKey) ?? 0) + 1)
   }
@@ -181,7 +234,6 @@ function buildProfile(events: LogonEvent[]): BehaviorProfile {
   for (const [pc, n] of pcCounts) if (n >= 2) p.knownIps.push(pc)
   p.knownUserAgents = ['cert-logon'] // CERT da alohida qurilma signali yo'q — doim "tanish"
 
-  p.resourceMix = { logon: events.length }
   p.sampleCount = events.length
 
   const rates = [...rateByDay.values()]
@@ -197,29 +249,40 @@ function buildProfile(events: LogonEvent[]): BehaviorProfile {
 interface CaseResult { user: string; attack: boolean; signals: LayerSignals; risk: number; alert: boolean; layer: string | null }
 
 function evaluateWindow(
-  profile: BehaviorProfile, primary: string, windowEvents: LogonEvent[],
+  profile: BehaviorProfile, primary: string, windowEvents: SourceEvent[],
+  useEmailAsAuthz: boolean,
 ): CaseResult['signals'] & { maxAuthz: number; maxBehavior: number } {
   let maxAuthz = 0, maxBehavior = 0
   let anyForeign = false
+  let anyExternalEmail = false
 
   for (const e of windowEvents) {
-    const foreign = e.pc !== primary
-    if (foreign) anyForeign = true
+    if (e.pc !== primary) anyForeign = true
+    if (e.resource === 'email' && e.external) anyExternalEmail = true
     const { hour, weekday } = parts(e.date)
     const ev: ObservedEvent = {
       hour, weekday, ip: e.pc, userAgent: 'cert-logon',
-      resource: 'logon', reqLastHour: 1,
+      resource: e.resource, reqLastHour: 1,
     }
     const { score } = scoreEvent(profile, ev)
     if (score > maxBehavior) maxBehavior = score
   }
-  // CERT da "rad etish" tushunchasi yo'q (domenga kirish RBAC bilan
-  // cheklanmagan) — boshqa PC'dan kirish MUVAFFAQIYATLI FOREIGN murojaat,
-  // productiondagi authzAllowed=1 holatiga mos keladi.
-  if (anyForeign) maxAuthz = 1
+
+  // CERT da "rad etilgan urinish" tushunchasi yo'q — boshqa xodimning
+  // kompyuteridan foydalanish MUVAFFAQIYATLI FOREIGN murojaatga
+  // tenglashtiriladi (authzAllowed=1).
+  //
+  // "Tashqi email" ni HAM shu toifaga qo'shish SINALDI va RAD ETILDI:
+  // natija AUC=0.466 berdi (tasodifdan yomon!), chunki bu populyatsiyada
+  // email trafigining ~48% tashqi domenga — bu oddiy biznes faoliyati,
+  // "begona obyektga muvaffaqiyatli murojaat hech qachon qonuniy emas"
+  // degan bizning LMS uchun to'g'ri bo'lgan taxmin bu yerda BUZILDI.
+  // --with-email-authz bayrog'i o'sha (yomon) variantni qayta ko'rish
+  // uchun saqlangan.
+  if (anyForeign || (useEmailAsAuthz && anyExternalEmail)) maxAuthz = 1
 
   return {
-    authzDenied: 0, authzAllowed: anyForeign ? 1 : 0, massAccess: false,
+    authzDenied: 0, authzAllowed: maxAuthz, massAccess: false,
     behaviorScore: maxBehavior, privilegedOwners: 0,
     maxAuthz, maxBehavior,
   }
@@ -265,6 +328,7 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2)
   const dir = args.find((a) => a.startsWith('--dir='))?.split('=')[1]
   const asJson = args.includes('--json')
+  const useEmailAsAuthz = args.includes('--with-email-authz')
   const log = (...a: unknown[]) => { if (!asJson) console.log(...a) }
 
   if (!dir) {
@@ -274,12 +338,19 @@ async function main(): Promise<void> {
   }
 
   const logonCsv = path.join(dir, 'logon.csv')
+  const httpCsv  = path.join(dir, 'http.csv')
+  const emailCsv = path.join(dir, 'email.csv')
   const answersDir = fs.existsSync(path.join(dir, 'answers')) ? path.join(dir, 'answers') : path.join(dir, '..', 'answers')
 
   if (!fs.existsSync(logonCsv)) { console.error(`logon.csv topilmadi: ${logonCsv}`); process.exitCode = 1; return }
   if (!fs.existsSync(path.join(answersDir, 'insiders.csv'))) {
     console.error(`answers/insiders.csv topilmadi: ${answersDir}`); process.exitCode = 1; return
   }
+  const useHttp  = fs.existsSync(httpCsv)
+  const useEmail = fs.existsSync(emailCsv)
+  log(`Boyitish: http.csv ${useHttp ? 'BOR — ishlatiladi' : 'yo\'q — o\'tkazib yuboriladi'}, ` +
+      `email.csv ${useEmail ? 'BOR — ishlatiladi' : 'yo\'q — o\'tkazib yuboriladi'}`)
+  log(`Tashqi email authz signali sifatida: ${useEmailAsAuthz ? 'YOQILGAN (--with-email-authz)' : "O'CHIQ (standart — tajriba shuni ko'rsatdi: yoqilsa AUC 0.466 ga tushadi)"}`)
 
   log('\nE1 — TASHQI BENCHMARK: CMU CERT Insider Threat Dataset r4.2\n')
 
@@ -314,6 +385,21 @@ async function main(): Promise<void> {
 
   const byUser = await loadLogonsForUsers(logonCsv, wantedUsers)
 
+  if (useEmail) {
+    log('email.csv o\'qilmoqda...')
+    await loadEmailForUsers(emailCsv, wantedUsers, byUser)
+  }
+  if (useHttp) {
+    log('http.csv o\'qilmoqda (eng katta fayl — bir necha daqiqa)...')
+    await loadHttpForUsers(httpCsv, wantedUsers, byUser)
+  }
+  // Manbalar turli tartibda qo'shilgan — vaqt bo'yicha saralash oyna
+  // kesishmasi (train vs window) to'g'ri ishlashi uchun SHART.
+  for (const [user, events] of byUser) {
+    events.sort((a, b) => a.date.getTime() - b.date.getTime())
+    byUser.set(user, events)
+  }
+
   const results: CaseResult[] = []
   let skippedInsufficient = 0
 
@@ -328,7 +414,7 @@ async function main(): Promise<void> {
 
     const profile = buildProfile(trainEvents)
     const primary = primaryPc(trainEvents)
-    const sig = evaluateWindow(profile, primary, windowEvents)
+    const sig = evaluateWindow(profile, primary, windowEvents, useEmailAsAuthz)
     const verdict = correlate(sig)
     results.push({ user: ins.user, attack: true, signals: sig, risk: verdict.risk, alert: verdict.alert, layer: verdict.layer })
   }
@@ -350,7 +436,7 @@ async function main(): Promise<void> {
 
     const profile = buildProfile(trainEvents)
     const primary = primaryPc(trainEvents)
-    const sig = evaluateWindow(profile, primary, windowEvents)
+    const sig = evaluateWindow(profile, primary, windowEvents, useEmailAsAuthz)
     const verdict = correlate(sig)
     results.push({ user, attack: false, signals: sig, risk: verdict.risk, alert: verdict.alert, layer: verdict.layer })
   }

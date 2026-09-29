@@ -856,10 +856,89 @@ gipotezasining o'zi noto'g'ri ekanini ko'rsatmaydi -- E2 aynan shu
 gipotezani boy, ko'p signalli ma'lumotda tasdiqladi (AUC=0.980). E1 past
 natijasi ma'lumot boyligi cheklovini ko'rsatadi: bitta zaif proksi-signal
 (faqat PC identifikatori) productionda 5 xil signal bilan ishlaydigan
-behaviorScoring.ts ni to'liq almashtira olmaydi. Kelgusi ish yo'nalishi:
-email.csv/http.csv/device.csv ni ham qo'shib qayta o'lchash.
+behaviorScoring.ts ni to'liq almashtira olmaydi. Quyida email.csv/http.csv
+bilan boyitilgan ikkita qo'shimcha yugurish tavsiflanadi.
+
+### E1 — 2-urinish: email.csv ni avtorizatsiya signali sifatida qo'shish (rad etildi)
+
+Gipoteza: "tashqi email qabul qiluvchi" (domen `dtaa.com` dan tashqari)
+"boshqa PC" bilan bir xil -- ya'ni `authzAllowed=1` (to'liq risk) signalini
+uyg'otadi, deb faraz qilindi (`--with-email-authz` bayrog'i).
+
+**Natija (367 holat):**
+
+| | |
+|---|---|
+| Confusion matrix | TP=65, FP=299, FN=5, TN=1 |
+| Aniqlik | **0.179** |
+| Qamrov | **0.929** |
+| F1 | **0.300** |
+| ROC AUC | **0.466** (tasodifiydan HAM PAST) |
+
+Bu natija ochiq YOMONLASHUV, yashirilmaydi. Sabab aniq o'lchandi:
+email.csv dagi 974,395 ta tegishli hodisadan 475,302 tasi (**48%**) kamida
+bitta tashqi qabul qiluvchiga ega -- bu sintetik korpusda tashqi email
+juda oddiy, ko'pincha qonuniy ish jarayoni (mijozlar, hamkorlar,
+konferensiyalar). Uni "hech qachon qonuniy bo'lmagan" LMS IDOR bilan bir
+xil ishonch darajasida (`authzAllowed=1`) baholash noto'g'ri proksi
+yaratdi: deyarli barcha 300 zararsiz foydalanuvchi ham kamida bir marta
+tashqi email yuborgan -- shuning uchun FP=299/300. Xulosa: "tashqi
+qabul qiluvchi" xususiyati o'zi past ajratuvchanlikka ega, LMS domenidagi
+"begona resursga IDOR" bilan bir xil semantik og'irlikda ishlatib
+bo'lmaydi. Kod `--with-email-authz` bayrog'i ostida saqlangan (takrorlash
+uchun), lekin STANDART REJIM emas.
+
+### E1 — 3-urinish (yakuniy): email.csv/http.csv faqat xatti-harakat boyitishi uchun
+
+Tuzatilgan yondashuv: email.csv va http.csv hodisalari faqat xatti-harakat
+profiliga (`resourceMix`, o'rtacha so'rov chastotasi, ko'proq o'qitish
+namunasi) qo'shiladi -- avtorizatsiya signali FAQAT logon.csv dagi "boshqa
+PC" holatidan hisoblanadi (1-urinishdagi kabi, o'zgarmagan). Bu standart
+rejim (`useEmailAsAuthz=false`, bayroqsiz ishga tushirish).
+
+**Qayta ishlangan hajm:** email.csv -- 2,629,979 qator, 974,395 mos
+hodisa; http.csv -- 28,434,423 qator, 10,546,593 mos hodisa (370
+foydalanuvchi bo'yicha).
+
+**Natija (367 holat):**
+
+| | |
+|---|---|
+| Confusion matrix | TP=19, FP=59, FN=51, TN=241 |
+| Aniqlik | **0.244** |
+| Qamrov | **0.271** |
+| F1 | **0.257** |
+| ROC AUC | **0.650** |
+
+Solishtirish uchun uch yugurish:
+
+| Variant | TP | FP | FN | TN | Aniqlik | Qamrov | F1 | AUC |
+|---|---|---|---|---|---|---|---|---|
+| 1: faqat logon.csv | 19 | 67 | 51 | 230 | 0.221 | 0.271 | 0.244 | 0.627 |
+| 2: +email avtorizatsiya sifatida | 65 | 299 | 5 | 1 | 0.179 | 0.929 | 0.300 | **0.466** |
+| 3: +email/http xatti-harakat boyitishi | 19 | 59 | 51 | 241 | 0.244 | 0.271 | 0.257 | **0.650** |
+
+Diagnostika: qamrov (0.271, TP=19/70) O'ZGARMADI -- chunki avtorizatsiya
+mantig'i o'zgarmagan (hali ham faqat "boshqa PC"), shuning uchun ANIQLANGAN
+insayderlar to'plami bir xil qoldi. Ammo FP 67 dan 59 ga tushdi (12%
+kamaydi): email/http trafigi bilan boyitilgan xatti-harakat profili
+(ko'proq resurs turi, real chastota) ba'zi zararsiz-lekin-boshqa-PC
+ishlatuvchi xodimlarni to'g'ri "normal xatti-harakat" deb belgilashga
+yordam berdi -- ularning umumiy faoliyat rasmi kengroq bo'lgani uchun
+tasodifiy bitta boshqa-PC hodisasi profildan unchalik chetga chiqmaydi.
+Bu E1 ning eng yaxshi (lekin hamon E2 dan sezilarli past) natijasi.
+
+Xulosa: xatti-harakat qatlamini boyitish OZGINA yordam beradi (AUC 0.627
+-> 0.650, +3.7 foiz punkti), lekin qamrovni (recall) YAXSHILAMAYDI, chunki
+E1 dagi asosiy cheklov avtorizatsiya signalining zaifligi (yagona proksi
+-- "boshqa PC"), behaviorScoring emas. Haqiqiy yaxshilanish uchun
+email/http hodisalarini alohida, LMS domeniga xos bo'lmagan avtorizatsiya
+semantikasi bilan (masalan, "tashqi ish-qidiruv sayti" kabi maxsus URL
+toifalari, shunchaki "tashqi qabul qiluvchi" emas) qayta modellashtirish
+kerak bo'ladi -- bu joriy ish doirasidan tashqarida, keyingi qadam
+sifatida qoldirildi.
 
 Ishlatish:
 ```bash
-npx tsx apps/api/src/tools/externalBenchmark.ts --dir=<r4.2 papkasi>
+npx tsx apps/api/src/tools/externalBenchmark.ts --dir=<r4.2 papkasi> [--with-email-authz]
 ```
