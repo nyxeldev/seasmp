@@ -31,6 +31,11 @@
  *
  * Talab:
  *   - API ishlab turishi kerak
+ *   - db:seed (asosiy) VA db:seed:demo (14 ssenariydan ~9 tasi
+ *     `*@demo.seasmp.uz` hisoblaridan foydalanadi — ular FAQAT
+ *     seed-demo.ts tomonidan yaratiladi; bu bajarilmasa o'sha ssenariylar
+ *     `makeActor()` login xatosi bilan JIM o'tkazib yuboriladi — pastdagi
+ *     "kutilgan N" tekshiruvi buni ochiq ko'rsatadi)
  *   - db:seed:history va POST /v1/security/profiles/refresh bajarilgan
  *     bo'lishi kerak (aks holda barcha aktorlar uchun 2-qatlam signalsiz)
  *   - RATE_LIMIT_MAX standart 100/min dan yuqori bo'lishi tavsiya etiladi
@@ -469,6 +474,7 @@ async function main(): Promise<void> {
   await resetActorState(admin.id)
 
   const results: ScenarioResult[] = []
+  const skipped: string[] = []
   for (const sc of SCENARIOS) {
     const r = await runScenario(admin, sc)
     if (r) {
@@ -479,8 +485,23 @@ async function main(): Promise<void> {
         r.name.padEnd(46), `(${r.actor})`,
       )
       log(`         ↳ ${r.note}`)
+    } else {
+      skipped.push(sc.name)
     }
     await sleep(500)
+  }
+
+  // Kirish muvaffaqiyatsiz bo'lgan ssenariylar JIM o'tkazib yuborilishi
+  // mumkin edi (masalan seed-demo.ts bajarilmagan bo'lsa) — bu esa N'ni
+  // kichraytirib, ogohlantirishsiz boshqa tarkibli natija berardi. Shuning
+  // uchun bu holat endi hech qachon jim qoldirilmaydi.
+  if (skipped.length > 0) {
+    console.warn(
+      `\n  OGOHLANTIRISH: ${skipped.length}/${SCENARIOS.length} ta ssenariy o'tkazib yuborildi ` +
+      `(kirish muvaffaqiyatsiz — ehtimol "npm run db:seed:demo --workspace=apps/api" bajarilmagan):`,
+    )
+    for (const name of skipped) console.warn(`    - ${name}`)
+    console.warn(`  Natija (N=${results.length}) TO'LIQ 14 ta ssenariy asosida EMAS.\n`)
   }
 
   const c = confusionAt(results)
@@ -489,7 +510,7 @@ async function main(): Promise<void> {
 
   if (asJson) {
     console.log(JSON.stringify({
-      apiUrl: API, totalScenarios: results.length,
+      apiUrl: API, totalScenarios: results.length, definedScenarios: SCENARIOS.length, skipped,
       confusion: c, precision: m.precision, recall: m.recall, f1: m.f1, aucRoc: auc,
       results: results.map((r) => ({
         name: r.name, attack: r.attack, actor: r.actor, note: r.note,

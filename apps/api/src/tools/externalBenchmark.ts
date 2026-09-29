@@ -46,13 +46,14 @@
  * Bu ataylab shunday: maqsad YANGI algoritm sinash emas, MAVJUD algoritmni
  * tashqi ma'lumotda o'lchash.
  *
- * QAMROV HAQIDA HALOLLIK: r4.2 da ~4000 foydalanuvchi, ~500 kun bor —
- * logon.csv o'nlab million qatordan iborat. Bu skript BARCHA 70 ta
- * belgilangan insayderni ISHLATADI (to'liq musbat sinf), lekin salbiy
- * sinf uchun tasodifiy tanlangan NEGATIVE_SAMPLE_USERS ta zararsiz
- * foydalanuvchi ishlatiladi — to'liq ~4000 emas. Bu standart va qonuniy
- * amaliyot (down-sampling), lekin ochiq aytiladi: natija BARCHA
- * foydalanuvchi ustida emas, tasodifiy namunada.
+ * QAMROV HAQIDA HALOLLIK: r4.2 logon.csv da 1000 ta noyob foydalanuvchi bor
+ * (dastlab ~4000 deb taxmin qilingan edi — amalda o'lchab rad etildi),
+ * 854,859 qator. Bu skript BARCHA 70 ta belgilangan insayderni ISHLATADI
+ * (to'liq musbat sinf), lekin salbiy sinf uchun tasodifiy tanlangan
+ * NEGATIVE_SAMPLE_USERS (300) ta zararsiz foydalanuvchi ishlatiladi — bu
+ * ~930 nomzoddan (1000 - 70 insayder) ~32%, to'liq populyatsiya emas. Bu
+ * standart va qonuniy amaliyot (down-sampling), lekin ochiq aytiladi:
+ * natija BARCHA foydalanuvchi ustida emas, tasodifiy namunada.
  *
  * Ishlatish:
  *   npx tsx apps/api/src/tools/externalBenchmark.ts --dir=<CERT r4.2 papkasi>
@@ -194,7 +195,21 @@ async function loadEmailForUsers(emailCsv: string, wantedUsers: Set<string>, int
   console.log(`  email.csv: jami ${rows} qator o'qildi, ${matched} ta mos hodisa (${externalCount} ta tashqi qabul qiluvchi bilan)`)
 }
 
-/** Foydalanuvchining eng ko'p ishlatgan PC'si — OWNER ekvivalenti (barcha manbalar bo'yicha) */
+/**
+ * Foydalanuvchining eng ko'p ishlatgan PC'si — OWNER ekvivalenti.
+ *
+ * MUHIM: bu funksiya boyitilgan yugurishda logon+http+email BIRLASHGAN
+ * hodisalar ustida ishlaydi (har uchalasi ham CERT'da o'z `pc` ustuniga
+ * ega). Demak "email/http faqat xatti-harakat profilini boyitadi,
+ * avtorizatsiya mantig'i o'zgarmaydi" degan ta'rif TO'LIQ TO'G'RI EMAS:
+ * qaysi PC "asosiy" (demak qaysi PC "begona"/FOREIGN) ekanligi ham
+ * ko'proq ma'lumot asosida qayta hisoblanadi. 3-variantda FP'ning
+ * 67 -> 59 ga tushishi shu sabab bilan (aniqroq primaryPc hisoblanishi),
+ * behaviorScore o'zgarishi bilan EMAS izohlanishi mumkin — chunki
+ * authzAllowed=1 bo'lganda correlate() riskni har doim 1 ga tenglashtiradi
+ * va behaviorScore ta'sir qilmaydi (correlation.ts: authzRisk/correlate).
+ * PROJECT_CONTEXT.md §15 da bu aniqlashtirilgan.
+ */
 function primaryPc(events: SourceEvent[]): string {
   const counts = new Map<string, number>()
   for (const e of events) counts.set(e.pc, (counts.get(e.pc) ?? 0) + 1)

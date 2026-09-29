@@ -890,11 +890,21 @@ uchun), lekin STANDART REJIM emas.
 
 ### E1 — 3-urinish (yakuniy): email.csv/http.csv faqat xatti-harakat boyitishi uchun
 
-Tuzatilgan yondashuv: email.csv va http.csv hodisalari faqat xatti-harakat
+Tuzatilgan yondashuv: email.csv va http.csv hodisalari xatti-harakat
 profiliga (`resourceMix`, o'rtacha so'rov chastotasi, ko'proq o'qitish
-namunasi) qo'shiladi -- avtorizatsiya signali FAQAT logon.csv dagi "boshqa
-PC" holatidan hisoblanadi (1-urinishdagi kabi, o'zgarmagan). Bu standart
+namunasi) qo'shiladi va avtorizatsiya QOIDASI o'zgarmaydi -- u hamon
+faqat "boshqa PC" holatiga asoslanadi, "tashqi email" alohida authz
+signali sifatida hisoblanmaydi (2-urinishdagi kabi emas). Bu standart
 rejim (`useEmailAsAuthz=false`, bayroqsiz ishga tushirish).
+
+**ANIQLASHTIRISH (kod ko'rib chiqishda topilgan):** qoidaning o'zi
+o'zgarmagan bo'lsa-da, uning KIRISH MA'LUMOTI o'zgargan -- "eng ko'p
+ishlatilgan PC" (`primaryPc()`) va "boshqa PC"lik (`anyForeign`) endi
+logon+http+email BIRLASHGAN hodisalar ustida hisoblanadi (barchasi CERT'da
+o'z `pc` ustuniga ega), 1-urinishdagi kabi FAQAT logon.csv emas. Ya'ni
+avtorizatsiya signali "o'zgarmagan" degan da'vo faqat QOIDA darajasida
+to'g'ri -- NATIJA darajasida emas, chunki ko'proq ma'lumot "asosiy PC"ni
+aniqroq belgilaydi. Quyidagi diagnostika shuni hisobga oladi.
 
 **Qayta ishlangan hajm:** email.csv -- 2,629,979 qator, 974,395 mos
 hodisa; http.csv -- 28,434,423 qator, 10,546,593 mos hodisa (370
@@ -918,20 +928,35 @@ Solishtirish uchun uch yugurish:
 | 2: +email avtorizatsiya sifatida | 65 | 299 | 5 | 1 | 0.179 | 0.929 | 0.300 | **0.466** |
 | 3: +email/http xatti-harakat boyitishi | 19 | 59 | 51 | 241 | 0.244 | 0.271 | 0.257 | **0.650** |
 
-Diagnostika: qamrov (0.271, TP=19/70) O'ZGARMADI -- chunki avtorizatsiya
-mantig'i o'zgarmagan (hali ham faqat "boshqa PC"), shuning uchun ANIQLANGAN
-insayderlar to'plami bir xil qoldi. Ammo FP 67 dan 59 ga tushdi (12%
-kamaydi): email/http trafigi bilan boyitilgan xatti-harakat profili
-(ko'proq resurs turi, real chastota) ba'zi zararsiz-lekin-boshqa-PC
-ishlatuvchi xodimlarni to'g'ri "normal xatti-harakat" deb belgilashga
-yordam berdi -- ularning umumiy faoliyat rasmi kengroq bo'lgani uchun
-tasodifiy bitta boshqa-PC hodisasi profildan unchalik chetga chiqmaydi.
+Diagnostika: qamrov (0.271, TP=19/70) O'ZGARMADI -- bu safar 70 ta
+insayderning aynan qaysi 19 tasi tutilgani ham 1-urinish bilan bir xil
+bo'lib chiqdi (empirik kuzatuv, qoidaning mantiqiy natijasi emas). FP esa
+67 dan 59 ga tushdi (12% kamaydi).
+
+**MUHIM:** bu FP kamayishini "xatti-harakat profili boyidi, shuning uchun
+ba'zi zararsiz xodimlar to'g'ri aniqlandi" deb izohlash CHALG'ITUVCHI
+bo'lar edi. `correlation.ts`dagi `correlate()` funksiyasi `authzAllowed=1`
+bo'lganda riskni SO'ZSIZ 1 ga tenglashtiradi (`authzRisk()` shart
+tekshirmasdan `return 1` qiladi) -- ya'ni `behaviorScore` bu holatlarda
+YAKUNIY qarorga UMUMAN TA'SIR QILMAYDI. FP'ning kamayishi xatti-harakat
+signali "kuchayganidan" emas, balki yuqorida aniqlangandek `primaryPc()`
+endi ko'proq ma'lumot (logon+http+email) asosida hisoblanib, ba'zi
+zararsiz-lekin-ko'p-PC-ishlatuvchi xodimlar uchun "asosiy PC" aniqroq
+belgilangani va shu bilan `anyForeign` noto'g'ri ko'tarilmagani uchun,
+degan ehtimol ancha kuchli. Bu ish doirasida ikkala mexanizmni ajratib
+o'lchash (ablation: `primaryPc`ni faqat logon.csv'dan hisoblab, faqat
+`behaviorScore` uchun http/email qo'shish) qilinmadi -- shuning uchun
+sabab "kuchli ehtimol" darajasida qoldirilmoqda, "isbotlangan" emas.
+
 Bu E1 ning eng yaxshi (lekin hamon E2 dan sezilarli past) natijasi.
 
-Xulosa: xatti-harakat qatlamini boyitish OZGINA yordam beradi (AUC 0.627
--> 0.650, +3.7 foiz punkti), lekin qamrovni (recall) YAXSHILAMAYDI, chunki
-E1 dagi asosiy cheklov avtorizatsiya signalining zaifligi (yagona proksi
--- "boshqa PC"), behaviorScoring emas. Haqiqiy yaxshilanish uchun
+Xulosa: manba boyitish AUC'ni ozgina yaxshiladi (0.627 -> 0.650, +3.7 foiz
+punkti), ehtimol asosan `primaryPc()` aniqroq hisoblangani orqali (yuqoriga
+qarang), sof xatti-harakat signali orqali emas -- chunki qamrov (recall)
+umuman o'zgarmadi va `authzAllowed=1` bo'lgan holatlarda `behaviorScore`
+qarorga ta'sir qila olmaydi. E1 dagi asosiy cheklov avtorizatsiya
+signalining zaifligi (yagona proksi -- "boshqa PC"), behaviorScoring emas.
+Haqiqiy yaxshilanish uchun
 email/http hodisalarini alohida, LMS domeniga xos bo'lmagan avtorizatsiya
 semantikasi bilan (masalan, "tashqi ish-qidiruv sayti" kabi maxsus URL
 toifalari, shunchaki "tashqi qabul qiluvchi" emas) qayta modellashtirish
