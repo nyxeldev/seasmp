@@ -57,6 +57,9 @@ services:
       DATABASE_URL:           "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       REDIS_URL:              "redis://:${REDIS_PASSWORD}@redis:6379"
       ANALYTICS_API_URL:      "http://seasmp-analytics:5000"
+      # API faqat ichki tarmoqda — X-Forwarded-For ni Nginx qo'yadi va unga
+      # ishonsa bo'ladi. Usiz request.ip proksi IP si bo'lib qoladi.
+      TRUST_PROXY:            "true"
     ports:
       - "4000:4000"
     depends_on:
