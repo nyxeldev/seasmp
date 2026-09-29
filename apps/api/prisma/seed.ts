@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { slugify } from '../src/lib/slug'
 
 const prisma = new PrismaClient()
 
@@ -86,6 +87,7 @@ async function main() {
     create: {
       id:            '00000000-0000-0000-0000-000000000001',
       title:         'Web dasturlash asoslari',
+      slug:          slugify('Web dasturlash asoslari'),
       description:   'HTML, CSS va JavaScript orqali web-saytlar yaratish',
       teacherId:     teacher1.id,
       category:      'Dasturlash',
@@ -103,6 +105,7 @@ async function main() {
     create: {
       id:            '00000000-0000-0000-0000-000000000002',
       title:         'Ma\'lumotlar bazasi',
+      slug:          slugify('Ma\'lumotlar bazasi'),
       description:   'SQL va NoSQL ma\'lumotlar bazalari bilan ishlash',
       teacherId:     teacher1.id,
       category:      'Dasturlash',
@@ -120,6 +123,7 @@ async function main() {
     create: {
       id:            '00000000-0000-0000-0000-000000000003',
       title:         'Ingliz tili (A2-B1)',
+      slug:          slugify('Ingliz tili (A2-B1)'),
       description:   'Kundalik muloqot va biznes ingliz tili',
       teacherId:     teacher2.id,
       category:      'Til kurslari',
@@ -200,5 +204,5 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
+  .catch((e) => { console.error(e); process.exit(1) })
   .finally(() => prisma.$disconnect())

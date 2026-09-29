@@ -47,6 +47,147 @@ export const analyticsService = {
     }
   },
 
+  /**
+   * Bosh sahifa va Analitika sahifasi uchun umumiy ko'rsatkichlar.
+   *
+   * Nega alohida metod: bu ikki sahifa ilgari qattiq yozilgan massivlarni
+   * chizardi (247 o'quvchi, 94% davomat, "Aliyev Jasur — 87% xavf") — bazada
+   * esa bunday ma'lumot yo'q edi. Endi hamma raqam shu yerdan, haqiqiy
+   * jadvallardan keladi.
+   *
+   * Hammasi bitta chaqiruvda qaytariladi: sahifa beshta so'rov yubormasin.
+   */
+  async overview(params: { days?: number } = {}) {
+    const days = Math.min(Math.max(params.days ?? 30, 1), 365)
+    const since = new Date()
+    since.setDate(since.getDate() - days)
+    since.setHours(0, 0, 0, 0)
+
+    const [students, activeCourses, attendanceRows, grades, riskRows] = await Promise.all([
+      prisma.user.count({ where: { role: 'STUDENT', isActive: true } }),
+      prisma.course.count({ where: { status: 'ACTIVE' } }),
+      prisma.attendance.findMany({
+        where:  { lessonDate: { gte: since } },
+        select: { lessonDate: true, status: true },
+        orderBy: { lessonDate: 'asc' },
+      }),
+      prisma.grade.findMany({
+        select: { score: true, assessment: { select: { type: true, maxScore: true } } },
+      }),
+      prisma.enrollment.findMany({
+        where:  { dropoutRiskScore: { not: null }, status: 'ACTIVE' },
+        select: {
+          id: true,
+          dropoutRiskScore: true,
+          student: { select: { id: true, firstName: true, lastName: true } },
+          course:  { select: { id: true, slug: true, title: true } },
+        },
+        orderBy: { dropoutRiskScore: 'desc' },
+        take: 10,
+      }),
+    ])
+
+    // ── Kunlik davomat foizi ────────────────────────────────────────────────
+    const perDay = new Map<string, { present: number; total: number }>()
+    for (const r of attendanceRows) {
+      const key = r.lessonDate.toISOString().slice(0, 10)
+      const cell = perDay.get(key) ?? { present: 0, total: 0 }
+      cell.total += 1
+      if (r.status === 'PRESENT' || r.status === 'LATE') cell.present += 1
+      perDay.set(key, cell)
+    }
+    const attendanceTrend = [...perDay.entries()].map(([date, c]) => ({
+      date,
+      rate:  Math.round((c.present / c.total) * 1000) / 10,
+      total: c.total,
+    }))
+
+    const rateOf = (rows: { status: string }[]) =>
+      rows.length > 0
+        ? Math.round(
+            (rows.filter(r => r.status === 'PRESENT' || r.status === 'LATE').length / rows.length) * 1000,
+          ) / 10
+        : null
+
+    const attendanceRate = rateOf(attendanceRows)
+
+    // Oldingi shuncha kunlik oyna — KPI kartasidagi o'zgarish uchun. Boshqa
+    // ko'rsatkichlar (talaba soni kabi) uchun tarixiy suratlar saqlanmaydi,
+    // shuning uchun ularga o'zgarish ko'rsatilmaydi.
+    const prevFrom = new Date(since)
+    prevFrom.setDate(prevFrom.getDate() - days)
+    const prevRows = await prisma.attendance.findMany({
+      where:  { lessonDate: { gte: prevFrom, lt: since } },
+      select: { status: true },
+    })
+    const prevRate = rateOf(prevRows)
+    const attendanceDelta = attendanceRate !== null && prevRate !== null
+      ? Math.round((attendanceRate - prevRate) * 10) / 10
+      : null
+
+    // ── Baholar: foizga keltirib o'rtachalash ───────────────────────────────
+    // Turli topshiriqlarning maxScore'i har xil, shuning uchun xom ball emas,
+    // foiz o'rtachalanadi.
+    const pct = (score: unknown, max: unknown) => (Number(score) / Number(max)) * 100
+    const avgGrade = grades.length > 0
+      ? Math.round(
+          (grades.reduce((s, g) => s + pct(g.score, g.assessment.maxScore), 0) / grades.length) * 10,
+        ) / 10
+      : null
+
+    const byType = new Map<string, { sum: number; n: number }>()
+    for (const g of grades) {
+      const cell = byType.get(g.assessment.type) ?? { sum: 0, n: 0 }
+      cell.sum += pct(g.score, g.assessment.maxScore)
+      cell.n += 1
+      byType.set(g.assessment.type, cell)
+    }
+    const gradesByType = [...byType.entries()].map(([type, c]) => ({
+      type, avg: Math.round((c.sum / c.n) * 10) / 10, count: c.n,
+    }))
+
+    // ── Qoldirish xavfi ─────────────────────────────────────────────────────
+    const HIGH_RISK = 0.7
+    const risk = riskRows.map(r => ({
+      enrollmentId: r.id,
+      score:        Number(r.dropoutRiskScore),
+      studentId:    r.student.id,
+      studentName:  `${r.student.firstName} ${r.student.lastName}`,
+      courseId:     r.course.id,
+      courseSlug:   r.course.slug,
+      courseTitle:  r.course.title,
+    }))
+    const [highRisk, riskAgg] = await Promise.all([
+      prisma.enrollment.count({
+        where: { status: 'ACTIVE', dropoutRiskScore: { gte: HIGH_RISK } },
+      }),
+      // Barcha ro'yxatga olishlar bo'yicha. `risk` massivi eng yuqori 10 tani
+      // saqlaydi — undan o'rtacha olinsa, ko'rsatkich butun guruhniki emas,
+      // eng yomonlarniki bo'lib chiqadi (88% kabi).
+      prisma.enrollment.aggregate({
+        where: { status: 'ACTIVE', dropoutRiskScore: { not: null } },
+        _avg:  { dropoutRiskScore: true },
+      }),
+    ])
+    const avgRisk = riskAgg._avg.dropoutRiskScore !== null
+      ? Math.round(Number(riskAgg._avg.dropoutRiskScore) * 1000) / 10
+      : null
+
+    return {
+      windowDays: days,
+      students,
+      activeCourses,
+      attendanceRate,
+      attendanceDelta,
+      attendanceTrend,
+      avgGrade,
+      gradesByType,
+      highRisk,
+      avgRisk,
+      topRisk: risk.slice(0, 5),
+    }
+  },
+
   async courseStats(courseId: string, actorId: string, actorRole: UserRole) {
     const course = await prisma.course.findUnique({ where: { id: courseId } })
     if (!course) throw Object.assign(new Error('Kurs topilmadi'), { statusCode: 404 })
@@ -111,7 +252,7 @@ export const analyticsService = {
     const enrollments = await prisma.enrollment.findMany({
       where: { studentId },
       include: {
-        course: { select: { id: true, title: true, category: true } },
+        course: { select: { id: true, slug: true, title: true, category: true } },
         attendance: { select: { status: true } },
         grades: { select: { score: true, assessment: { select: { maxScore: true, weight: true } } } },
       },

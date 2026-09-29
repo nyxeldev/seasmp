@@ -74,7 +74,9 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - analytics_models:/app/model
+      # MODEL_DIR ning o'zi. Ilgari /app/model ga ulangan edi, kod esa
+      # /app/ml/models ga yozardi — o'qitilgan model saqlanmay yo'qolardi.
+      - analytics_models:/app/ml/models
     networks:
       - seasmp-network
     healthcheck:

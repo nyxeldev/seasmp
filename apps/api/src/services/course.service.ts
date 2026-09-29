@@ -1,6 +1,13 @@
 import { prisma } from '../config/prisma'
 import { auditService } from './audit.service'
+import { uniqueSlug } from '../lib/slug'
 import type { CourseStatus, UserRole } from '@prisma/client'
+
+/** Slug band emasligini tekshiradi. `exceptId` — kursni o'zgartirayotganda o'zini hisobga olmaslik uchun */
+async function slugTaken(slug: string, exceptId?: string): Promise<boolean> {
+  const existing = await prisma.course.findUnique({ where: { slug }, select: { id: true } })
+  return existing !== null && existing.id !== exceptId
+}
 
 export const courseService = {
   async list(params: {
@@ -40,9 +47,21 @@ export const courseService = {
     }
   },
 
-  async findById(id: string) {
+  /**
+   * Kursni UUID yoki slug bo'yicha topadi.
+   *
+   * Manzil qatorida endi slug turadi, lekin ilgari tarqatilgan yoki saqlangan
+   * UUID havolalari ishlashda davom etishi kerak — shuning uchun ikkalasi ham
+   * qabul qilinadi. Qaysi biri ekanligi shakl bo'yicha aniqlanadi.
+   */
+  async findByIdOrSlug(idOrSlug: string) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug)
+    return this.findById(idOrSlug, isUuid ? 'id' : 'slug')
+  },
+
+  async findById(id: string, by: 'id' | 'slug' = 'id') {
     const course = await prisma.course.findUnique({
-      where: { id },
+      where: by === 'slug' ? { slug: id } : { id },
       include: {
         teacher:     { select: { id: true, firstName: true, lastName: true, email: true } },
         assessments: true,
@@ -81,6 +100,7 @@ export const courseService = {
     const course = await prisma.course.create({
       data: {
         title:         data.title,
+        slug:          await uniqueSlug(data.title, (s) => slugTaken(s)),
         description:   data.description,
         teacherId:     data.teacherId,
         category:      data.category,
@@ -121,7 +141,17 @@ export const courseService = {
       throw Object.assign(new Error("Bu kursni tahrirlash uchun ruxsat yo'q"), { statusCode: 403 })
     }
 
-    const updated = await prisma.course.update({ where: { id }, data: data as any })
+    // Sarlavha o'zgarsa slug ham yangilanadi — aks holda manzil eski nomni
+    // ko'rsatib turaverardi. Eski slug bo'yicha havolalar ishlamay qoladi,
+    // shuning uchun faqat sarlavha HAQIQATAN o'zgarganda qayta hisoblanadi.
+    const slug = data.title && data.title !== course.title
+      ? await uniqueSlug(data.title, (s) => slugTaken(s, id))
+      : undefined
+
+    const updated = await prisma.course.update({
+      where: { id },
+      data: { ...(data as any), ...(slug ? { slug } : {}) },
+    })
 
     await auditService.log({
       userId: actorId, action: 'UPDATE', resource: 'courses',

@@ -1,5 +1,6 @@
 import { prisma } from '../config/prisma'
 import { auditService } from './audit.service'
+import { notificationService } from './notification.service'
 import type { AssessmentType, UserRole } from '@prisma/client'
 
 export const assessmentService = {
@@ -189,6 +190,19 @@ export const assessmentService = {
       userId: actorId, action: 'GRADE_SUBMIT', resource: 'grades',
       resourceId: grade.id, newData: { score: data.score, enrollmentId: data.enrollmentId }, ipAddress,
     })
+
+    // Talabaning o'ziga xabar. O'qituvchi o'ziga baho qo'ysa (nazariy holat)
+    // o'ziga xabar bormaydi.
+    if (enrollment.studentId !== actorId) {
+      await notificationService.create({
+        userId: enrollment.studentId,
+        type:   'GRADE_POSTED',
+        title:  `Baho qo'yildi: ${assessment.title}`,
+        body:   `${data.score} / ${assessment.maxScore} — ${assessment.course.title}`,
+        link:   `/courses/${assessment.course.slug ?? assessment.course.id}/grades`,
+        data:   { gradeId: grade.id, assessmentId: assessment.id, score: data.score },
+      })
+    }
 
     return grade
   },

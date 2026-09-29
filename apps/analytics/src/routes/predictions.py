@@ -53,3 +53,27 @@ def trigger_calculation(db: Session = Depends(get_db)):
     from src.tasks.etl_tasks import nightly_risk_calculation
     task = nightly_risk_calculation.delay()
     return {"status": "queued", "taskId": str(task.id)}
+
+
+@router.post("/analytics/train")
+def train(db: Session = Depends(get_db)):
+    """
+    Asosiy modelni o'qitadi va darhol xotiraga yuklaydi.
+
+    Nega kerak edi: `ml/train.py` to'liq yozilgan (train/test bo'linishi, scaler,
+    AUC-ROC, versiyalash, metadata), lekin uni faqat oylik Celery jadvali
+    chaqirardi — ya'ni amalda hech qachon ishlamagan va `/health` doim
+    "rule_based_fallback" deb turgan. Endi qo'lda ham ishga tushirish mumkin.
+
+    Eski `/dropout/train` boshqa — u legacy quvurni o'qitadi va boshqa
+    xususiyatlar to'plamiga tayanadi.
+    """
+    from ml.train import train_model
+    from src.services.ml_model import load_model
+
+    result = train_model(db)
+    if result.get("status") == "success":
+        # Yangi model shu zahoti kuchga kirsin — aks holda konteyner qayta
+        # ishga tushmaguncha eski (yoki umuman yo'q) model ishlatilaverardi.
+        load_model()
+    return result

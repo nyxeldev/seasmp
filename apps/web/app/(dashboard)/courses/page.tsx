@@ -90,7 +90,7 @@ function CourseCard({ course, canManage, isAdmin, onStatusChange }: {
       <div className="flex items-center justify-between pt-3 border-t"
         style={{ borderColor: 'var(--s-border)' }}>
         <div className="flex items-center gap-1.5">
-          <Users className="size-3.5" style={{ color: 'var(--s-muted)' }} />
+          <Users className="size-4" style={{ color: 'var(--s-muted)' }} />
           <span className="text-xs" style={{ color: 'var(--s-muted)' }}>{enrolled} / {course.maxStudents}</span>
         </div>
         <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
@@ -101,9 +101,9 @@ function CourseCard({ course, canManage, isAdmin, onStatusChange }: {
 
       {canManage && (
         <div className="flex items-center gap-2 pt-1">
-          <Link href={`/courses/${course.id}`}
+          <Link href={`/courses/${course.slug}`}
             className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-            <ExternalLink className="size-3" /> Ko'rish
+            <ExternalLink className="size-3.5" /> Ko'rish
           </Link>
           {isAdmin && course.status !== 'ACTIVE' && (
             <button onClick={() => onStatusChange(course.id, 'ACTIVE')}
@@ -202,7 +202,7 @@ export default function CoursesPage() {
                 style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}
               />
             }>
-              <Plus className="size-4" /> {t('courses.new')}
+              <Plus className="size-[18px]" /> {t('courses.new')}
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader><DialogTitle>Yangi kurs yaratish</DialogTitle></DialogHeader>
@@ -287,7 +287,7 @@ export default function CoursesPage() {
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-52 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 pointer-events-none" style={{ color: 'var(--s-muted)' }} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 pointer-events-none" style={{ color: 'var(--s-muted)' }} />
           <input
             type="text"
             value={search}

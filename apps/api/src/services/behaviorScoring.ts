@@ -36,7 +36,18 @@ export interface AnomalyScore {
 /** Profil ishonchli bo'lishi uchun minimal kuzatuv soni */
 export const MIN_SAMPLES = 50
 
-/** Ogohlantirish chiqariladigan chegara */
+/**
+ * DIQQAT: bu QAROR chegarasi EMAS.
+ *
+ * Nomi shunday bo'lgani bilan hukm bu yerda chiqarilmaydi. Xatti-harakat
+ * qatlami faqat ball beradi, qarorni esa correlation.ts qabul qiladi:
+ * yolg'iz qatlam uchun SINGLE_THRESHOLD, ikkala qatlam tasdiqlaganda
+ * CORRELATED_THRESHOLD. Kodni o'qiyotgan odam 0.6 ni chegara deb o'ylab
+ * qolmasligi uchun shu izoh yozildi.
+ *
+ * Qiymatning o'zi qoldirildi: u "bu ball sezilarli anomaliya" degan
+ * tayanch daraja sifatida testlarda ishlatiladi.
+ */
 export const ALERT_THRESHOLD = 0.6
 
 /**
@@ -50,11 +61,38 @@ function clamp01(x: number): number {
 }
 
 /**
+ * Soat yadrosi — Gauss, ±5 soat.
+ *
+ * Ilgari yadro [0.25, 0.5, 0.25] edi va faqat ±1 soatga yetardi. Shuning uchun
+ * quyidagi va'da amalda bajarilmasdi: 9-17 profilida 18:00 haqiqatan yumshoq
+ * baholanardi (surprise 0.73), lekin 19:00 dan boshlab HAMMA soat 03:00 bilan
+ * bir xil 0.968 chiqardi. Ya'ni "kechroq ishlash" bilan "tungi kirish"
+ * farqlanmasdi — aynan shu farq esa xatti-harakat qatlamining butun ma'nosi.
+ *
+ * Kengroq yadro masofani haqiqatan kodlaydi:
+ *   18:00 -> 0.54   19:00 -> 0.70   20:00 -> 0.82   22:00 -> 0.94   03:00 -> 0.97
+ */
+export const HOUR_KERNEL_HALF_WIDTH = 5
+export const HOUR_KERNEL_SIGMA = 2.5
+
+/** Normallashtirilgan Gauss yadrosi. Yig'indisi aniq 1 — silliqlash massani saqlaydi. */
+export function gaussianKernel(
+  halfWidth = HOUR_KERNEL_HALF_WIDTH, sigma = HOUR_KERNEL_SIGMA,
+): number[] {
+  const raw: number[] = []
+  for (let i = -halfWidth; i <= halfWidth; i++) raw.push(Math.exp(-(i * i) / (2 * sigma * sigma)))
+  const total = raw.reduce((a, b) => a + b, 0)
+  return raw.map((x) => x / total)
+}
+
+export const HOUR_KERNEL = gaussianKernel()
+
+/**
  * Doiraviy silliqlash. Soatlar tartibli kattalik: agar foydalanuvchi 17:00 gacha
  * ishlasa, 18:00 dagi faollik 03:00 dagidan ancha kam shubhali. Silliqlashsiz
  * ikkalasi ham bir xil "hech ko'rilmagan" deb baholanardi.
  */
-export function smoothCircular(counts: number[], kernel: number[] = [0.25, 0.5, 0.25]): number[] {
+export function smoothCircular(counts: number[], kernel: number[] = HOUR_KERNEL): number[] {
   const n = counts.length
   if (n === 0) return []
   const half = Math.floor(kernel.length / 2)

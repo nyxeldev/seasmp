@@ -49,7 +49,7 @@ export default function EnrollmentsPage() {
         {user?.role === 'ADMIN' && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger render={<Button />}>
-              <Plus className="size-4" /> New Enrollment
+              <Plus className="size-[18px]" /> New Enrollment
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Enroll Student</DialogTitle></DialogHeader>

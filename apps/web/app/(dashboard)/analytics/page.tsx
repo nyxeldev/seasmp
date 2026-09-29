@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import {
-  analyticsApi, coursesApi,
+  analyticsApi, coursesApi, usersApi,
   type DashboardStats, type Course,
   type PyRiskStudent, type PyTeacherKpi, type PyCourseFullAnalytics,
+  type AnalyticsOverview,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { useLocale } from '@/store/locale'
@@ -60,34 +61,10 @@ function DarkTooltip({ active, payload, label, unit = '' }: any) {
   )
 }
 
-// ── Mock static data ──────────────────────────────────────────────────────────
-const GRADES_DATA = [
-  { name: '1-test',   avg: 74 }, { name: '2-test',   avg: 79 },
-  { name: 'Muqobil',  avg: 68 }, { name: '3-test',   avg: 82 },
-  { name: 'Yakuniy',  avg: 71 },
-]
-
-const ATT_TREND = [
-  { week: '1-h', pct: 88 }, { week: '2-h', pct: 91 }, { week: '3-h', pct: 85 },
-  { week: '4-h', pct: 93 }, { week: '5-h', pct: 90 }, { week: '6-h', pct: 87 },
-  { week: '7-h', pct: 94 }, { week: '8-h', pct: 92 },
-]
-
-const RADAR_DATA = [
-  { metric: "Davomat %",          A: 92, B: 87, C: 95 },
-  { metric: "O'rtacha baho",      A: 78, B: 81, C: 73 },
-  { metric: "Tugatish %",         A: 85, B: 90, C: 88 },
-  { metric: "Talaba faolligi",    A: 70, B: 75, C: 68 },
-  { metric: "Xavf oldini olish",  A: 60, B: 65, C: 72 },
-]
-
-const MOCK_DROPOUT = [
-  { name: 'Aliyev Jasur',     course: 'Matematika', score: 87, att: 61, trend: 'up'   },
-  { name: 'Karimova Nilufar', course: 'Fizika',     score: 71, att: 74, trend: 'up'   },
-  { name: 'Toshmatov Bobur',  course: 'Kimyo',      score: 64, att: 79, trend: 'down' },
-  { name: 'Rahimova Zulfiya', course: 'Biologiya',  score: 52, att: 83, trend: 'down' },
-  { name: 'Nazarov Sherzod',  course: 'Tarix',      score: 43, att: 88, trend: 'down' },
-]
+// Topshiriq turining o'zbekcha nomi — diagramma o'qi uchun
+const TYPE_LABEL: Record<string, string> = {
+  QUIZ: 'Nazorat', HOMEWORK: 'Uy ishi', MIDTERM: 'Oraliq', FINAL: 'Yakuniy',
+}
 
 // ── Risk bar color ────────────────────────────────────────────────────────────
 function riskColor(score: number) {
@@ -115,6 +92,12 @@ function AdminAnalytics() {
   const [riskLoading, setRiskLoading] = useState(false)
   const [pyOffline, setPyOffline] = useState(false)
   const [triggering, setTriggering] = useState(false)
+  // Sahifadagi ko'rsatkichlar ilgari qattiq yozilgan massivlardan chizilardi
+  // (78.4 o'rtacha baho, MOCK_DROPOUT ro'yxati). Endi hammasi shu yerdan.
+  const [ov, setOv] = useState<AnalyticsOverview | null>(null)
+  // Radar diagrammasi ilgari uchta o'ylab topilgan o'qituvchining qattiq
+  // yozilgan ko'rsatkichlarini chizardi. Endi haqiqiy KPI endpointidan.
+  const [teacherKpis, setTeacherKpis] = useState<{ name: string; kpi: PyTeacherKpi }[]>([])
   const [dateFrom, setDateFrom]   = useState('')
   const [dateTo, setDateTo]       = useState('')
 
@@ -131,6 +114,29 @@ function AdminAnalytics() {
   }, [])
 
   useEffect(() => { loadDashboard(); loadHighRisk() }, [loadHighRisk]) // eslint-disable-line
+
+  useEffect(() => {
+    let cancelled = false
+    analyticsApi.overview(120)
+      .then(r => { if (!cancelled) setOv(r.data) })
+      .catch(() => { if (!cancelled) setOv(null) })
+
+    // Eng ko'p talabaga ega uchta o'qituvchi
+    usersApi.list('role=TEACHER&limit=50')
+      .then(async res => {
+        const picked = res.data.slice(0, 3)
+        const rows = await Promise.all(picked.map(async u => {
+          try {
+            const k = await analyticsApi.teacherKpi(u.id)
+            return { name: u.lastName, kpi: k.data }
+          } catch { return null }
+        }))
+        if (!cancelled) setTeacherKpis(rows.filter(Boolean) as { name: string; kpi: PyTeacherKpi }[])
+      })
+      .catch(() => { if (!cancelled) setTeacherKpis([]) })
+
+    return () => { cancelled = true }
+  }, [])
 
   const triggerCalc = async () => {
     setTriggering(true)
@@ -151,37 +157,89 @@ function AdminAnalytics() {
     ? Math.round(riskData.reduce((s, r) => s + r.riskScore, 0) / riskData.length * 100)
     : null
 
+  // Baholash turiga ko'ra o'rtacha — haqiqiy baholardan
+  const gradesData = useMemo(
+    () => (ov?.gradesByType ?? []).map(g => ({
+      name: TYPE_LABEL[g.type] ?? g.type,
+      avg:  g.avg,
+    })),
+    [ov],
+  )
+
+  // Davomat dinamikasi — kunlik foizlar haftalarga yig'iladi
+  const attTrend = useMemo(() => {
+    const rows = ov?.attendanceTrend ?? []
+    if (rows.length === 0) return []
+    const perWeek = new Map()
+    const first = new Date(rows[0].date).getTime()
+    for (const r of rows) {
+      const w = Math.floor((new Date(r.date).getTime() - first) / (7 * 86400000))
+      const cell = perWeek.get(w) ?? { sum: 0, n: 0 }
+      cell.sum += r.rate; cell.n += 1
+      perWeek.set(w, cell)
+    }
+    return [...perWeek.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([w, c]) => ({ week: `${w + 1}-h`, pct: Math.round((c.sum / c.n) * 10) / 10 }))
+  }, [ov])
+
+  // Radar uchun: barcha o'lchamlar 0-100 shkalasida bo'lishi kerak
+  const radarData = useMemo(() => {
+    if (teacherKpis.length === 0) return []
+    const maxStudents = Math.max(...teacherKpis.map(t => t.kpi.total_students), 1)
+    const keys = ['A', 'B', 'C'] as const
+    const rows: Record<string, string | number>[] = [
+      { metric: 'Davomat %' },
+      { metric: "O'rtacha baho" },
+      { metric: 'Yuklama' },
+      { metric: 'Xavfsiz ulush' },
+    ]
+    teacherKpis.forEach((t, i) => {
+      const k = keys[i]
+      const riskShare = t.kpi.total_students > 0
+        ? (t.kpi.at_risk_students_count / t.kpi.total_students) * 100
+        : 0
+      rows[0][k] = Math.round(t.kpi.avg_attendance_rate)
+      rows[1][k] = Math.round(t.kpi.avg_grade)
+      rows[2][k] = Math.round((t.kpi.total_students / maxStudents) * 100)
+      rows[3][k] = Math.round(100 - riskShare)
+    })
+    return rows
+  }, [teacherKpis])
+
   const metricCards = [
     {
       label: t('analytics.avgGrade'),
-      value: '78.4',
+      value: ov?.avgGrade != null ? ov.avgGrade.toFixed(1) : '—',
       unit: '/100',
       icon: GraduationCap,
       trendUp: true,
-      trend: `+2.1 ${t('common.thisMonth')}`,
+      trend: ov ? `${ov.gradesByType.reduce((n, g) => n + g.count, 0)} ta baho` : '',
       color: '#3B82F6',
     },
     {
       label: t('analytics.attendanceTrend'),
-      value: avgAttendance === '—' ? '91.2' : avgAttendance,
+      value: ov?.attendanceRate != null ? ov.attendanceRate.toFixed(1) : '—',
       unit: '%',
       icon: CalendarCheck,
-      trendUp: true,
-      trend: `+1.8% ${t('common.thisWeek')}`,
+      trendUp: (ov?.attendanceDelta ?? 0) >= 0,
+      trend: ov?.attendanceDelta != null
+        ? `${ov.attendanceDelta > 0 ? '+' : ''}${ov.attendanceDelta}% oldingi davrga`
+        : '',
       color: '#22C55E',
     },
     {
       label: t('analytics.avgRisk'),
-      value: avgRisk !== null ? String(avgRisk) : '34',
+      value: ov?.avgRisk != null ? String(Math.round(ov.avgRisk)) : '—',
       unit: '%',
       icon: ShieldAlert,
       trendUp: false,
-      trend: pyOffline ? t('common.noData') : `-3% ${t('common.thisWeek')}`,
+      trend: ov ? `${ov.highRisk} ta yuqori xavfda` : '',
       color: '#F59E0B',
     },
   ]
 
-  // Dropout table: prefer real data, fall back to mock
+  // Qoldirish xavfi: Python servisidan, u yetib bormasa umumiy ko'rsatkichdan
   const dropoutRows = riskData.length > 0
     ? riskData.slice(0, 8).map(r => ({
         name:   `${r.student.firstName} ${r.student.lastName}`,
@@ -191,7 +249,14 @@ function AdminAnalytics() {
         trend:  r.riskScore > 0.6 ? 'up' : 'down',
         id:     r.studentId,
       }))
-    : MOCK_DROPOUT.map(r => ({ ...r, id: undefined }))
+    : (ov?.topRisk ?? []).map(r => ({
+        name:   r.studentName,
+        course: r.courseTitle,
+        score:  Math.round(r.score * 100),
+        att:    0,
+        trend:  r.score > 0.6 ? 'up' : 'down',
+        id:     r.studentId,
+      }))
 
   return (
     <div className="space-y-5">
@@ -200,7 +265,7 @@ function AdminAnalytics() {
         <div>
           <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>{t('analytics.title')}</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>
-            {pyOffline ? '⚠ Analytics servisi offline — mock data ko\'rsatilmoqda' : 'Real-time tahlil'}
+            {pyOffline ? '⚠ Analytics servisi ishlamayapti — qiymatlar bazadan hisoblanmoqda' : 'Real-time tahlil'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -217,12 +282,12 @@ function AdminAnalytics() {
             style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)' }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-            <RefreshCw className={`size-3.5 ${riskLoading ? 'animate-spin' : ''}`} /> {t('attendance.refresh')}
+            <RefreshCw className={`size-4 ${riskLoading ? 'animate-spin' : ''}`} /> {t('attendance.refresh')}
           </button>
           <button onClick={triggerCalc} disabled={triggering || pyOffline}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white seasmp-btn disabled:opacity-50"
             style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
-            <TrendingUp className="size-3.5" /> {triggering ? 'Navbatda...' : 'ETL ishlatish'}
+            <TrendingUp className="size-4" /> {triggering ? 'Navbatda...' : 'ETL ishlatish'}
           </button>
         </div>
       </div>
@@ -240,14 +305,14 @@ function AdminAnalytics() {
               <div className="flex items-start justify-between mb-3">
                 <p className="text-xs font-medium" style={{ color: 'var(--s-muted)' }}>{label}</p>
                 <div className="p-2 rounded-lg" style={{ background: `${color}18` }}>
-                  <Icon className="size-4" style={{ color }} />
+                  <Icon className="size-[18px]" style={{ color }} />
                 </div>
               </div>
               <p className="text-3xl font-bold tabular-nums mb-2" style={{ color: 'var(--s-text)' }}>
                 {value}<span className="text-base font-normal ml-0.5" style={{ color: 'var(--s-muted)' }}>{unit}</span>
               </p>
               <div className="flex items-center gap-1 text-xs" style={{ color: trendUp ? '#22C55E' : '#F59E0B' }}>
-                {trendUp ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+                {trendUp ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
                 <span>{trend}</span>
               </div>
             </DC>
@@ -262,13 +327,13 @@ function AdminAnalytics() {
             <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--s-text)' }}>Baholar (baholash turiga ko'ra)</h2>
             <p className="text-xs mb-4" style={{ color: 'var(--s-muted)' }}>O'rtacha ball, 100 dan</p>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={GRADES_DATA} margin={{ left: -20, right: 4, top: 4, bottom: 0 }}>
+              <BarChart data={gradesData} margin={{ left: -20, right: 4, top: 4, bottom: 0 }}>
                 <CartesianGrid stroke="var(--s-border)" vertical={false} />
                 <XAxis dataKey="name" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 100]} tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<DarkTooltip unit="" />} />
                 <Bar dataKey="avg" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                  {GRADES_DATA.map((entry, i) => (
+                  {gradesData.map((entry, i) => (
                     <Cell key={i}
                       fill={entry.avg >= 80 ? '#22C55E' : entry.avg >= 70 ? '#3B82F6' : '#F59E0B'} />
                   ))}
@@ -283,7 +348,7 @@ function AdminAnalytics() {
             <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--s-text)' }}>Davomat dinamikasi</h2>
             <p className="text-xs mb-4" style={{ color: 'var(--s-muted)' }}>Haftalik davomat foizi</p>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={ATT_TREND} margin={{ left: -20, right: 4, top: 4, bottom: 0 }}>
+              <LineChart data={attTrend} margin={{ left: -20, right: 4, top: 4, bottom: 0 }}>
                 <defs>
                   <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%"   stopColor="#22C55E" stopOpacity={0.2} />
@@ -313,27 +378,22 @@ function AdminAnalytics() {
               <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>Asosiy ko'rsatkichlar bo'yicha</p>
             </div>
             <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--s-muted)' }}>
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full inline-block" style={{ background: '#3B82F6' }} />
-                Toshmatov
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full inline-block" style={{ background: '#22C55E' }} />
-                Rahimov
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full inline-block" style={{ background: '#F59E0B' }} />
-                Karimov
-              </span>
+              {teacherKpis.map((t, i) => (
+                <span key={t.kpi.teacherId} className="flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-full inline-block"
+                    style={{ background: ['#3B82F6', '#22C55E', '#F59E0B'][i] }} />
+                  {t.name}
+                </span>
+              ))}
             </div>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <RadarChart data={RADAR_DATA} margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
+            <RadarChart data={radarData} margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
               <PolarGrid stroke="var(--s-border)" />
               <PolarAngleAxis dataKey="metric" tick={{ fill: '#64748B', fontSize: 11 }} />
-              <Radar name="Toshmatov" dataKey="A" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.12} strokeWidth={2} />
-              <Radar name="Rahimov"   dataKey="B" stroke="#22C55E" fill="#22C55E" fillOpacity={0.12} strokeWidth={2} />
-              <Radar name="Karimov"   dataKey="C" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.12} strokeWidth={2} />
+              <Radar name={teacherKpis[0]?.name ?? "A"} dataKey="A" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.12} strokeWidth={2} />
+              <Radar name={teacherKpis[1]?.name ?? "B"} dataKey="B" stroke="#22C55E" fill="#22C55E" fillOpacity={0.12} strokeWidth={2} />
+              <Radar name={teacherKpis[2]?.name ?? "C"} dataKey="C" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.12} strokeWidth={2} />
               <Tooltip content={<DarkTooltip />} />
             </RadarChart>
           </ResponsiveContainer>
@@ -345,7 +405,7 @@ function AdminAnalytics() {
         <DC>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="size-4" style={{ color: '#EF4444' }} />
+              <AlertTriangle className="size-[18px]" style={{ color: '#EF4444' }} />
               <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>Qoldirish xavfi — talabalar</h2>
             </div>
             <Link href="/analytics/risk">
@@ -367,7 +427,7 @@ function AdminAnalytics() {
 
             {dropoutRows.map((r, i) => (
               <motion.div
-                key={r.name}
+                key={`${r.name}:${r.course}`}
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.4 + i * 0.05 }}
@@ -394,8 +454,8 @@ function AdminAnalytics() {
                 </div>
                 <div className="col-span-1 flex justify-center">
                   {r.trend === 'up'
-                    ? <TrendingUp className="size-4 text-red-400" />
-                    : <TrendingDown className="size-4 text-green-400" />
+                    ? <TrendingUp className="size-[18px] text-red-400" />
+                    : <TrendingDown className="size-[18px] text-green-400" />
                   }
                 </div>
               </motion.div>
@@ -460,7 +520,7 @@ function TeacherAnalytics({ userId }: { userId: string }) {
           <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>Kurs Analitikasi</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>O'qituvchi ko'rinishi</p>
         </div>
-        <Select value={courseId} onValueChange={v => setCourseId(v ?? '')}>
+        <Select value={courseId} onValueChange={v => setCourseId(v ?? '')} items={Object.fromEntries(courses.map(c => [c.id, c.title]))}>
           <SelectTrigger className="w-56"><SelectValue placeholder="Kursni tanlang" /></SelectTrigger>
           <SelectContent>
             {courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
@@ -471,7 +531,7 @@ function TeacherAnalytics({ userId }: { userId: string }) {
           style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)' }}
           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)'}
           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-          <RefreshCw className={`size-3.5 ${scoring ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`size-4 ${scoring ? 'animate-spin' : ''}`} />
           {scoring ? 'Navbatda...' : 'Xavfni hisoblash'}
         </button>
       </div>
@@ -518,7 +578,7 @@ function TeacherAnalytics({ userId }: { userId: string }) {
           {pyStats.at_risk_students.length > 0 && (
             <DC>
               <h2 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--s-text)' }}>
-                <AlertTriangle className="size-4 text-red-400" />
+                <AlertTriangle className="size-[18px] text-red-400" />
                 Xavf ostidagi talabalar ({pyStats.at_risk_students.length})
               </h2>
               <div className="space-y-2">

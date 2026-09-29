@@ -2,14 +2,17 @@
 
 import { ThemeProvider } from 'next-themes'
 import { AuthProvider } from '@/lib/auth-context'
+import { RealtimeProvider } from '@/lib/realtime'
 import { Toaster } from '@/components/ui/sonner'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="seasmp-theme" disableTransitionOnChange={false}>
       <AuthProvider>
-        {children}
-        <Toaster richColors position="top-right" />
+        <RealtimeProvider>
+          {children}
+          <Toaster richColors position="top-right" />
+        </RealtimeProvider>
       </AuthProvider>
     </ThemeProvider>
   )

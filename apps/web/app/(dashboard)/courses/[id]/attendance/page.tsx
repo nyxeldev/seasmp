@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { attendanceApi, enrollmentsApi, type Attendance, type Enrollment } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useCourse } from '@/lib/use-course'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,6 +15,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { useRealtime, useRealtimeEvent, type AttendanceMarkedEvent } from '@/lib/realtime'
 import { ArrowLeft, Plus, QrCode } from 'lucide-react'
 
 const STATUS_OPTS = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'] as const
@@ -32,20 +34,43 @@ export default function CourseAttendancePage() {
   const [open, setOpen]               = useState(false)
   const [qrOpen, setQrOpen]           = useState(false)
   const [qrToken, setQrToken]         = useState<string | null>(null)
+  const [qrImage, setQrImage]         = useState<string | null>(null)
   const [qrCountdown, setQrCountdown] = useState(0)
+
   const [form, setForm]               = useState({ enrollmentId: '', lessonDate: '', status: 'PRESENT' as AttStatus })
   const [qrDate, setQrDate]           = useState(new Date().toISOString().slice(0, 10))
 
+  // Manzildagi qism slug bo'lishi mumkin — quyidagi so'rovlar esa UUID kutadi
+  const { courseId } = useCourse(id)
+
   const load = useCallback(() => {
+    if (!courseId) return
     const q = filterDate ? `lessonDate=${filterDate}&limit=500` : 'limit=500'
-    attendanceApi.byCourse(id, q).then(r => setRecords(r.data)).catch(e => toast.error(e.message))
-  }, [id, filterDate])
+    attendanceApi.byCourse(courseId, q).then(r => setRecords(r.data)).catch(e => toast.error(e.message))
+  }, [courseId, filterDate])
 
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    enrollmentsApi.list(`courseId=${id}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
-  }, [id])
+    if (!courseId) return
+    enrollmentsApi.list(`courseId=${courseId}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
+  }, [courseId])
+
+  // Kurs xonasiga qo'shilish. Server ruxsatni O'ZI tekshiradi — xonaga
+  // faqat shu kursning o'qituvchisi, yozilgan talabasi yoki admin kiradi.
+  const { socket } = useRealtime()
+  useEffect(() => {
+    if (!socket || !courseId) return
+    socket.emit('join:course', courseId)
+    return () => { socket.emit('leave:course', courseId) }
+  }, [socket, courseId])
+
+  // Boshqa birov (yoki QR bilan talabaning o'zi) davomat belgilasa, jadval
+  // sahifani yangilamasdan to'ldiriladi.
+  useRealtimeEvent<AttendanceMarkedEvent>('attendance:marked', (e) => {
+    if (e.courseId !== courseId) return
+    load()
+  })
 
   // QR countdown
   useEffect(() => {
@@ -72,8 +97,12 @@ export default function CourseAttendancePage() {
 
   const generateQr = async () => {
     try {
-      const res = await attendanceApi.generateQr(id, qrDate)
+      // `id` — manzildagi qism, u slug bo'lishi mumkin. API bu yerda UUID kutadi,
+      // shuning uchun aniqlangan kursning identifikatori yuboriladi.
+      if (!courseId) return
+      const res = await attendanceApi.generateQr(courseId, qrDate)
       setQrToken(res.data.token)
+      setQrImage(res.data.qrCodeUrl)
       setQrCountdown(res.data.expiresIn)
     } catch (err: any) { toast.error(err.message) }
   }
@@ -98,7 +127,7 @@ export default function CourseAttendancePage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon-sm" render={<Link href={`/courses/${id}`} />}>
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-[18px]" />
         </Button>
         <h1 className="text-2xl font-semibold">Attendance</h1>
       </div>
@@ -137,7 +166,7 @@ export default function CourseAttendancePage() {
           <>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger render={<Button variant="outline" />}>
-                <Plus className="size-4" /> Mark Manual
+                <Plus className="size-[18px]" /> Mark Manual
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
@@ -175,9 +204,9 @@ export default function CourseAttendancePage() {
               </DialogContent>
             </Dialog>
 
-            <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrCountdown(0) } }}>
+            <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrImage(null); setQrCountdown(0) } }}>
               <DialogTrigger render={<Button />}>
-                <QrCode className="size-4" /> QR Attendance
+                <QrCode className="size-[18px]" /> QR Attendance
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader><DialogTitle>QR Attendance Token</DialogTitle></DialogHeader>
@@ -196,6 +225,14 @@ export default function CourseAttendancePage() {
                           {qrFmt}
                         </Badge>
                       </div>
+                      {/* Skanerlanadigan kod. API uni qaytarardi, lekin bu oyna
+                          faqat matnni ko'rsatib, rasmni tashlab yuborardi — ya'ni
+                          "skanerlang" deyilsa-da, skanerlaydigan narsa yo'q edi. */}
+                      {qrImage && (
+                        <div className="flex justify-center bg-white rounded-lg p-3">
+                          <img src={qrImage} alt="QR attendance code" className="size-44" />
+                        </div>
+                      )}
                       <p className="font-mono text-xs break-all bg-muted p-3 rounded select-all">{qrToken}</p>
                       <Button variant="outline" onClick={generateQr} className="w-full">Regenerate</Button>
                     </div>

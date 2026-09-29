@@ -5,14 +5,31 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { useTheme } from 'next-themes'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useLocale } from '@/store/locale'
 import type { TKey } from '@/store/locale'
 import {
   LayoutDashboard, BookOpen, Users, CalendarCheck,
-  TrendingUp, ShieldCheck, Settings, LogOut, Shield,
+  TrendingUp, ShieldCheck, Settings, LogOut, Shield, ChevronLeft,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+
+// ── Harakat ───────────────────────────────────────────────────────────────────
+// Yig'ilgan va yozilgan kengliklar. Ikonka HAR IKKI holatda bir xil gorizontal
+// nuqtada turishi uchun ular bilan birga hisoblanadi — ikonka sakramasa,
+// ochilish-yopilish sokin ko'rinadi.
+const RAIL_W = 64
+const FULL_W = 220
+const NAV_PAD = 8            // nav elementining px-2 chekkasi
+const ICON_W = 18            // lucide size-[18px]
+/** Ikonkaning chap chekkadan masofasi — tor holatda markazda turishi uchun */
+const ICON_LEFT = (RAIL_W - NAV_PAD * 2 - ICON_W) / 2
+
+/** Sokin, "elastik" emas egri chiziq — sakramaydi, cho'zilmaydi */
+const EASE = [0.22, 1, 0.36, 1] as const
+const WIDTH_S = 0.26
+
+export const SIDEBAR_WIDTH = { rail: RAIL_W, full: FULL_W }
 
 // ── Context ───────────────────────────────────────────────────────────────────
 interface SidebarCtx { collapsed: boolean; toggle: () => void }
@@ -146,6 +163,30 @@ export function Sidebar() {
   const pathname              = usePathname()
   const { collapsed, toggle } = useSidebar()
   const { t }                 = useLocale()
+  const reduce                = useReducedMotion()
+
+  /**
+   * Yorliqlar uchun harakat. Faqat `opacity` va `transform` — bular kompozitor
+   * qatlamida bajariladi. Ilgari bu yerda `width: 0 → auto` animatsiya qilinardi:
+   * brauzer har kadrda o'nlab element uchun layoutni qayta hisoblashi kerak edi
+   * va shundan siltanish chiqardi.
+   *
+   * Vaqtlash assimetrik: yozilganda yorliq konteyner kengaygach paydo bo'ladi,
+   * yig'ilganda esa darhol yo'qoladi — aks holda matn tor zolakka "surilib"
+   * kirgandek ko'rinadi.
+   */
+  const labelMotion = reduce
+    ? { initial: false as const, animate: { opacity: collapsed ? 0 : 1 }, transition: { duration: 0 } }
+    : {
+        initial:    { opacity: 0, x: -8 },
+        animate:    { opacity: 1, x: 0 },
+        exit:       { opacity: 0, x: -8 },
+        transition: { duration: 0.18, ease: EASE, delay: 0.06 },
+      }
+
+  const widthTransition = reduce
+    ? { duration: 0 }
+    : { duration: WIDTH_S, ease: EASE }
 
   if (!user) return null
 
@@ -156,8 +197,8 @@ export function Sidebar() {
   return (
     <div style={{ position: 'relative', flexShrink: 0, display: 'flex' }}>
       <motion.aside
-        animate={{ width: collapsed ? 64 : 220 }}
-        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+        animate={{ width: collapsed ? RAIL_W : FULL_W }}
+        transition={widthTransition}
         className="flex h-screen flex-col border-r overflow-hidden"
         style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
       >
@@ -165,16 +206,12 @@ export function Sidebar() {
         <div className="flex items-center gap-2 border-b px-3"
           style={{ borderColor: 'var(--color-border)', height: '56px', minHeight: '56px' }}>
           <div className="size-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
-            <Shield className="size-4 text-white" />
+            <Shield className="size-[18px] text-white" />
           </div>
           <AnimatePresence initial={false}>
             {!collapsed && (
-              <motion.span key="label"
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.2, ease: 'easeOut' as const }}
-                className="font-semibold text-sm overflow-hidden whitespace-nowrap"
+              <motion.span key="label" {...labelMotion}
+                className="font-semibold text-sm whitespace-nowrap"
                 style={{ color: 'var(--color-text1)' }}>
                 SEASMP
               </motion.span>
@@ -191,9 +228,12 @@ export function Sidebar() {
               <Link key={href} href={href}
                 className="flex items-center gap-2.5 rounded-lg py-2 text-sm font-medium transition-colors relative overflow-hidden"
                 style={{
-                  paddingLeft:    collapsed ? undefined : '10px',
-                  paddingRight:   collapsed ? undefined : '10px',
-                  justifyContent: collapsed ? 'center' : undefined,
+                  // Ikonka ikkala holatda ham bir xil nuqtada turadi: yig'ilganda
+                  // zolakning markazida, yozilganda esa o'sha joyda qoladi.
+                  // Ilgari `justifyContent` almashardi va ikonka har ochilishda
+                  // gorizontal sakrardi — ko'zga eng ko'p tashlanadigan joyi shu edi.
+                  paddingLeft:  `${ICON_LEFT}px`,
+                  paddingRight: '10px',
                   color:      active ? '#fff' : 'var(--color-text2)',
                   background: active ? '#2563EB' : 'transparent',
                 }}
@@ -207,15 +247,11 @@ export function Sidebar() {
                 }}}
               >
                 {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-white/60" />}
-                <Icon className="size-4 shrink-0" />
+                <Icon className="size-[18px] shrink-0" />
                 <AnimatePresence initial={false}>
                   {!collapsed && (
-                    <motion.span key="text"
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: 'auto' }}
-                      exit={{ opacity: 0, width: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeOut' as const }}
-                      className="truncate overflow-hidden whitespace-nowrap">
+                    <motion.span key="text" {...labelMotion}
+                      className="whitespace-nowrap">
                       {label}
                     </motion.span>
                   )}
@@ -242,11 +278,7 @@ export function Sidebar() {
           </Avatar>
           <AnimatePresence initial={false}>
             {!collapsed && (
-              <motion.div key="user-info"
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.2, ease: 'easeOut' as const }}
+              <motion.div key="user-info" {...labelMotion}
                 className="flex flex-1 items-center gap-1 min-w-0 overflow-hidden">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text1)' }}>
@@ -265,7 +297,7 @@ export function Sidebar() {
                     (e.currentTarget as HTMLElement).style.color = 'var(--color-text3)'
                     ;(e.currentTarget as HTMLElement).style.background = 'transparent'
                   }}>
-                  <LogOut className="size-4" />
+                  <LogOut className="size-[18px]" />
                 </button>
               </motion.div>
             )}
@@ -273,10 +305,13 @@ export function Sidebar() {
         </div>
       </motion.aside>
 
-      {/* Pull tab — circular, positioned at top: 72px */}
+      {/* Tortish tugmasi — yopiq/ochiq holatini o'qning burilishi ko'rsatadi */}
       <button
         onClick={toggle}
+        // aria-label ekran o'quvchilar uchun qoladi, lekin `title` yo'q:
+        // sichqoncha ustiga kelganda brauzer ko'rsatadigan izoh keraksiz edi
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-expanded={!collapsed}
         style={{
           position:       'absolute',
           right:          '-14px',
@@ -306,7 +341,15 @@ export function Sidebar() {
           ;(e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'
         }}
       >
-        {collapsed ? '→' : '←'}
+        {/* Matn o'qi ('←'/'→') o'rniga ikonka: shriftga bog'liq emas, qolgan
+            interfeys bilan bir xil to'plamdan va burilishi holatni ko'rsatadi */}
+        <motion.span
+          animate={{ rotate: collapsed ? 180 : 0 }}
+          transition={reduce ? { duration: 0 } : { duration: WIDTH_S, ease: EASE }}
+          className="flex"
+        >
+          <ChevronLeft className="size-4" />
+        </motion.span>
       </button>
     </div>
   )

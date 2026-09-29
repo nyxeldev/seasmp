@@ -48,8 +48,13 @@ describe('LoginPage — credentials step', () => {
     render(<LoginPage />)
     await userEvent.type(screen.getByLabelText(/email/i), 'admin@test.com')
     await userEvent.type(screen.getByLabelText(/parol/i), 'Password@1')
-    fireEvent.submit(screen.getByRole('button', { name: /kirish/i }))
-    expect(screen.getByRole('button')).toBeDisabled()
+    // Tugmani oldindan ushlab olamiz: yuklanish paytida uning matni "Kirish"
+    // dan "Kirilmoqda..." ga o'zgaradi, shuning uchun nom bo'yicha qayta topib
+    // bo'lmaydi. Nomsiz getByRole('button') esa endi ishlamaydi — sahifada
+    // mavzu almashtirgich, parol ko'zi va "Parolni unutdingizmi?" ham bor.
+    const submit = screen.getByRole('button', { name: /kirish/i })
+    fireEvent.submit(submit)
+    await waitFor(() => expect(submit).toBeDisabled())
   })
 
   it('transitions to totp step when requires_2fa', async () => {
@@ -59,7 +64,7 @@ describe('LoginPage — credentials step', () => {
     await userEvent.type(screen.getByLabelText(/parol/i), 'Password@1')
     await userEvent.click(screen.getByRole('button', { name: /kirish/i }))
     await waitFor(() => {
-      expect(screen.getByText(/ikki bosqichli/i)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /2fa tasdiqlash/i })).toBeInTheDocument()
     })
   })
 

@@ -19,6 +19,16 @@ export interface LayerSignals {
   behaviorScore: number
   /** Ommaviy ma'lumot chiqarish qoidasi ishladimi */
   massAccess: boolean
+  /**
+   * Imtiyozli aktor (ADMIN/SUPER_ADMIN) oynada NECHTA har xil egaga tegdi.
+   *
+   * Oddiy foydalanuvchi uchun begona obyektga murojaat o'zi belgidir. Admin
+   * uchun esa bu — ish tavsifi, shuning uchun uni FOREIGN deb belgilash
+   * jurnalni yolg'on signalga to'ldirardi. Admin uchun signal boshqa:
+   * bitta talabaning yozuvini ochish odatiy, o'n besh daqiqada oltmish xil
+   * talabaning yozuvini ochish esa yo'q.
+   */
+  privilegedOwners: number
 }
 
 export type Layer = 'AUTHORIZATION' | 'BEHAVIOR' | 'CORRELATED'
@@ -37,6 +47,26 @@ export const CORRELATED_THRESHOLD = 0.50
 /** Nechta rad etishdan keyin avtorizatsiya riski to'liq bo'ladi */
 export const DENIED_SATURATION = 5
 
+/**
+ * Imtiyozli qamrov: shu sondan kam egaga tegish umuman signal emas.
+ * Admin bir necha talabaning yozuvini ko'rishi — kundalik ish.
+ */
+export const PRIVILEGED_SCOPE_FLOOR = 20
+/** Shu sondan keyin qamrov riski to'yinadi */
+export const PRIVILEGED_SCOPE_SATURATION = 60
+/**
+ * Qamrov riskining TEPA CHEGARASI — ataylab SINGLE_THRESHOLD dan past.
+ *
+ * Ya'ni keng qamrov YOLG'IZ o'zi hech qachon ogohlantirish bermaydi: adminning
+ * ko'p talabani ko'rishi jinoyat emas. Lekin u endi nolga teng emas, shuning
+ * uchun xatti-harakat qatlami ham ishora bersa (notanish IP, tungi soat)
+ * ikkalasi birga CORRELATED_THRESHOLD dan o'tadi. Ishning gipotezasi aynan
+ * shu: yolg'iz zaif dalil bostiriladi, tasdiqlangani o'tkaziladi.
+ *
+ * Bu uchta son boshlang'ich qiymat — haqiqiy trafikda qayta o'lchanishi kerak.
+ */
+export const PRIVILEGED_SCOPE_CAP = 0.5
+
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x)
 
 /** Mustaqil signallarni birlashtirish (behaviorScoring dagi bilan bir xil g'oya) */
@@ -46,10 +76,22 @@ export function combineRisk(parts: number[]): number {
   return clamp01(1 - acc)
 }
 
+/**
+ * Imtiyozli aktorning qamrov riski: oynada nechta har xil egaga tegdi.
+ * Chiqish [0, PRIVILEGED_SCOPE_CAP] oralig'ida — yolg'iz ogohlantira olmaydi.
+ */
+export function privilegedScopeRisk(distinctOwners: number): number {
+  if (!(distinctOwners > PRIVILEGED_SCOPE_FLOOR)) return 0
+  const span = PRIVILEGED_SCOPE_SATURATION - PRIVILEGED_SCOPE_FLOOR
+  return clamp01((distinctOwners - PRIVILEGED_SCOPE_FLOOR) / span) * PRIVILEGED_SCOPE_CAP
+}
+
 /** Avtorizatsiya qatlamining riski */
 export function authzRisk(s: LayerSignals): number {
   if (s.authzAllowed > 0) return 1
-  return clamp01((s.authzDenied / DENIED_SATURATION) * 0.8)
+  const denied = clamp01((s.authzDenied / DENIED_SATURATION) * 0.8)
+  const scope  = privilegedScopeRisk(s.privilegedOwners)
+  return combineRisk([denied, scope])
 }
 
 /** Xatti-harakat qatlamining riski */
@@ -64,6 +106,7 @@ export function correlate(s: LayerSignals): CorrelationVerdict {
 
   if (s.authzAllowed > 0) reasons.push('FOREIGN_OBJECT_ALLOWED')
   else if (s.authzDenied > 0) reasons.push('FOREIGN_OBJECT_DENIED')
+  if (privilegedScopeRisk(s.privilegedOwners) > 0) reasons.push('PRIVILEGED_BROAD_SCOPE')
   if (s.massAccess) reasons.push('MASS_ACCESS')
   else if (s.behaviorScore > 0) reasons.push('BEHAVIOR_ANOMALY')
 

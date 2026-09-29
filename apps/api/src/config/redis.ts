@@ -5,12 +5,28 @@ import { logger } from './logger'
 // ── In-memory Redis for local dev when Docker is unavailable ──────────────────
 class MemRedis {
   private kv   = new Map<string, { v: string; exp?: number }>()
-  private sets = new Map<string, Set<string>>()
+  private sets = new Map<string, { s: Set<string>; exp?: number }>()
 
   private alive(k: string) {
     const e = this.kv.get(k)
     if (!e) return false
     if (e.exp && Date.now() > e.exp) { this.kv.delete(k); return false }
+    return true
+  }
+
+  /**
+   * To'plamlar uchun ham muddat tekshiriladi.
+   *
+   * Ilgari `expire` to'plamga nisbatan jimgina e'tiborsiz qoldirilardi. Bu
+   * `sig:priv_scope:<user>` uchun jiddiy edi: imtiyozli qamrov signali 15
+   * daqiqalik oynaga tayanadi va oyna yopilmasa har xil egalar butun jarayon
+   * davomida to'planib boraveradi. Admin kun bo'yi odatdagicha ishlaganda ham
+   * to'yinish chegarasidan oshib ketardi va yolg'on CORRELATED chiqarardi.
+   */
+  private setAlive(k: string) {
+    const e = this.sets.get(k)
+    if (!e) return false
+    if (e.exp && Date.now() > e.exp) { this.sets.delete(k); return false }
     return true
   }
 
@@ -38,49 +54,41 @@ class MemRedis {
   async expire(k: string, sec: number) {
     const e = this.kv.get(k)
     if (e) { e.exp = Date.now() + sec * 1000; return 1 }
-    const s = this.sets.get(k)
-    if (s) {
-      // store expiry separately for sets — simple approach: ignore for mem impl
-      return 1
-    }
+    if (this.setAlive(k)) { this.sets.get(k)!.exp = Date.now() + sec * 1000; return 1 }
     return 0
   }
   async ttl(k: string) {
     const e = this.kv.get(k)
-    if (!e?.exp) return -1
-    const r = Math.ceil((e.exp - Date.now()) / 1000)
-    return r > 0 ? r : -2
+    if (e) {
+      if (!e.exp) return -1
+      const r = Math.ceil((e.exp - Date.now()) / 1000)
+      return r > 0 ? r : -2
+    }
+    if (this.setAlive(k)) {
+      const exp = this.sets.get(k)!.exp
+      if (!exp) return -1
+      const r = Math.ceil((exp - Date.now()) / 1000)
+      return r > 0 ? r : -2
+    }
+    return -2
   }
   async ping() { return 'PONG' as const }
 
   // ── Set ops (used by checkMultiDevice / removeSessionIp) ────────────────────
   async sadd(k: string, ...members: string[]) {
-    if (!this.sets.has(k)) this.sets.set(k, new Set())
-    const s = this.sets.get(k)!
+    if (!this.setAlive(k)) this.sets.set(k, { s: new Set() })
+    const { s } = this.sets.get(k)!
     let added = 0
     for (const m of members) if (!s.has(m)) { s.add(m); added++ }
     return added
   }
-  async scard(k: string) { return this.sets.get(k)?.size ?? 0 }
+  async scard(k: string) { return this.setAlive(k) ? this.sets.get(k)!.s.size : 0 }
   async srem(k: string, ...members: string[]) {
-    const s = this.sets.get(k)
-    if (!s) return 0
+    if (!this.setAlive(k)) return 0
+    const { s } = this.sets.get(k)!
     let removed = 0
     for (const m of members) if (s.delete(m)) removed++
     return removed
-  }
-
-  // ── Pipeline stub — checkRateLimit is never called, just needs to type-check ─
-  pipeline() {
-    const pipe = {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      zremrangebyscore: (..._: any[]) => pipe,
-      zadd:             (..._: any[]) => pipe,
-      zcard:            (..._: any[]) => pipe,
-      expire:           (..._: any[]) => pipe,
-      exec: async () => [[null, 0], [null, 0], [null, 0], [null, 0]] as [null, number][],
-    }
-    return pipe
   }
 
   disconnect() { /* no-op */ }
@@ -99,7 +107,6 @@ type RedisLike = {
   sadd(k: string, ...members: string[]): Promise<number>
   scard(k: string): Promise<number>
   srem(k: string, ...members: string[]): Promise<number>
-  pipeline(): ReturnType<MemRedis['pipeline']>
   disconnect(): void
 }
 
@@ -172,7 +179,6 @@ class SafeRedis implements RedisLike {
   sadd(k: string, ...m: string[])        { return this.impl.sadd(k, ...m) }
   scard(k: string)                       { return this.impl.scard(k) }
   srem(k: string, ...m: string[])        { return this.impl.srem(k, ...m) }
-  pipeline()                             { return this.impl.pipeline() }
   disconnect()                           { this.impl.disconnect() }
 }
 
