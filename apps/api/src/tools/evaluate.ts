@@ -11,10 +11,14 @@
  * shu jadval keltiriladi.
  */
 import {
-  scoreEvent, isMassAccess, emptyProfile, ALERT_THRESHOLD,
+  scoreEvent, isMassAccess, emptyProfile,
   type BehaviorProfile,
 } from '../services/behaviorScoring'
-import { correlate, singleLayerVerdict, type LayerSignals } from '../services/correlation'
+import {
+  correlate, singleLayerVerdict,
+  SINGLE_THRESHOLD, CORRELATED_THRESHOLD,
+  type LayerSignals,
+} from '../services/correlation'
 
 // ── Takrorlanadigan tasodifiy sonlar ────────────────────────────────────────
 function rng(seed: number) {
@@ -47,6 +51,7 @@ function build(
   name: string, attack: boolean, profile: BehaviorProfile,
   ev: { hour: number; ip: string; ua: string; resource: string; req: number },
   authzDenied: number, authzAllowed: number,
+  privilegedOwners = 0,
 ): Case {
   const s = scoreEvent(profile, {
     hour: ev.hour, weekday: 2, ip: ev.ip, userAgent: ev.ua,
@@ -58,6 +63,7 @@ function build(
       authzDenied, authzAllowed,
       behaviorScore: s.score,
       massAccess: isMassAccess(ev.req, profile.reqPerHourMean),
+      privilegedOwners,
     },
   }
 }
@@ -86,12 +92,25 @@ function generate(seed: number, n: number): Case[] {
     out.push(build('O\'qituvchi ko\'p talabani ko\'radi', false, day,
       { hour: 11, ip: '10.0.0.5', ua: 'Chrome', resource: 'enrollments', req: 12 }, 0, 0))
 
-    // Shovqinli zararsiz holatlar — bir nechta zaif signal, lekin hujum emas
+    // Shovqinli zararsiz holatlar — bir nechta zaif signal, lekin hujum emas.
+    //
+    // Bu ssenariy ilgari QATTIQ YOZILGAN edi (hour:20, req:3, tasodifsiz),
+    // shuning uchun ko'p yugurishli barqarorlik tekshiruvida uning bali HAR
+    // DOIM bir xil chiqardi va std=0 ko'rsatardi — bu chegara qanchalik
+    // barqaror emasligini yashirardi. Endi soat va chastota bir oz suzadi:
+    // aynan shu ssenariy SINGLE_THRESHOLD ga eng yaqin turadigan zararsiz
+    // holat (bal ~0.7), shuning uchun uning haqiqiy tarqalishi muhim.
     out.push(build('Uydan, yangi qurilmada, kechqurun', false, day,
-      { hour: 20, ip: '78.40.1.55', ua: 'Safari-Mobile', resource: 'courses', req: 3 }, 0, 0))
+      { hour: 19 + Math.floor(r() * 3), ip: '78.40.1.55', ua: 'Safari-Mobile', resource: 'courses', req: 2 + Math.floor(r() * 3) }, 0, 0))
 
     out.push(build('Yangi bo\'limga qiziqish (qonuniy)', false, day,
       { hour: 15, ip: '10.0.0.5', ua: 'Chrome', resource: 'users', req: 4 }, 0, 0))
+
+    // Imtiyozli aktor keng qamrov bilan — bu ADMIN UCHUN ODATIY ISH.
+    // 1-qatlam endi bu yerda ham signal beradi, lekin ataylab zaif: yolg'iz
+    // o'zi hech qachon ogohlantira olmaydi.
+    out.push(build('Admin kundalik ko\'rikdan o\'tkazadi', false, night,
+      { hour: pick([22, 23, 0, 1]), ip: '10.0.0.9', ua: 'Firefox', resource: 'users', req: 6 }, 0, 0, 45))
 
     // ── HUJUM ─────────────────────────────────────────────────────────────
     out.push(build('IDOR paypaslash (rad etilgan)', true, day,
@@ -100,11 +119,21 @@ function generate(seed: number, n: number): Case[] {
     out.push(build('Muvaffaqiyatli IDOR', true, day,
       { hour: 14, ip: '10.0.0.5', ua: 'Chrome', resource: 'grades', req: 4 }, 0, 2))
 
+    // Bu ham ilgari qattiq yozilgan edi (hour:3, req:5) — aynan shu bal
+    // yuqoridagi zararsiz holat bilan SINGLE_THRESHOLD ni ikki tomondan
+    // siqib turadi. Endi u ham suzadi.
     out.push(build('O\'g\'irlangan hisob', true, day,
-      { hour: 3, ip: '203.0.113.9', ua: 'curl/8.0', resource: 'courses', req: 5 }, 0, 0))
+      { hour: pick([2, 3, 4]), ip: '203.0.113.9', ua: 'curl/8.0', resource: 'courses', req: 4 + Math.floor(r() * 3) }, 0, 0))
 
     out.push(build('Ommaviy ma\'lumot chiqarish', true, day,
       { hour: 12, ip: '10.0.0.5', ua: 'Chrome', resource: 'enrollments', req: 250 }, 0, 0))
+
+    // O'g'irlangan ADMIN hisobi: qamrov keng, lekin yolg'iz o'zi yetarli emas —
+    // notanish IP va begona qurilma bilan birga tasdiqlanadi. Ilgari 1-qatlam
+    // imtiyozli aktor uchun umuman jim edi, ya'ni bu holat faqat 2-qatlamga
+    // qolardi.
+    out.push(build('Admin hisobidan ma\'lumot chiqarish', true, night,
+      { hour: 3, ip: '198.51.100.7', ua: 'python-requests', resource: 'users', req: 8 }, 0, 0, 70))
 
     // Eng muhim holat: ikkala signal ham zaif, faqat birgalikda ko'rinadi
     out.push(build('Ehtiyotkor ichki tahdid', true, day,
@@ -190,10 +219,227 @@ function emitJson(cases: Case[], seed: number, attacks: number): void {
   }, null, 2))
 }
 
+// ── Ishlash nuqtasi: AYNAN ishlab chiqarishdagi qaror ───────────────────────
+//
+// ROC butun egri chiziqni beradi, ya'ni "chegara eng yaxshi qilib tanlansa"
+// degan taxminda. Ishlab chiqarishda esa chegara qat'iy: correlation.ts dagi
+// SINGLE_THRESHOLD va CORRELATED_THRESHOLD. Ikkisi bir xil narsa emas —
+// AUC 1.000 bo'lsa ham qat'iy chegarada yolg'on ishora chiqishi mumkin.
+//
+// Shuning uchun yozma ishda AYNAN shu jadval keltirilishi kerak: u tizim
+// haqiqatan qanday qaror qabul qilishini ko'rsatadi.
+
+interface Confusion { tp: number; fp: number; fn: number; tn: number }
+
+type Decider = (s: LayerSignals) => boolean
+
+const DECIDERS: Array<[string, Decider]> = [
+  ['Faqat 1-qatlam (avtorizatsiya)', (s) => singleLayerVerdict(s, 'AUTHORIZATION')],
+  ['Faqat 2-qatlam (xatti-harakat)', (s) => singleLayerVerdict(s, 'BEHAVIOR')],
+  ['Gibrid (korrelyatsiya)',          (s) => correlate(s).alert],
+]
+
+function confusion(cases: Case[], decide: Decider): Confusion {
+  const c: Confusion = { tp: 0, fp: 0, fn: 0, tn: 0 }
+  for (const x of cases) {
+    const alert = decide(x.signals)
+    if (x.attack) { if (alert) c.tp++; else c.fn++ }
+    else          { if (alert) c.fp++; else c.tn++ }
+  }
+  return c
+}
+
+function prf(c: Confusion): { precision: number; recall: number; f1: number } {
+  const precision = c.tp + c.fp > 0 ? c.tp / (c.tp + c.fp) : 0
+  const recall    = c.tp + c.fn > 0 ? c.tp / (c.tp + c.fn) : 0
+  const f1        = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0
+  return { precision, recall, f1 }
+}
+
+/** Qaysi stsenariylar noto'g'ri baholanadi — chegarani muhokama qilish uchun */
+function misclassified(cases: Case[], decide: Decider): { fp: string[]; fn: string[] } {
+  const fp = new Set<string>(), fn = new Set<string>()
+  for (const x of cases) {
+    const alert = decide(x.signals)
+    if (!x.attack && alert) fp.add(x.name)
+    if (x.attack && !alert) fn.add(x.name)
+  }
+  return { fp: [...fp], fn: [...fn] }
+}
+
+function reportOperatingPoint(cases: Case[]): void {
+  console.log(`
+Ishlash nuqtasi (yolg'iz qatlam >= ${SINGLE_THRESHOLD}, korrelyatsiya >= ${CORRELATED_THRESHOLD}):
+`)
+  console.log('konfiguratsiya'.padEnd(34), '  TP    FP    FN   aniqlik  qamrov      F1')
+  console.log('-'.repeat(34), '-'.repeat(46))
+  for (const [name, decide] of DECIDERS) {
+    const c = confusion(cases, decide)
+    const m = prf(c)
+    console.log(
+      name.padEnd(34),
+      String(c.tp).padStart(4), String(c.fp).padStart(5), String(c.fn).padStart(5),
+      m.precision.toFixed(3).padStart(9), m.recall.toFixed(3).padStart(8), m.f1.toFixed(3).padStart(8),
+    )
+  }
+
+  for (const [name, decide] of DECIDERS) {
+    const { fp, fn } = misclassified(cases, decide)
+    if (fp.length === 0 && fn.length === 0) continue
+    console.log(`
+  ${name}:`)
+    for (const x of fp) console.log(`    yolg'on ishora  : ${x}`)
+    for (const x of fn) console.log(`    o'tkazib yubordi: ${x}`)
+  }
+  console.log()
+}
+
+// ── Ko'p yugurishli barqarorlik: chegaralarni asoslash ──────────────────────
+//
+// Bitta seed = bitta raqam muammosi: F1=1.000 degan da'vo bitta tasodifiy
+// chizishga tayangan bo'lishi mumkin. Bu qism bir xil ishlash nuqtasini ko'p
+// marta, har safar boshqa seed bilan hisoblaydi va natijaning qanchalik
+// BARQAROR ekanini (standart og'ish orqali) ko'rsatadi. Yozma ishda
+// "F1=1.000" o'rniga "F1=1.000±0.000, N=30 yugurish" deyish mumkin bo'ladi —
+// bu ancha kuchli da'vo.
+
+function mean(xs: number[]): number {
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0
+}
+function stdev(xs: number[]): number {
+  if (xs.length === 0) return 0
+  const m = mean(xs)
+  return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)))
+}
+
+interface TrialStats { precision: number[]; recall: number[]; f1: number[]; fp: number[]; fn: number[] }
+
+/** Katta tub son bilan siljitish — ketma-ket seedlar bir-biriga o'xshab qolmasin */
+const SEED_STRIDE = 7919
+
+function runTrials(baseSeed: number, trials: number, n: number): Map<string, TrialStats> {
+  const stats = new Map<string, TrialStats>()
+  for (const [name] of DECIDERS) stats.set(name, { precision: [], recall: [], f1: [], fp: [], fn: [] })
+
+  for (let t = 0; t < trials; t++) {
+    const cases = generate(baseSeed + t * SEED_STRIDE, n)
+    for (const [name, decide] of DECIDERS) {
+      const c = confusion(cases, decide)
+      const m = prf(c)
+      const s = stats.get(name)!
+      s.precision.push(m.precision); s.recall.push(m.recall); s.f1.push(m.f1)
+      s.fp.push(c.fp); s.fn.push(c.fn)
+    }
+  }
+  return stats
+}
+
+function reportTrials(stats: Map<string, TrialStats>, trials: number, n: number): void {
+  console.log("")
+  console.log(`${trials} MARTA TAKRORLANGAN ISHLASH NUQTASI (har safar boshqa seed, holat/yugurish=${n * 12})`)
+  console.log("")
+  console.log("Standart og'ish qancha kichik bo'lsa, ishlash nuqtasi shuncha barqaror —")
+  console.log("ya'ni natija tasodifiy chizishga emas, tizimning o'ziga tegishli.")
+  console.log("")
+  console.log("konfiguratsiya".padEnd(34), "aniqlik (o'rt±std)", "qamrov (o'rt±std)", "   F1 (o'rt±std)", "  FP (o'rt, min-max)")
+  console.log("-".repeat(34), "-".repeat(95))
+  for (const [name, s] of stats) {
+    console.log(
+      name.padEnd(34),
+      `${mean(s.precision).toFixed(3)}±${stdev(s.precision).toFixed(3)}`.padStart(20),
+      `${mean(s.recall).toFixed(3)}±${stdev(s.recall).toFixed(3)}`.padStart(20),
+      `${mean(s.f1).toFixed(3)}±${stdev(s.f1).toFixed(3)}`.padStart(20),
+      `${mean(s.fp).toFixed(1)} (${Math.min(...s.fp)}-${Math.max(...s.fp)})`.padStart(20),
+    )
+  }
+  console.log("")
+}
+
+// ── Chegara grid-qidiruvi ────────────────────────────────────────────────────
+//
+// SINGLE_THRESHOLD=0.75 va CORRELATED_THRESHOLD=0.50 correlation.ts da
+// QOTIRILGAN qiymatlar edi — hech qachon boshqa nuqta bilan solishtirilmagan.
+// Bu funksiya ikkala chegarani mustaqil o'zgartirib, har nuqtada jami
+// (FP+FN) ni ko'p yugurish bo'yicha o'rtachalab beradi. correlate() ning o'zi
+// TEGILMAYDI — mantiq shu yerda authzRisk/behaviorRisk/combineRisk dan qayta
+// yig'iladi, faqat chegara qiymati parametr bo'ladi.
+
+function decideWithThresholds(s: LayerSignals, singleT: number, corrT: number): boolean {
+  const a = authzRisk(s)
+  const b = behaviorRisk(s)
+  if (a <= 0 && b <= 0) return false
+  const both = a > 0 && b > 0
+  const risk = combineRisk([a, b])
+  return risk >= (both ? corrT : singleT)
+}
+
+function sweepThresholds(baseSeed: number, trials: number, n: number): void {
+  const singleGrid = [0.60, 0.65, 0.70, 0.75, 0.80, 0.85]
+  const corrGrid   = [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60]
+
+  const allTrials: Case[][] = []
+  for (let t = 0; t < trials; t++) allTrials.push(generate(baseSeed + t * SEED_STRIDE, n))
+  const totalCases = allTrials.reduce((a, c) => a + c.length, 0)
+
+  console.log("")
+  console.log(`CHEGARA GRID-QIDIRUVI (${trials} yugurish x ${n} takror, jami ${totalCases} holat/nuqta)`)
+  console.log("")
+  console.log("Har katakcha: jami FP+FN (kichikroq — yaxshiroq). '-' — korrelyatsiya chegarasi")
+  console.log("yolg'iz chegaradan past bo'lishi SHART (gipoteza: birgalikda past chegara")
+  console.log("yetarli), shuning uchun teskarisi sinalmaydi. Joriy ishlab chiqarish qiymati [*].")
+  console.log("")
+
+  const header = ["korrelyatsiya \\ yolg'iz"].concat(singleGrid.map((v) => v.toFixed(2)))
+  console.log(header.map((h, i) => (i === 0 ? h.padEnd(24) : h.padStart(8))).join(""))
+
+  let best: { s: number; c: number; cost: number } | null = null
+
+  for (const corrT of corrGrid) {
+    const row: string[] = [corrT.toFixed(2).padEnd(24)]
+    for (const singleT of singleGrid) {
+      if (corrT >= singleT) { row.push("-".padStart(8)); continue }
+      let totalFp = 0, totalFn = 0
+      for (const cases of allTrials) {
+        for (const c of cases) {
+          const alert = decideWithThresholds(c.signals, singleT, corrT)
+          if (!c.attack && alert) totalFp++
+          if (c.attack && !alert) totalFn++
+        }
+      }
+      const cost = totalFp + totalFn
+      const isProd = Math.abs(singleT - SINGLE_THRESHOLD) < 1e-9 && Math.abs(corrT - CORRELATED_THRESHOLD) < 1e-9
+      row.push((isProd ? `${cost}*` : String(cost)).padStart(8))
+      if (!best || cost < best.cost) best = { s: singleT, c: corrT, cost }
+    }
+    console.log(row.join(""))
+  }
+
+  console.log("")
+  console.log(`Eng kam xato: SINGLE=${best?.s.toFixed(2)}, CORRELATED=${best?.c.toFixed(2)} (jami xato: ${best?.cost})`)
+  console.log(`Joriy ishlab chiqarish:  SINGLE=${SINGLE_THRESHOLD}, CORRELATED=${CORRELATED_THRESHOLD}`)
+  console.log("")
+  console.log("DIQQAT: bu grid ATAYLAB ishlab chiqarish qiymatini o'zgartirmaydi — faqat")
+  console.log("tanlovni asoslaydi yoki muqobil nuqtani ko'rsatadi. Chegarani shu stend")
+  console.log("natijasiga moslashtirish o'sha stendning o'zi o'lchayotgan narsaga")
+  console.log("moslashtirish bo'lardi — haqiqiy o'zgartirish haqiqiy trafik talab qiladi.")
+  console.log("")
+}
+
 function main(): void {
   const args = process.argv.slice(2)
   const seed = Number(args.find((a) => a.startsWith('--seed='))?.split('=')[1] ?? 42)
   const n    = Number(args.find((a) => a.startsWith('--n='))?.split('=')[1] ?? 100)
+
+  // --trials=K: bitta seed emas, K ta seed bilan barqarorlikni tekshiradi.
+  // --sweep: shu yordamida chegara grid-qidiruvini ham ishga tushiradi.
+  const trialsArg = args.find((a) => a.startsWith('--trials='))
+  if (trialsArg) {
+    const trials = Number(trialsArg.split('=')[1])
+    const stats = runTrials(seed, trials, n)
+    reportTrials(stats, trials, n)
+    if (args.includes('--sweep')) sweepThresholds(seed, trials, n)
+    return
+  }
 
   const cases = generate(seed, n)
   const attacks = cases.filter((c) => c.attack).length
@@ -220,6 +466,7 @@ function main(): void {
     )
   }
 
+  reportOperatingPoint(cases)
   console.log('\nTahdid sinflari bo\'yicha o\'rtacha ball:\n')
   const byName = new Map<string, { attack: boolean; sums: number[]; n: number }>()
   for (const c of cases) {

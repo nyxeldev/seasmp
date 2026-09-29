@@ -16,6 +16,19 @@
  *        --concurrency 20 --duration 20 --label "yoqilgan"
  *
  * k6 o'rnatilmagan muhitlarda ishlashi uchun ataylab bog'liqliksiz yozilgan.
+ *
+ * WINDOWS / GIT BASH: `--path` ni MSYS_NO_PATHCONV=1 bilan bering.
+ *
+ *   MSYS_NO_PATHCONV=1 node load-tests/detection-overhead.js --path /v1/courses/<id>
+ *
+ * Aks holda Git Bash "/v1/..." ni Windows yo'liga aylantiradi va skript
+ * "C:/Program Files/Git/v1/..." ga so'rov yuboradi. Natija jimgina noto'g'ri
+ * chiqadi: barcha so'rovlar xato bo'ladi, lekin o'tkazuvchanlik raqami
+ * baribir chop etiladi va u juda katta ko'rinadi.
+ *
+ * Shuningdek `--concurrency` bilan o'lchayotganda RATE_LIMIT_MAX ni
+ * ko'taring, aks holda o'lchov aniqlash qatlamini emas, tezlik
+ * cheklagichini o'lchaydi (hammasi 429 qaytaradi).
  */
 
 function arg(name, fallback) {

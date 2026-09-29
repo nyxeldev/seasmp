@@ -50,6 +50,12 @@ nginx/ssl/*.crt
 *.joblib
 models/trained/
 
+# Analitika servisining model chiqishi. *.pkl allaqachon to'silgan, lekin
+# model_metadata.json emas edi — o'qitilgan model papkasi butunligicha
+# repodan tashqarida qolsin (u `analytics_models` volumida yashaydi).
+# apps/analytics/.dockerignore ham xuddi shu yo'lni to'sadi.
+apps/analytics/ml/models/
+
 # Docker volumes (local)
 docker/volumes/
 

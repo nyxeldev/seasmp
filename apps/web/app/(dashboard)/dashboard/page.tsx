@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/lib/auth-context'
+import { analyticsApi, securityApi, type AnalyticsOverview } from '@/lib/api'
 import { useRole } from '@/hooks/useRole'
 import { useLocale } from '@/store/locale'
 import {
@@ -51,42 +52,50 @@ function useCounter(target: number, duration = 1600) {
   return count
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const ATTENDANCE_DATA = [
-  { day: 'May 17', pct: 89 },
-  { day: 'May 18', pct: 92 },
-  { day: 'May 19', pct: 87 },
-  { day: 'May 20', pct: 94 },
-  { day: 'May 21', pct: 91 },
-  { day: 'May 22', pct: 95 },
-  { day: 'May 23', pct: 93 },
-]
-
-const RISK_STUDENTS = [
-  { name: 'Aliyev Jasur',      course: 'Matematika',  score: 87, absences: 14 },
-  { name: 'Karimova Nilufar',  course: 'Fizika',      score: 71, absences: 11 },
-  { name: 'Toshmatov Bobur',   course: 'Kimyo',       score: 64, absences: 9  },
-  { name: 'Rahimova Zulfiya',  course: 'Biologiya',   score: 52, absences: 7  },
-  { name: 'Nazarov Sherzod',   course: 'Tarix',       score: 43, absences: 6  },
-]
-
 type ActivityType = 'login' | 'attendance' | 'grade' | 'user' | 'course' | 'security' | 'report'
 interface Activity {
   id: number; type: ActivityType; actor: string; msg: string; time: string; icon: Icon
 }
 
-const ACTIVITY: Activity[] = [
-  { id: 1,  type: 'login',      actor: 'Aliyev Jasur',     msg: 'Tizimga kirdi',                    time: '2 daqiqa oldin',   icon: LogIn       },
-  { id: 2,  type: 'attendance', actor: 'Rahimov Sardor',   msg: 'Davomat belgilandi — Matematika',  time: '15 daqiqa oldin',  icon: CalendarCheck },
-  { id: 3,  type: 'grade',      actor: 'Admin',            msg: "Karimova baho qo'shildi: 85",      time: '32 daqiqa oldin',  icon: Star        },
-  { id: 4,  type: 'user',       actor: 'Admin',            msg: "Yangi o'quvchi ro'yxatga olindi",  time: '1 soat oldin',     icon: UserPlus    },
-  { id: 5,  type: 'course',     actor: 'Admin',            msg: 'Fizika kursi faollashtirildi',     time: '2 soat oldin',     icon: BookOpen    },
-  { id: 6,  type: 'security',   actor: 'Toshmatov Bobur',  msg: "Noma'lum IP-dan kirish urinishi",  time: '3 soat oldin',     icon: AlertTriangle },
-  { id: 7,  type: 'login',      actor: 'Rahimova Zulfiya', msg: 'Tizimga kirdi',                    time: '4 soat oldin',     icon: LogIn       },
-  { id: 8,  type: 'grade',      actor: 'Nazarov M.',       msg: 'Matematika bahosi yangilandi: 92', time: '5 soat oldin',     icon: Star        },
-  { id: 9,  type: 'report',     actor: 'Admin',            msg: "Oylik hisobot yaratildi",          time: '6 soat oldin',     icon: FileText    },
-  { id: 10, type: 'security',   actor: 'System',           msg: '2FA muvaffaqiyatli yoqildi',       time: '8 soat oldin',     icon: ShieldCheck },
-]
+/** Audit harakatini tasmadagi ko'rinishga bog'laydi. Ro'yxatda yo'q harakat chiqmaydi. */
+const AUDIT_ACTIVITY: Record<string, { type: ActivityType; msg: string; icon: Icon }> = {
+  LOGIN:            { type: 'login',      msg: 'Tizimga kirdi',            icon: LogIn },
+  LOGIN_FAILED:     { type: 'security',   msg: 'Kirishda xatolik',         icon: AlertTriangle },
+  ATTENDANCE_MARK:  { type: 'attendance', msg: 'Davomat belgilandi',       icon: CalendarCheck },
+  GRADE_SUBMIT:     { type: 'grade',      msg: "Baho qo'yildi",            icon: Star },
+  CREATE:           { type: 'user',       msg: 'Yangi yozuv yaratildi',    icon: UserPlus },
+  UPDATE:           { type: 'course',     msg: 'Yozuv yangilandi',         icon: BookOpen },
+  DELETE:           { type: 'security',   msg: "Yozuv o'chirildi",         icon: AlertTriangle },
+  ENROLL:           { type: 'user',       msg: 'Kursga yozildi',           icon: UserPlus },
+  ROLE_CHANGE:      { type: 'security',   msg: "Rol o'zgartirildi",        icon: ShieldCheck },
+  PASSWORD_CHANGE:  { type: 'security',   msg: "Parol o'zgartirildi",      icon: ShieldCheck },
+  TWO_FA_SETUP:     { type: 'security',   msg: '2FA yoqildi',              icon: ShieldCheck },
+  ACCESS_DENIED:    { type: 'security',   msg: 'Ruxsatsiz urinish',        icon: AlertTriangle },
+  IP_BLOCKED:       { type: 'security',   msg: 'IP bloklandi',             icon: AlertTriangle },
+}
+
+/**
+ * Grafik o'qi uchun qisqa sana.
+ *
+ * `toLocaleDateString('uz-UZ', { month: 'short' })` brauzerda "M09" qaytaradi —
+ * uz lokalining oy nomlari to'liq emas. Shuning uchun o'zbekcha qo'lda.
+ */
+const UZ_MONTHS = ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek']
+
+function shortDate(iso: string, locale: string): string {
+  const d = new Date(iso)
+  if (locale === 'uz') return `${d.getDate()}-${UZ_MONTHS[d.getMonth()]}`
+  return d.toLocaleDateString(locale === 'ru' ? 'ru-RU' : 'en-US', { month: 'short', day: 'numeric' })
+}
+
+/** Qisqa nisbiy vaqt — tasma uchun */
+function relTime(iso: string): string {
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
+  if (s < 60)    return 'hozir'
+  if (s < 3600)  return `${Math.round(s / 60)} daqiqa oldin`
+  if (s < 86400) return `${Math.round(s / 3600)} soat oldin`
+  return `${Math.round(s / 86400)} kun oldin`
+}
 
 const ACTIVITY_COLORS: Record<ActivityType, string> = {
   login:      '#3B82F6',
@@ -175,8 +184,11 @@ interface KpiProps {
   target: number
   suffix?: string
   icon: Icon
-  trendDir: 'up' | 'down'
-  trendVal: string
+  // Trend ixtiyoriy: hamma ko'rsatkich uchun oldingi davr bilan taqqoslash
+  // mavjud emas (talaba soni tarixi saqlanmaydi). Ma'lumot bo'lmasa nishon
+  // umuman chizilmaydi — to'qib chiqarilgan "+12" dan ko'ra shunisi halol.
+  trendDir?: 'up' | 'down'
+  trendVal?: string
   trendColor: 'green' | 'amber' | 'red'
   pulse?: boolean
 }
@@ -198,7 +210,7 @@ function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, t
         <div className="flex items-start justify-between mb-3">
           <p className="text-sm font-medium" style={{ color: 'var(--s-muted)' }}>{label}</p>
           <div className="p-2 rounded-lg" style={{ background: 'rgba(59,130,246,0.1)' }}>
-            <Icon className="size-4" style={{ color: '#3B82F6' }} />
+            <Icon className="size-[18px]" style={{ color: '#3B82F6' }} />
           </div>
         </div>
 
@@ -213,14 +225,18 @@ function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, t
               <span className="relative inline-flex size-2 rounded-full" style={{ background: '#EF4444' }} />
             </span>
           )}
-          <span
-            className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium"
-            style={{ color: trendText, background: trendBg }}
-          >
-            <TrendIcon className="size-3" />
-            {trendVal}
-          </span>
-          <span className="text-xs" style={{ color: 'var(--s-muted)' }}>bu oy</span>
+          {trendVal && (
+            <>
+              <span
+                className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium"
+                style={{ color: trendText, background: trendBg }}
+              >
+                <TrendIcon className="size-3.5" />
+                {trendVal}
+              </span>
+              <span className="text-xs" style={{ color: 'var(--s-muted)' }}>oldingi davrga nisbatan</span>
+            </>
+          )}
         </div>
       </DashCard>
     </motion.div>
@@ -229,16 +245,83 @@ function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, t
 
 // ── Admin dashboard ───────────────────────────────────────────────────────────
 function AdminDashboard() {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
+
+  // Bu sahifa ilgari qattiq yozilgan raqamlarni chizardi (247 o'quvchi, 94%
+  // davomat, "Aliyev Jasur — 87% xavf"). Bazada bunday ma'lumot yo'q edi, ya'ni
+  // ekrandagi hech narsa tizimning haqiqiy holatini aks ettirmasdi.
+  const [data, setData]       = useState<AnalyticsOverview | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    analyticsApi.overview(30)
+      .then(r => { if (!cancelled) setData(r.data) })
+      .catch(() => { if (!cancelled) setData(null) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
   const kpis: KpiProps[] = [
-    { label: t('dashboard.totalStudents'), target: 247, icon: Users,          trendDir: 'up',   trendVal: '+12',  trendColor: 'green' },
-    { label: t('dashboard.activeCourses'), target: 18,  icon: BookOpen,       trendDir: 'up',   trendVal: '+3',   trendColor: 'green' },
-    { label: t('dashboard.avgAttendance'), target: 94,  suffix: '%', icon: CalendarCheck, trendDir: 'down', trendVal: '-2%',  trendColor: 'amber' },
-    { label: t('dashboard.highRisk'),      target: 12,  icon: AlertTriangle,  trendDir: 'up',   trendVal: '+5',   trendColor: 'red', pulse: true },
+    { label: t('dashboard.totalStudents'), target: data?.students ?? 0,       icon: Users,         trendColor: 'green' },
+    { label: t('dashboard.activeCourses'), target: data?.activeCourses ?? 0,  icon: BookOpen,      trendColor: 'green' },
+    { label: t('dashboard.avgAttendance'), target: Math.round(data?.attendanceRate ?? 0), suffix: '%', icon: CalendarCheck,
+      trendColor: (data?.attendanceDelta ?? 0) >= 0 ? 'green' : 'amber',
+      trendDir:   (data?.attendanceDelta ?? 0) >= 0 ? 'up' : 'down',
+      trendVal:   data?.attendanceDelta != null ? `${data.attendanceDelta > 0 ? '+' : ''}${data.attendanceDelta}%` : undefined },
+    { label: t('dashboard.highRisk'),      target: data?.highRisk ?? 0,       icon: AlertTriangle, trendColor: 'red', pulse: (data?.highRisk ?? 0) > 0 },
   ]
+
+  // Grafik uchun sana yorlig'i — foydalanuvchi tilida
+  // useMemo: Recharts massiv identiteti o'zgarsa animatsiyani qayta boshlaydi
+  const trend = useMemo(
+    () => (data?.attendanceTrend ?? []).slice(-14).map(d => ({
+      day: shortDate(d.date, locale),
+      pct: d.rate,
+    })),
+    [data, locale],
+  )
+
+  // ── Faollik tasmasi ────────────────────────────────────────────────────────
+  // Ilgari bu ro'yxat ham to'qima edi ("Aliyev Jasur tizimga kirdi — 2 daqiqa
+  // oldin"). Endi audit jurnalidan o'qiladi; kundalik oqim (ACCESS) chiqarib
+  // tashlanadi, aks holda tasma faqat sahifa ko'rishlaridan iborat bo'lardi.
+  const [activity, setActivity] = useState<Activity[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    securityApi.auditLogs('limit=40')
+      .then(r => {
+        if (cancelled) return
+        const rows = (Array.isArray(r.data) ? r.data : [])
+          .filter(l => l.action in AUDIT_ACTIVITY)
+          .slice(0, 10)
+          .map((l, i) => {
+            const cfg = AUDIT_ACTIVITY[l.action]
+            return {
+              id:    i,
+              type:  cfg.type,
+              actor: l.user ? `${l.user.firstName} ${l.user.lastName}` : (l.ipAddress ?? 'Tizim'),
+              msg:   `${cfg.msg}${l.resource ? ` — ${l.resource}` : ''}`,
+              time:  relTime(l.createdAt),
+              icon:  cfg.icon,
+            } satisfies Activity
+          })
+        setActivity(rows)
+      })
+      .catch(() => { if (!cancelled) setActivity([]) })
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div className="space-y-6">
+      {/* Sahifaning h1 i. Talaba va o'qituvchi variantlarida bor edi, admin
+          variantida esa umuman yo'q edi — ya'ni asosiy sahifa sarlavhasiz
+          qolardi. Ekran o'quvchilar sahifani shundan aniqlaydi. */}
+      <h1 className="text-xl font-semibold" style={{ color: 'var(--s-text)' }}>
+        {t('dashboard.title')}
+      </h1>
+
       {/* KPI cards */}
       <motion.div
         className="kpi-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
@@ -257,18 +340,26 @@ function AdminDashboard() {
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{t('dashboard.attendanceTrend')}</h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>So'nggi 7 kun</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>So'nggi {trend.length} dars kuni</p>
               </div>
-              <Badge
-                className="text-xs px-2 py-0.5"
-                style={{ background: 'rgba(34,197,94,0.1)', color: '#22C55E', border: 'none' }}
-              >
-                ↑ 4% o'sdi
-              </Badge>
+              {/* Oldingi davr bilan haqiqiy taqqoslash. Ilgari bu yerda
+                  o'zgarmas "↑ 4% o'sdi" turardi. */}
+              {data?.attendanceDelta != null && (
+                <Badge
+                  className="text-xs px-2 py-0.5"
+                  style={
+                    data.attendanceDelta >= 0
+                      ? { background: 'rgba(34,197,94,0.1)',  color: '#22C55E', border: 'none' }
+                      : { background: 'rgba(245,158,11,0.1)', color: '#F59E0B', border: 'none' }
+                  }
+                >
+                  {data.attendanceDelta >= 0 ? '↑' : '↓'} {Math.abs(data.attendanceDelta)}%
+                </Badge>
+              )}
             </div>
 
             <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={ATTENDANCE_DATA} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <AreaChart data={trend} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor="#3B82F6" stopOpacity={0.25} />
@@ -312,25 +403,30 @@ function AdminDashboard() {
                 <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{t('dashboard.riskStudents')}</h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--s-muted)' }}>Top 5 · qoldirish ehtimoli</p>
               </div>
-              <AlertTriangle className="size-4" style={{ color: '#EF4444' }} />
+              <AlertTriangle className="size-[18px]" style={{ color: '#EF4444' }} />
             </div>
 
             <div className="space-y-3">
-              {RISK_STUDENTS.map((s, i) => (
+              {(data?.topRisk ?? []).map((s, i) => (
                 <motion.div
-                  key={s.name}
+                  key={s.enrollmentId}
                   initial={{ opacity: 0, x: 16 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.35 + i * 0.07, duration: 0.35 }}
                   className="flex items-center gap-3"
                 >
-                  <RiskRing score={s.score} />
+                  <RiskRing score={Math.round(s.score * 100)} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" style={{ color: 'var(--s-text)' }}>{s.name}</p>
-                    <p className="text-xs truncate" style={{ color: 'var(--s-muted)' }}>{s.course} · {s.absences} sinfdan qoldi</p>
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--s-text)' }}>{s.studentName}</p>
+                    <p className="text-xs truncate" style={{ color: 'var(--s-muted)' }}>{s.courseTitle}</p>
                   </div>
                 </motion.div>
               ))}
+              {!loading && (data?.topRisk.length ?? 0) === 0 && (
+                <p className="text-xs py-6 text-center" style={{ color: 'var(--s-muted)' }}>
+                  Xavf ostidagi o&apos;quvchi yo&apos;q
+                </p>
+              )}
             </div>
           </DashCard>
         </motion.div>
@@ -341,11 +437,16 @@ function AdminDashboard() {
         <DashCard>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{t('dashboard.recentActivity')}</h2>
-            <span className="text-xs" style={{ color: 'var(--s-muted)' }}>10 ta voqea</span>
+            <span className="text-xs" style={{ color: 'var(--s-muted)' }}>{activity.length} ta voqea</span>
           </div>
 
           <div className="space-y-0.5">
-            {ACTIVITY.map((ev, i) => {
+            {activity.length === 0 && !loading && (
+              <p className="text-xs py-6 text-center" style={{ color: 'var(--s-muted)' }}>
+                Hozircha voqea yo&apos;q
+              </p>
+            )}
+            {activity.map((ev, i) => {
               const Icon  = ev.icon
               const color = ACTIVITY_COLORS[ev.type]
               return (
@@ -362,7 +463,7 @@ function AdminDashboard() {
                     className="size-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
                     style={{ background: `${color}18` }}
                   >
-                    <Icon className="size-3.5" style={{ color }} />
+                    <Icon className="size-4" style={{ color }} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm leading-snug" style={{ color: 'var(--s-text)' }}>

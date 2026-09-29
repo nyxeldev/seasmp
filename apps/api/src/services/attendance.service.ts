@@ -3,9 +3,19 @@ import * as QRCode from 'qrcode'
 import { prisma } from '../config/prisma'
 import { redis } from '../config/redis'
 import { auditService } from './audit.service'
+import { notificationService } from './notification.service'
+import { emitAttendanceMarked } from '../realtime/gateway'
 import type { AttendanceStatus, UserRole } from '@prisma/client'
 
 const QR_TTL_SECONDS = 300 // QR token 5 daqiqa amal qiladi
+
+/** Davomat holati bo'yicha bildirishnoma sarlavhasi */
+const ATTENDANCE_TITLE: Record<string, string> = {
+  PRESENT: "Darsda bo'ldingiz deb belgilandi",
+  ABSENT:  'Darsni qoldirdingiz deb belgilandi',
+  LATE:    'Darsga kech qoldingiz deb belgilandi',
+  EXCUSED: 'Sababli deb belgilandi',
+}
 
 export const attendanceService = {
   async list(params: {
@@ -101,7 +111,106 @@ export const attendanceService = {
       ipAddress,
     })
 
+    emitAttendanceMarked({
+      attendanceId: record.id,
+      courseId:     enrollment.courseId,
+      enrollmentId: data.enrollmentId,
+      studentId:    enrollment.studentId,
+      lessonDate:   data.lessonDate,
+      status:       data.status,
+      markedBy:     actorId,
+    })
+
+    // Faqat BOSHQA birov belgilaganda xabar beriladi. QR bilan o'zi
+    // belgilagan talabaga "davomatingiz belgilandi" deyishning ma'nosi yo'q —
+    // u buni ayni daqiqada o'zi qildi.
+    if (enrollment.studentId !== actorId) {
+      await notificationService.create({
+        userId: enrollment.studentId,
+        type:   'ATTENDANCE_MARKED',
+        title:  ATTENDANCE_TITLE[data.status] ?? 'Davomat belgilandi',
+        body:   `${data.lessonDate}`,
+        link:   '/attendance',
+        data:   { attendanceId: record.id, status: data.status, lessonDate: data.lessonDate },
+      })
+    }
+
     return record
+  },
+
+  /**
+   * Bir kursning bitta darsi uchun butun guruh davomatini bir marta yozadi.
+   *
+   * Nega kerak: `mark()` bitta talabani belgilaydi va allaqachon belgilangan
+   * bo'lsa 409 qaytaradi. Amalda o'qituvchi darsdan keyin butun guruhni bir
+   * o'tirishda belgilaydi va xatosini darhol tuzatadi — bittalab yozishda
+   * 30 kishilik guruh uchun 30 ta so'rov va tuzatishning iloji yo'q.
+   *
+   * Shuning uchun bu yerda upsert ishlatiladi: qayta yuborish holatni
+   * yangilaydi, xato bermaydi.
+   */
+  async markBulk(
+    data: {
+      courseId:   string
+      lessonDate: string
+      records:    { enrollmentId: string; status: AttendanceStatus }[]
+    },
+    actorId: string,
+    actorRole: UserRole,
+    ipAddress: string
+  ) {
+    const course = await prisma.course.findUnique({
+      where: { id: data.courseId },
+      select: { id: true, teacherId: true },
+    })
+    if (!course) throw Object.assign(new Error('Kurs topilmadi'), { statusCode: 404 })
+    if (actorRole === 'TEACHER' && course.teacherId !== actorId) {
+      throw Object.assign(new Error("Bu kurs uchun davomat belgilash ruxsati yo'q"), { statusCode: 403 })
+    }
+
+    // Har bir yozuv HAQIQATAN shu kursga tegishli ekanini tekshiramiz — aks holda
+    // o'qituvchi o'z kursi nomi bilan begona guruh davomatini yozib yuborishi mumkin.
+    const enrollmentIds = data.records.map((r) => r.enrollmentId)
+    const valid = await prisma.enrollment.findMany({
+      where: { id: { in: enrollmentIds }, courseId: data.courseId, status: 'ACTIVE' },
+      select: { id: true },
+    })
+    const validIds = new Set(valid.map((e) => e.id))
+
+    const rejected = enrollmentIds.filter((id) => !validIds.has(id))
+    if (rejected.length > 0) {
+      throw Object.assign(
+        new Error(`${rejected.length} ta yozuv bu kursga tegishli emas yoki talaba faol emas`),
+        { statusCode: 400 },
+      )
+    }
+
+    const lessonDate = new Date(data.lessonDate)
+
+    const saved = await prisma.$transaction(
+      data.records.map((r) =>
+        prisma.attendance.upsert({
+          where:  { enrollmentId_lessonDate: { enrollmentId: r.enrollmentId, lessonDate } },
+          create: {
+            enrollmentId: r.enrollmentId,
+            lessonDate,
+            status:       r.status,
+            markedBy:     actorId,
+            ipAddress,
+          },
+          update: { status: r.status, markedBy: actorId, markedAt: new Date() },
+        }),
+      ),
+    )
+
+    await auditService.log({
+      userId: actorId, action: 'ATTENDANCE_MARK', resource: 'attendance',
+      resourceId: data.courseId,
+      newData: { courseId: data.courseId, lessonDate: data.lessonDate, count: saved.length },
+      ipAddress,
+    })
+
+    return { saved: saved.length, lessonDate: data.lessonDate }
   },
 
   async generateQrToken(courseId: string, lessonDate: string, actorId: string, actorRole: string): Promise<{ token: string; qrCodeUrl: string; expiresIn: number }> {
@@ -145,6 +254,16 @@ export const attendanceService = {
     })
 
     await redis.del(`qr_attendance:${token}`)
+
+    emitAttendanceMarked({
+      attendanceId: record.id,
+      courseId,
+      enrollmentId: enrollment.id,
+      studentId:    actorId,
+      lessonDate,
+      status:       'PRESENT',
+      markedBy:     actorId,
+    })
 
     return record
   },

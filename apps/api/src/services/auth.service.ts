@@ -145,7 +145,7 @@ export const authService = {
 
     // 5. ADMIN/TEACHER — 2FA majburiy (production only)
     const must2FA = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'TEACHER'
-    const twoFAEnforced = process.env.DISABLE_2FA_REQUIRED !== 'true'
+    const twoFAEnforced = env.DISABLE_2FA_REQUIRED !== 'true'
     if (must2FA && !user.twoFactorEnabled && twoFAEnforced) {
       // Return flag that frontend should redirect to 2FA setup
       const setupToken = crypto.randomBytes(32).toString('hex')

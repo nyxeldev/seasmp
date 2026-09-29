@@ -13,7 +13,7 @@ import { logger } from '../config/logger'
 import { auditService } from './audit.service'
 import { resolveAccess, type OwnershipVerdict } from './ownershipResolver'
 import { inspect as inspectBehavior } from './behaviorDetector'
-import { recordAuthz } from './signalWindow'
+import { recordAuthz, recordPrivilegedScope } from './signalWindow'
 import { evaluate as correlationEvaluate } from './correlationDetector'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -114,6 +114,14 @@ export async function recordRequest(request: FastifyRequest, reply: FastifyReply
     // 2-QATLAM: xatti-harakatni foydalanuvchining o'z profiliga solishtirish.
     // Dalilni signal oynasiga yozadi, ogohlantirish yaratmaydi.
     await inspectBehavior(userId, request.ip, request.headers['user-agent'], resource)
+
+    // 1-QATLAM dalili — IMTIYOZLI aktor uchun qamrov.
+    // Admin uchun begona obyekt yo'q, shuning uchun hodisa emas, o'n besh
+    // daqiqalik oynada nechta HAR XIL egaga teganini o'lchaymiz. O'zining
+    // obyekti hisobga olinmaydi.
+    if (verdict.relation === 'PRIVILEGED' && verdict.ownerId && verdict.ownerId !== userId) {
+      await recordPrivilegedScope(userId, verdict.ownerId)
+    }
 
     // 1-QATLAM dalili — begona obyektga urinish rad etilgan yoki o'tib ketgan
     if (denied && verdict.relation === 'FOREIGN') {

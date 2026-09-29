@@ -9,6 +9,15 @@ const markSchema = z.object({
   status:       z.enum(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED']),
 })
 
+const markBulkSchema = z.object({
+  courseId:   z.string().uuid(),
+  lessonDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana YYYY-MM-DD formatida bo'lishi kerak"),
+  records: z.array(z.object({
+    enrollmentId: z.string().uuid(),
+    status:       z.enum(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED']),
+  })).min(1, "Kamida bitta yozuv kerak").max(500, "Bir so'rovda 500 tadan ko'p emas"),
+})
+
 const qrGenerateSchema = z.object({
   courseId:   z.string().uuid(),
   lessonDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana YYYY-MM-DD formatida bo'lishi kerak"),
@@ -46,6 +55,15 @@ export default async function attendanceRoutes(app: FastifyInstance) {
 
     const record = await attendanceService.mark(body.data, request.user.sub, request.user.role, request.ip)
     return reply.status(201).send({ success: true, data: record })
+  })
+
+  // POST /v1/attendance/bulk  — butun guruh davomatini bir marta yozish
+  app.post('/bulk', { onRequest: [app.authenticate, app.requireRoles('ADMIN', 'SUPER_ADMIN', 'TEACHER')] }, async (request, reply) => {
+    const body = markBulkSchema.safeParse(request.body)
+    if (!body.success) return validationError(reply, body.error.errors[0].message)
+
+    const result = await attendanceService.markBulk(body.data, request.user.sub, request.user.role, request.ip)
+    return reply.send({ success: true, data: result })
   })
 
   // GET /v1/attendance/courses/:courseId  (teacher / admin — full course attendance)

@@ -32,7 +32,7 @@ function Card({
       style={{ background: 'var(--s-bg-card)', borderColor: 'var(--s-border)' }}>
       <div className="flex items-start gap-3 mb-6 pb-5 border-b" style={{ borderColor: 'var(--s-border)' }}>
         <div className="p-2.5 rounded-lg shrink-0" style={{ background: 'rgba(59,130,246,0.1)' }}>
-          <Icon className="size-4.5" style={{ color: '#3B82F6' }} />
+          <Icon className="size-[18px].5" style={{ color: '#3B82F6' }} />
         </div>
         <div>
           <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{title}</h2>
@@ -78,7 +78,7 @@ function Field({ label, error, type = 'text', ...props }: {
             style={{ color: 'var(--s-muted)' }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--s-text)'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--s-muted)'}>
-            {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            {show ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
           </button>
         )}
       </div>
@@ -131,7 +131,7 @@ function Toggle({ label, description, checked, onChange }: {
       <button onClick={() => onChange(!checked)} aria-pressed={checked}
         className="relative shrink-0 w-10 h-5.5 rounded-full transition-colors"
         style={{ background: checked ? '#3B82F6' : 'var(--s-border)' }}>
-        <span className="absolute top-0.5 left-0.5 size-4.5 rounded-full bg-white shadow transition-transform"
+        <span className="absolute top-0.5 left-0.5 size-[18px].5 rounded-full bg-white shadow transition-transform"
           style={{ transform: checked ? 'translateX(18px)' : 'translateX(0)' }} />
       </button>
     </div>
@@ -146,7 +146,7 @@ function SubmitBtn({ loading, saved, label }: { loading?: boolean; saved?: boole
     <button type="submit" disabled={loading}
       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-60 seasmp-btn"
       style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
-      {loading ? <RefreshCw className="size-4 animate-spin" /> : saved ? <><Check className="size-4" /> {t('settings.saved')}</> : btnLabel}
+      {loading ? <RefreshCw className="size-[18px] animate-spin" /> : saved ? <><Check className="size-[18px]" /> {t('settings.saved')}</> : btnLabel}
     </button>
   )
 }
@@ -201,7 +201,7 @@ function TwoFaModal({ onClose }: { onClose: () => void }) {
             style={{ color: 'var(--s-muted)' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-text)'; (e.currentTarget as HTMLElement).style.background = 'var(--s-hover)' }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--s-muted)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
-            <X className="size-4" />
+            <X className="size-[18px]" />
           </button>
         </div>
 
@@ -235,7 +235,7 @@ function TwoFaModal({ onClose }: { onClose: () => void }) {
               style={{ background: 'var(--s-input)', border: '1px solid var(--s-border)' }}>
               <code className="text-xs flex-1 break-all" style={{ color: 'var(--s-text)' }}>{data.secret}</code>
               <button onClick={copySecret} className="shrink-0 text-text3 hover:text-text1 transition-colors">
-                <Copy className="size-3.5" />
+                <Copy className="size-4" />
               </button>
             </div>
             <form onSubmit={confirm} className="space-y-3">
@@ -454,10 +454,10 @@ function SecuritySection() {
   }
 
   const getDeviceIcon = (ua?: string) => {
-    if (!ua) return <Monitor className="size-4" />
+    if (!ua) return <Monitor className="size-[18px]" />
     return /mobile|android|iphone/i.test(ua)
-      ? <Smartphone className="size-4" />
-      : <Monitor className="size-4" />
+      ? <Smartphone className="size-[18px]" />
+      : <Monitor className="size-[18px]" />
   }
 
   return (
@@ -486,7 +486,7 @@ function SecuritySection() {
 
           <div className="flex items-start gap-3 rounded-lg p-3"
             style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)' }}>
-            <Shield className="size-4 text-blue-400 shrink-0 mt-0.5" />
+            <Shield className="size-[18px] text-blue-400 shrink-0 mt-0.5" />
             <p className="text-xs leading-relaxed" style={{ color: 'var(--s-muted)' }}>
               So'nggi kirish: <span className="font-medium" style={{ color: 'var(--s-text)' }}>Bugun, 10:32</span> — Toshkent, O'zbekiston
             </p>
@@ -506,7 +506,7 @@ function SecuritySection() {
             </div>
             <button onClick={loadSessions} disabled={sessLoading}
               className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50">
-              <RefreshCw className={`size-3.5 ${sessLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`size-4 ${sessLoading ? 'animate-spin' : ''}`} />
               {t('attendance.refresh')}
             </button>
           </div>
@@ -551,8 +551,8 @@ function SecuritySection() {
                     className="p-1.5 rounded-md hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
                     style={{ color: 'var(--s-muted)' }}>
                     {revokingId === sess.id
-                      ? <RefreshCw className="size-3.5 animate-spin" />
-                      : <Trash2 className="size-3.5" />}
+                      ? <RefreshCw className="size-4 animate-spin" />
+                      : <Trash2 className="size-4" />}
                   </button>
                 )}
               </motion.div>
@@ -580,7 +580,7 @@ function SecuritySection() {
                   className="flex items-center justify-between rounded-lg px-3 py-2"
                   style={{ background: 'var(--s-alt)', border: '1px solid var(--s-border)' }}>
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <Monitor className="size-3.5 shrink-0" style={{ color: 'var(--s-muted)' }} />
+                    <Monitor className="size-4 shrink-0" style={{ color: 'var(--s-muted)' }} />
                     <div className="min-w-0">
                       <p className="text-xs font-medium truncate" style={{ color: 'var(--s-text)' }}>
                         {entry.ipAddress ?? 'IP noma\'lum'}
@@ -627,7 +627,7 @@ function NotificationsSection() {
       <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--s-border)' }}>
         <div className="px-4 py-2.5" style={{ background: 'var(--s-alt)' }}>
           <div className="flex items-center gap-2">
-            <Bell className="size-3.5" style={{ color: 'var(--s-muted)' }} />
+            <Bell className="size-4" style={{ color: 'var(--s-muted)' }} />
             <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--s-muted)' }}>Tizim ichida</span>
           </div>
         </div>
@@ -639,7 +639,7 @@ function NotificationsSection() {
         </div>
         <div className="px-4 py-2.5 mt-1" style={{ background: 'var(--s-alt)' }}>
           <div className="flex items-center gap-2">
-            <Mail className="size-3.5" style={{ color: 'var(--s-muted)' }} />
+            <Mail className="size-4" style={{ color: 'var(--s-muted)' }} />
             <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--s-muted)' }}>Email</span>
           </div>
         </div>
@@ -652,7 +652,7 @@ function NotificationsSection() {
         <button onClick={() => { setSaved(true); toast.success(t('settings.saved')); setTimeout(() => setSaved(false), 2500) }}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all seasmp-btn"
           style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)' }}>
-          {saved ? <><Check className="size-4" /> {t('settings.saved')}</> : t('settings.save')}
+          {saved ? <><Check className="size-[18px]" /> {t('settings.saved')}</> : t('settings.save')}
         </button>
       </div>
     </Card>

@@ -68,6 +68,30 @@ jobs:
           AES_ENCRYPTION_KEY:   b7dcb02c6342b24134b3a09db4d897c16df22aa9034a757d4d0028118159a756
           DISABLE_2FA_REQUIRED: 'false'
 
+  # ─── Web unit tests ──────────────────────────────────────────────────────────
+  # Bu qadam ilgari yo'q edi: CI web uchun faqat `tsc` va Playwright'ni
+  # ishlatardi, shuning uchun vitest testlari jimgina eskirib qolardi. Login
+  # sahifasi qayta dizayn qilinganda ikkitasi yiqilgan, lekin hech qayerda
+  # ko'rinmagan — nosozlik faqat qo'lda ishga tushirganda topildi.
+  test-web:
+    name: Web Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci --workspace=apps/web
+
+      - name: Run web unit tests
+        working-directory: apps/web
+        run: npm test
+
   # ─── Integration tests ───────────────────────────────────────────────────────
   test-integration:
     name: Integration Tests
@@ -158,11 +182,127 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/seasmp_test
           REDIS_URL:    redis://localhost:6379
 
+  # ─── E2E tests ───────────────────────────────────────────────────────────────
+  # Playwright to'plami yozilgan edi, lekin CI da hech qachon ishlamagan —
+  # shuning uchun u sezdirmasdan eskirib qolgandi (mavjud bo'lmagan hisoblar
+  # bilan kirishga urinardi). Endi har PR da ishlaydi.
+  test-e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB:       seasmp_e2e
+          POSTGRES_USER:     seasmp
+          POSTGRES_PASSWORD: testpassword
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U seasmp -d seasmp_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7.4-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL:         postgresql://seasmp:testpassword@localhost:5432/seasmp_e2e
+      REDIS_URL:            redis://localhost:6379
+      JWT_ACCESS_SECRET:    test-access-secret-that-is-long-enough-for-zod
+      JWT_REFRESH_SECRET:   test-refresh-secret-that-is-long-enough-for-zod
+      AES_ENCRYPTION_KEY:   b7dcb02c6342b24134b3a09db4d897c16df22aa9034a757d4d0028118159a756
+      API_PORT:             4000
+      API_HOST:             0.0.0.0
+      CORS_ORIGIN:          http://localhost:3000
+      DISABLE_2FA_REQUIRED: 'true'
+      NEXT_PUBLIC_API_URL:  http://localhost:4000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
+
+      - name: Migrate and seed
+        working-directory: apps/api
+        run: |
+          npx prisma migrate deploy
+          npx tsx prisma/seed.ts
+
+      - name: Start API
+        working-directory: apps/api
+        # NODE_ENV faqat SHU bosqichda beriladi. Job darajasida bo'lsa uni
+        # "next build" ham oladi va Next development rejimida quriladi —
+        # natijada prerender paytida React nusxalari mos kelmay,
+        # "Cannot read properties of null (reading 'useContext')" chiqadi.
+        env:
+          NODE_ENV: development
+        run: |
+          npx tsx src/server.ts > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4000/health >/dev/null && exit 0
+            sleep 2
+          done
+          echo "API ko'tarilmadi:"; cat /tmp/api.log; exit 1
+
+      - name: Build and start web
+        working-directory: apps/web
+        run: |
+          npm run build
+          npm run start > /tmp/web.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3000/login >/dev/null && exit 0
+            sleep 2
+          done
+          echo "Web ko'tarilmadi:"; cat /tmp/web.log; exit 1
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: apps/web
+        run: npx playwright test --project=chromium
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
+      - name: Server logs on failure
+        if: failure()
+        run: |
+          echo "── API ──"; tail -50 /tmp/api.log || true
+          echo "── WEB ──"; tail -50 /tmp/web.log || true
+
   # ─── Build & push Docker images ──────────────────────────────────────────────
   build:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    needs: [test-unit, test-integration, test-python]
+    needs: [test-unit, test-web, test-integration, test-python, test-e2e]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     permissions:

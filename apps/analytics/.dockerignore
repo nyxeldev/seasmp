@@ -3,4 +3,12 @@ __pycache__
 *.pyc
 *.pyo
 .env
-model/*.pkl
+# O'qitilgan model image'ga TUSHMASLIGI kerak: u `analytics_models` volumida
+# yashaydi va ishlayotgan tizimda o'qitiladi.
+#
+# Bu qator ilgari `model/*.pkl` edi — modellar `ml/models/` ga ko'chirilganda
+# yangilanmay qolgan. Oqibati jimgina: dasturchining mahalliy modeli image ichiga
+# ko'chirilar, yangi volume esa Docker tomonidan o'sha image mazmuni bilan
+# to'ldirilardi. Ya'ni konteyner "toza" emas, kimningdir noutbukidagi model
+# bilan ishga tushardi.
+ml/models/

@@ -188,6 +188,9 @@ export const attendanceApi = {
     api.get<{ success: boolean; data: Attendance[]; total: number }>(`/v1/attendance/courses/${courseId}${q ? `?${q}` : ''}`),
   mark:       (body: { enrollmentId: string; lessonDate: string; status: string }) =>
     api.post<{ success: boolean; data: Attendance }>('/v1/attendance', body),
+  /** Butun guruhni bir marta belgilaydi; qayta yuborilsa holatni yangilaydi */
+  markBulk:   (body: { courseId: string; lessonDate: string; records: { enrollmentId: string; status: string }[] }) =>
+    api.post<{ success: boolean; data: { saved: number; lessonDate: string } }>('/v1/attendance/bulk', body),
   stats:      (enrollmentId: string) => api.get<{ success: boolean; data: AttendanceStats }>(`/v1/attendance/stats/${enrollmentId}`),
   generateQr: (courseId: string, lessonDate: string) =>
     api.post<{ success: boolean; data: { token: string; qrCodeUrl: string; expiresIn: number } }>('/v1/attendance/qr/generate', { courseId, lessonDate }),
@@ -208,7 +211,26 @@ export const assessmentsApi = {
 }
 
 // ─── Analytics (via Node.js proxy → Python) ───────────────────────────────────
+export interface AnalyticsOverview {
+  windowDays: number
+  students: number
+  activeCourses: number
+  attendanceRate: number | null
+  attendanceDelta: number | null
+  attendanceTrend: { date: string; rate: number; total: number }[]
+  avgGrade: number | null
+  gradesByType: { type: string; avg: number; count: number }[]
+  highRisk: number
+  avgRisk: number | null
+  topRisk: {
+    enrollmentId: string; score: number
+    studentId: string; studentName: string
+    courseId: string; courseSlug: string; courseTitle: string
+  }[]
+}
+
 export const analyticsApi = {
+  overview: (days = 30) => api.get<{ success: boolean; data: AnalyticsOverview }>(`/v1/analytics/overview?days=${days}`),
   dashboard:          () => api.get<{ success: boolean; data: DashboardStats }>('/v1/analytics/dashboard'),
   courseSimple:       (id: string) => api.get<{ success: boolean; data: CourseStats }>(`/v1/analytics/courses/${id}/simple`),
   student:            (id: string) => api.get<{ success: boolean; data: StudentStats }>(`/v1/analytics/students/${id}`),
@@ -277,6 +299,8 @@ export interface User {
 export interface Course {
   id: string
   title: string
+  /** Manzil qatorida UUID o'rniga ishlatiladi */
+  slug: string
   category: string
   status: string
   price: number
@@ -293,14 +317,19 @@ export interface Enrollment {
   enrolledAt: string
   dropoutRiskScore?: number | null
   student: { id: string; firstName: string; lastName: string; email: string }
-  course: { id: string; title: string; category: string }
+  course: { id: string; slug: string; title: string; category: string }
 }
 
 export interface Attendance {
   id: string
   lessonDate: string
   status: string
-  enrollment: { student: { firstName: string; lastName: string }; course: { title: string } }
+  enrollment: {
+    id: string
+    student: { id: string; firstName: string; lastName: string }
+    // API `id` ni ham qaytaradi — usiz filtrlash kurs NOMI bo'yicha qilinardi
+    course: { id: string; title: string }
+  }
 }
 
 export interface AttendanceStats {
@@ -357,11 +386,29 @@ export interface CourseStats {
   avgGrade: number
 }
 
+/**
+ * GET /v1/analytics/students/:id javobi.
+ *
+ * Bu tip ilgari `{user, enrollments, avgAttendanceRate, avgGrade}` deb
+ * yozilgan edi — server esa hech qachon bunday javob qaytarmagan. Tip
+ * yolg'on gapirgani uchun talaba sahifasi undan foydalanmay, har bir
+ * ro'yxatga olish uchun alohida ikkita so'rov yuborardi (N+1).
+ */
+export interface StudentCourseStats {
+  enrollmentId: string
+  course: { id: string; slug: string | null; title: string; category: string }
+  status: string
+  /** Foizda, 0–100. Davomat yozuvi bo'lmasa null */
+  attendanceRate: number | null
+  /** Topshiriq vaznlari bo'yicha o'rtacha, 0–100. Baho yo'q bo'lsa null */
+  finalGrade: number | null
+  /** 0–1 oralig'ida, Python servisi yozadi */
+  dropoutRisk: number | null
+}
+
 export interface StudentStats {
-  user: User
-  enrollments: number
-  avgAttendanceRate: number
-  avgGrade: number
+  student: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'role'>
+  courses: StudentCourseStats[]
 }
 
 export interface AuditLog {
@@ -548,4 +595,53 @@ export interface PyTeacherKpi {
   avg_grade: number
   course_completion_rate: number
   at_risk_students_count: number
+}
+
+// ─── Bildirishnomalar ────────────────────────────────────────────────────────
+
+export type NotificationType =
+  | 'ATTENDANCE_MARKED' | 'GRADE_POSTED' | 'ENROLLED' | 'DROPOUT_RISK' | 'SECURITY_ALERT'
+
+export interface AppNotification {
+  id:        string
+  type:      NotificationType
+  title:     string
+  body:      string | null
+  /** Ilovadagi ichki manzil; bo'lmasligi mumkin */
+  link:      string | null
+  data:      Record<string, unknown>
+  readAt:    string | null
+  createdAt: string
+}
+
+/**
+ * Har bir foydalanuvchi faqat o'zinikini ko'radi — marshrutda `:userId` yo'q,
+ * egalik server tomonda tokendan olinadi.
+ */
+export const notificationsApi = {
+  list: (q?: string) =>
+    api.get<{ success: boolean; data: AppNotification[] }>(`/v1/notifications${q ? `?${q}` : ''}`),
+  unreadCount: () =>
+    api.get<{ success: boolean; data: { count: number } }>('/v1/notifications/unread-count'),
+  markRead: (id: string) =>
+    api.patch<{ success: boolean; data: { id: string } }>(`/v1/notifications/${id}/read`, {}),
+  markAllRead: () =>
+    api.patch<{ success: boolean; data: { count: number } }>('/v1/notifications/read-all', {}),
+}
+
+/**
+ * Brauzerdagi xatolarni serverga yuboradi.
+ *
+ * Ataylab `void` qaytaradi va hech qachon istisno tashlamaydi: xato haqida
+ * xabar berishda yuz bergan xato foydalanuvchiga ko'rinmasligi kerak.
+ */
+export const telemetryApi = {
+  clientError: (payload: {
+    message: string
+    stack?: string
+    path?: string
+    componentStack?: string
+  }): void => {
+    api.post('/v1/telemetry/client-error', payload).catch(() => { /* jim */ })
+  },
 }

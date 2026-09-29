@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit'
 
 import { env } from './config/env'
 import { logger } from './config/logger'
+import { reportError } from './config/errorReporter'
 import { registerAuthMiddleware } from './middlewares/auth.middleware'
 
 import authRoutes       from './routes/auth.routes'
@@ -17,6 +18,8 @@ import assessmentRoutes from './routes/assessment.routes'
 import analyticsRoutes  from './routes/analytics.routes'
 import securityRoutes   from './routes/security.routes'
 import internalRoutes   from './routes/internal.routes'
+import notificationRoutes from './routes/notification.routes'
+import telemetryRoutes    from './routes/telemetry.routes'
 import { checkBulkDelete } from './services/securityMonitor'
 import { recordRequest } from './services/requestAudit'
 
@@ -62,6 +65,60 @@ export async function buildApp() {
     }),
   })
 
+  // ─── Global Error Handler ─────────────────────────────────────────────────────
+  //
+  // MARSHRUTLARDAN OLDIN o'rnatilishi SHART. Fastify har bir `register`
+  // chaqiruvida alohida kontekst yaratadi va bola kontekst xato ishlovchisini
+  // RO'YXATDAN O'TISH PAYTIDAGI holatidan oladi. Ilgari bu blok fayl oxirida,
+  // barcha marshrutlardan keyin turardi — natijada u /v1/ marshrutlarining
+  // BIRORTASIGA ham qo'llanmasdi.
+  //
+  // Oqibati ikkita edi. Birinchisi: 500 xatolar Fastify ning standart
+  // ko'rinishida qaytardi va ichki xabarni oshkor qilardi, masalan
+  // "Cannot convert notanumber to a BigInt". Ikkinchisi: shu blokdagi
+  // qayd etish hech qachon ishlamasdi.
+  // ─── Global Error Handler ─────────────────────────────────────────────────────
+  app.setErrorHandler((err, request, reply) => {
+    const error = err as any
+
+    if (error.statusCode === 429) {
+      return reply.status(429).send({
+        success: false,
+        error: { code: 'RATE_LIMIT_EXCEEDED', message: error.message },
+      })
+    }
+    if (error.validation) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: "Ma'lumotlar noto'g'ri formatda", details: error.validation },
+      })
+    }
+
+    const statusCode = error.statusCode ?? 500
+
+    // 500 — bu bizning nosozligimiz, shuning uchun QAYD ETILADI. Ilgari
+    // bunday xato mijozga "Tizimda xatolik yuz berdi" deb qaytarilar,
+    // lekin hech qayerda saqlanmasdi: na stack, na qaysi so'rov edi.
+    // 4xx lar qayd etilmaydi — ular kutilgan holat (noto'g'ri so'rov,
+    // ruxsat yo'q) va ularni yozish shovqin bo'lardi.
+    if (statusCode >= 500) {
+      reportError(error, {
+        method: request.method,
+        path:   (request.url ?? '').split('?')[0],
+        userId: request.user?.sub ?? null,
+        statusCode,
+      })
+    }
+
+    return reply.status(statusCode).send({
+      success: false,
+      error: {
+        code: statusCode === 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_ERROR',
+        message: statusCode === 500 ? 'Tizimda xatolik yuz berdi' : error.message,
+      },
+    })
+  })
+
   // ─── Routes ──────────────────────────────────────────────────────────────────
   await app.register(authRoutes,       { prefix: '/v1/auth' })
   await app.register(userRoutes,       { prefix: '/v1/users' })
@@ -72,6 +129,8 @@ export async function buildApp() {
   await app.register(analyticsRoutes,  { prefix: '/v1/analytics' })
   await app.register(securityRoutes,   { prefix: '/v1/security' })
   await app.register(internalRoutes,   { prefix: '/v1/internal' })
+  await app.register(notificationRoutes, { prefix: '/v1/notifications' })
+  await app.register(telemetryRoutes,    { prefix: '/v1/telemetry' })
 
   // ─── Bulk Delete Guard ────────────────────────────────────────────────────────
   app.addHook('preHandler', async (request) => {
@@ -104,32 +163,6 @@ export async function buildApp() {
     service: 'seasmp-api',
   }))
 
-  // ─── Global Error Handler ─────────────────────────────────────────────────────
-  app.setErrorHandler((err, request, reply) => {
-    const error = err as any
-
-    if (error.statusCode === 429) {
-      return reply.status(429).send({
-        success: false,
-        error: { code: 'RATE_LIMIT_EXCEEDED', message: error.message },
-      })
-    }
-    if (error.validation) {
-      return reply.status(400).send({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: "Ma'lumotlar noto'g'ri formatda", details: error.validation },
-      })
-    }
-
-    const statusCode = error.statusCode ?? 500
-    return reply.status(statusCode).send({
-      success: false,
-      error: {
-        code: statusCode === 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_ERROR',
-        message: statusCode === 500 ? 'Tizimda xatolik yuz berdi' : error.message,
-      },
-    })
-  })
 
   return app
 }

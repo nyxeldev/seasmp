@@ -3,11 +3,13 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { useLocale } from '@/store/locale'
 import {
   coursesApi, enrollmentsApi, assessmentsApi, attendanceApi, usersApi,
   type Course, type Enrollment, type Assessment, type User,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useBreadcrumbTitle } from '@/lib/breadcrumb'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
@@ -28,6 +30,7 @@ export default function CourseDetailPage() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [students, setStudents]       = useState<User[]>([])
+  const { t } = useLocale()
   const [tab, setTab]                 = useState<Tab>('students')
   const [assOpen, setAssOpen]         = useState(false)
   const [assForm, setAssForm]         = useState({ title: '', type: 'QUIZ', maxScore: 100, weight: 0.2 })
@@ -36,16 +39,26 @@ export default function CourseDetailPage() {
   const [qrOpen, setQrOpen]           = useState(false)
   const [qrDate, setQrDate]           = useState(new Date().toISOString().slice(0, 10))
   const [qrToken, setQrToken]         = useState<string | null>(null)
+  const [qrImage, setQrImage]         = useState<string | null>(null)
   const [qrCountdown, setQrCountdown] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Breadcrumb'da xom UUID emas, kursning nomi ko'rinsin
+  useBreadcrumbTitle(course?.title)
+
+  // Manzildagi qism slug bo'lishi mumkin; qolgan so'rovlar esa kursning UUID
+  // sini kutadi, shuning uchun ular kurs yuklangandan KEYIN ishga tushadi.
+  const courseId = course?.id ?? null
+
   const loadCourse     = () => coursesApi.getById(id).then(r => setCourse(r.data)).catch(e => toast.error(e.message))
-  const loadEnrollments= () => enrollmentsApi.list(`courseId=${id}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
-  const loadAssessments= () => assessmentsApi.byCourse(id).then(r => setAssessments(r.data)).catch(() => {})
+  const loadEnrollments= () => courseId && enrollmentsApi.list(`courseId=${courseId}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
+  const loadAssessments= () => courseId && assessmentsApi.byCourse(courseId).then(r => setAssessments(r.data)).catch(() => {})
+
+  useEffect(() => { loadCourse() }, [id]) // eslint-disable-line
 
   useEffect(() => {
-    loadCourse(); loadEnrollments(); loadAssessments()
-  }, [id]) // eslint-disable-line
+    loadEnrollments(); loadAssessments()
+  }, [courseId]) // eslint-disable-line
 
   useEffect(() => {
     if ((user?.role === 'ADMIN') && enrollOpen) {
@@ -57,7 +70,7 @@ export default function CourseDetailPage() {
   useEffect(() => {
     if (qrCountdown <= 0) {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
-      if (qrToken) { setQrToken(null); toast.info('QR token expired') }
+      if (qrToken) { setQrToken(null); setQrImage(null); toast.info('QR token expired') }
       return
     }
     timerRef.current = setInterval(() => setQrCountdown(c => c - 1), 1000)
@@ -66,8 +79,9 @@ export default function CourseDetailPage() {
 
   const generateQr = async () => {
     try {
-      const res = await attendanceApi.generateQr(id, qrDate)
+      const res = await attendanceApi.generateQr(course!.id, qrDate)
       setQrToken(res.data.token)
+      setQrImage(res.data.qrCodeUrl)
       setQrCountdown(res.data.expiresIn)
       toast.success('QR token generated — 5 minutes')
     } catch (err: any) { toast.error(err.message) }
@@ -76,7 +90,7 @@ export default function CourseDetailPage() {
   const createAssessment = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await assessmentsApi.create({ ...assForm, courseId: id, maxScore: Number(assForm.maxScore), weight: Number(assForm.weight) })
+      await assessmentsApi.create({ ...assForm, courseId: course!.id, maxScore: Number(assForm.maxScore), weight: Number(assForm.weight) })
       toast.success('Assessment created')
       setAssOpen(false)
       loadAssessments()
@@ -95,7 +109,7 @@ export default function CourseDetailPage() {
   const enrollStudent = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await enrollmentsApi.enrollToCourse(id, enrollStudentId)
+      await enrollmentsApi.enrollToCourse(course!.id, enrollStudentId)
       toast.success('Student enrolled')
       setEnrollOpen(false)
       setEnrollStudentId('')
@@ -114,7 +128,7 @@ export default function CourseDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon-sm" render={<Link href="/courses" />}>
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-[18px]" />
         </Button>
         <h1 className="text-2xl font-semibold">{course.title}</h1>
         <Badge variant={course.status === 'ACTIVE' ? 'default' : 'outline'}>{course.status}</Badge>
@@ -123,10 +137,10 @@ export default function CourseDetailPage() {
       {/* Info cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Category',  value: course.category },
-          { label: 'Teacher',   value: `${course.teacher.firstName} ${course.teacher.lastName}` },
-          { label: 'Duration',  value: `${course.durationWeeks} weeks` },
-          { label: 'Students',  value: `${course._count?.enrollments ?? 0} / ${course.maxStudents}` },
+          { label: t('courses.category'), value: course.category },
+          { label: t('courses.teacher'),  value: `${course.teacher.firstName} ${course.teacher.lastName}` },
+          { label: t('courses.duration'), value: `${course.durationWeeks} ${t('courses.weeks')}` },
+          { label: t('courses.students'), value: `${course._count?.enrollments ?? 0} / ${course.maxStudents}` },
         ].map(({ label, value }) => (
           <Card key={label} size="sm">
             <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground font-normal">{label}</CardTitle></CardHeader>
@@ -138,9 +152,9 @@ export default function CourseDetailPage() {
       {/* Action buttons */}
       <div className="flex gap-2 flex-wrap">
         {isTeacher && (
-          <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrCountdown(0) } }}>
+          <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrImage(null); setQrCountdown(0) } }}>
             <DialogTrigger render={<Button variant="outline" />}>
-              <QrCode className="size-4" /> QR Attendance
+              <QrCode className="size-[18px]" /> {t('courses.qrAttendance')}
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>QR Attendance Token</DialogTitle></DialogHeader>
@@ -159,6 +173,14 @@ export default function CourseDetailPage() {
                         {qrFmt}
                       </Badge>
                     </div>
+                    {/* Skanerlanadigan kod. API uni qaytarardi, lekin oyna faqat
+                        matnni ko'rsatardi — "skanerlanganda" deyilsa-da,
+                        skanerlaydigan narsa yo'q edi. */}
+                    {qrImage && (
+                      <div className="flex justify-center bg-white rounded-lg p-3">
+                        <img src={qrImage} alt="QR attendance code" className="size-44" />
+                      </div>
+                    )}
                     <Card size="sm">
                       <CardContent className="pt-3">
                         <p className="font-mono text-xs break-all bg-muted p-3 rounded select-all">{qrToken}</p>
@@ -173,26 +195,26 @@ export default function CourseDetailPage() {
           </Dialog>
         )}
         <Button variant="outline" render={<Link href={`/courses/${id}/attendance`} />}>
-          <ClipboardList className="size-4" /> Attendance
+          <ClipboardList className="size-[18px]" /> Attendance
         </Button>
         <Button variant="outline" render={<Link href={`/courses/${id}/grades`} />}>
-          <Star className="size-4" /> Grades
+          <Star className="size-[18px]" /> Grades
         </Button>
       </div>
 
       {/* Tabs */}
       <div className="flex border-b">
-        {(['students', 'attendance', 'grades'] as Tab[]).map(t => (
+        {(['students', 'attendance', 'grades'] as Tab[]).map(tabKey => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 transition-colors ${
-              tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            key={tabKey}
+            onClick={() => setTab(tabKey)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'students' && <><Users className="inline size-3.5 mr-1" />Students ({enrollments.length})</>}
-            {t === 'attendance' && <><ClipboardList className="inline size-3.5 mr-1" />Attendance</>}
-            {t === 'grades' && <><Star className="inline size-3.5 mr-1" />Grades ({assessments.length})</>}
+            {tabKey === 'students' && <><Users className="inline size-4 mr-1" />{t('courses.students')} ({enrollments.length})</>}
+            {tabKey === 'attendance' && <><ClipboardList className="inline size-4 mr-1" />{t('courses.attendance')}</>}
+            {tabKey === 'grades' && <><Star className="inline size-4 mr-1" />{t('courses.grades')} ({assessments.length})</>}
           </button>
         ))}
       </div>
@@ -201,11 +223,11 @@ export default function CourseDetailPage() {
       {tab === 'students' && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Enrolled Students</CardTitle>
+            <CardTitle>{t('courses.enrolled')}</CardTitle>
             {isAdmin && (
               <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
                 <DialogTrigger render={<Button size="sm" />}>
-                  <Plus className="size-4" /> Enroll
+                  <Plus className="size-[18px]" /> Enroll
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader><DialogTitle>Enroll Student</DialogTitle></DialogHeader>
@@ -222,7 +244,7 @@ export default function CourseDetailPage() {
                       </Select>
                     </div>
                     <DialogFooter showCloseButton>
-                      <Button type="submit" disabled={!enrollStudentId}>Enroll</Button>
+                      <Button type="submit" disabled={!enrollStudentId}>{t('courses.enroll')}</Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>
@@ -266,7 +288,7 @@ export default function CourseDetailPage() {
         <div className="space-y-4">
           <p className="text-muted-foreground text-sm">View and manage full attendance records on the dedicated page.</p>
           <Button render={<Link href={`/courses/${id}/attendance`} />}>
-            <ClipboardList className="size-4" /> Open Attendance Page
+            <ClipboardList className="size-[18px]" /> Open Attendance Page
           </Button>
         </div>
       )}
@@ -280,7 +302,7 @@ export default function CourseDetailPage() {
               {isTeacher && (
                 <Dialog open={assOpen} onOpenChange={setAssOpen}>
                   <DialogTrigger render={<Button size="sm" />}>
-                    <Plus className="size-4" /> Add Assessment
+                    <Plus className="size-[18px]" /> Add Assessment
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader><DialogTitle>New Assessment</DialogTitle></DialogHeader>

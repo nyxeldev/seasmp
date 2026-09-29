@@ -29,12 +29,15 @@ test.describe('RBAC — route access', () => {
 
   test('sidebar shows role-appropriate links for admin', async ({ adminPage }) => {
     await adminPage.goto('/dashboard')
-    await expect(adminPage.getByRole('link', { name: /foydalanuvchilar|users/i })).toBeVisible()
+    // Yon menyudagi yorliq: uz "O'quvchilar", ru "Учащиеся", en "Students".
+    // Havola /users ga olib boradi, shuning uchun manzil bo'yicha tekshiramiz —
+    // tarjima o'zgarsa test buzilmaydi.
+    await expect(adminPage.locator('aside a[href="/users"]')).toBeVisible()
   })
 
   test('sidebar shows role-appropriate links for student', async ({ studentPage }) => {
     await studentPage.goto('/dashboard')
     // Students should not see the Users management link
-    await expect(studentPage.getByRole('link', { name: /foydalanuvchilar|users/i })).not.toBeVisible()
+    await expect(studentPage.locator('aside a[href="/users"]')).toHaveCount(0)
   })
 })

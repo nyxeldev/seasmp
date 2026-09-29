@@ -64,9 +64,11 @@ export default async function courseRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/courses/:id
+  // :id UUID ham, slug ham bo'lishi mumkin — manzil qatorida slug turadi,
+  // lekin eski UUID havolalari ishlashda davom etadi.
   app.get('/:id', { onRequest: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const course = await courseService.findById(id)
+    const course = await courseService.findByIdOrSlug(id)
     return reply.send({ success: true, data: course })
   })
 

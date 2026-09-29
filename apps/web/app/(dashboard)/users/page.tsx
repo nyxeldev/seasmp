@@ -61,7 +61,7 @@ export default function UsersPage() {
         <h1 className="text-2xl font-semibold">{t('students.title')}</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
-            <Plus className="size-4" /> {t('students.new')}
+            <Plus className="size-[18px]" /> {t('students.new')}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Create User</DialogTitle></DialogHeader>
@@ -106,7 +106,7 @@ export default function UsersPage() {
       {/* Filters */}
       <div className="flex gap-3">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-[18px] text-muted-foreground" />
           <Input className="pl-8" placeholder={t('students.search')} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={role} onValueChange={v => setRole(v ?? 'ALL')}>
@@ -143,7 +143,7 @@ export default function UsersPage() {
               </TableCell>
               <TableCell>
                 <Button variant="ghost" size="icon-sm" onClick={() => toggle(u)} title="Toggle status">
-                  <ToggleLeft className="size-4" />
+                  <ToggleLeft className="size-[18px]" />
                 </Button>
               </TableCell>
             </TableRow>

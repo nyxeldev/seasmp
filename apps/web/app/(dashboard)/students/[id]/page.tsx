@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { useLocale } from '@/store/locale'
 import {
-  usersApi, enrollmentsApi, attendanceApi, assessmentsApi, analyticsApi,
-  type User, type Enrollment, type GradeWithAssessment, type PyStudentEnrollmentAnalytics,
+  usersApi, enrollmentsApi, analyticsApi,
+  type User, type Enrollment, type PyStudentEnrollmentAnalytics,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useBreadcrumbTitle } from '@/lib/breadcrumb'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,16 +27,18 @@ interface EnrollmentStats {
   enrollmentId: string
   courseTitle: string
   courseId: string
+  /** Slug bo'lmasligi mumkin (eski kurslar) — havola UUID ga qaytadi */
+  courseSlug: string | null
   status: string
   attendanceRate: number
   avgGrade: string
   dropoutRisk: number | null
 }
 
-function RiskGauge({ score }: { score: number }) {
+function RiskGauge({ score, labels }: { score: number; labels: [string, string, string] }) {
   const pct = Math.round(score * 100)
   const color = pct >= 65 ? '#ef4444' : pct >= 40 ? '#f59e0b' : '#22c55e'
-  const label = pct >= 65 ? 'High Risk' : pct >= 40 ? 'Medium Risk' : 'Low Risk'
+  const label = pct >= 65 ? labels[0] : pct >= 40 ? labels[1] : labels[2]
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="relative size-24">
@@ -62,6 +66,7 @@ export default function StudentProfilePage() {
   const [student, setStudent]         = useState<User | null>(null)
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [stats, setStats]             = useState<EnrollmentStats[]>([])
+  const { t } = useLocale()
   const [tab, setTab]                 = useState<Tab>('overview')
   const [loading, setLoading]         = useState(true)
   const [selEnrollmentId, setSelEnrollmentId] = useState('')
@@ -69,43 +74,40 @@ export default function StudentProfilePage() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [analyticsOffline, setAnalyticsOffline] = useState(false)
 
+  // Breadcrumb'da xom UUID emas, talabaning ismi ko'rinsin
+  useBreadcrumbTitle(student ? `${student.firstName} ${student.lastName}` : undefined)
+
   const canView = me?.role === 'ADMIN' || me?.role === 'SUPER_ADMIN' ||
                   me?.role === 'TEACHER' || me?.id === id
 
   useEffect(() => {
     if (!canView) return
+    // Bitta so'rov. Ilgari bu yerda 1 + 2N so'rov bor edi: har bir ro'yxatga
+    // olish uchun alohida davomat statistikasi va baholar. Ellikta kurs =
+    // yuzdan ortiq so'rov. Server ayni agregatni bitta javobda beradi —
+    // `analytics.service.ts` dagi studentStats.
     Promise.all([
       usersApi.getById(id).then(r => setStudent(r.data)),
-      enrollmentsApi.list(`studentId=${id}&limit=50`).then(r => {
-        setEnrollments(r.data)
-        return r.data
-      }),
+      enrollmentsApi.list(`studentId=${id}&limit=50`).then(r => setEnrollments(r.data)),
+      analyticsApi.student(id),
     ])
-    .then(([, enrolls]) =>
-      Promise.all(enrolls.map(async e => {
-        const [attRes, gradeRes] = await Promise.all([
-          attendanceApi.stats(e.id).catch(() => ({ data: { attendanceRate: 0, rate: 0 } })),
-          assessmentsApi.gradesByEnrollment(e.id).catch(() => ({ data: [] as GradeWithAssessment[] })),
-        ])
-        const grades = gradeRes.data
-        let avgGrade = '—'
-        if (grades.length > 0) {
-          const total = grades.reduce((s, g) => s + (Number(g.score) / Number(g.assessment.maxScore)) * 100, 0)
-          avgGrade = `${(total / grades.length).toFixed(1)}%`
-        }
-        const rate = attRes.data.attendanceRate ?? attRes.data.rate ?? 0
-        return {
-          enrollmentId: e.id,
-          courseTitle:  e.course.title,
-          courseId:     e.course.id,
-          status:       e.status,
-          attendanceRate: Number(rate),
-          avgGrade,
-          dropoutRisk: e.dropoutRiskScore ?? null,
-        } satisfies EnrollmentStats
-      }))
-    )
-    .then(s => { setStats(s); if (s[0]) setSelEnrollmentId(s[0].enrollmentId) })
+    .then(([, , statsRes]) => {
+      const rows = statsRes.data.courses.map(c => ({
+        enrollmentId:   c.enrollmentId,
+        courseTitle:    c.course.title,
+        courseId:       c.course.id,
+        courseSlug:     c.course.slug,
+        status:         c.status,
+        attendanceRate: c.attendanceRate ?? 0,
+        // Server topshiriq VAZNLARI bo'yicha hisoblaydi; bu yerda ilgari
+        // oddiy o'rtacha olinardi. Vaznli variant to'g'riroq — `weight`
+        // ustuni aynan shuning uchun bor.
+        avgGrade:       c.finalGrade === null ? '—' : `${c.finalGrade.toFixed(1)}%`,
+        dropoutRisk:    c.dropoutRisk,
+      } satisfies EnrollmentStats))
+      setStats(rows)
+      if (rows[0]) setSelEnrollmentId(rows[0].enrollmentId)
+    })
     .catch(e => toast.error(e.message))
     .finally(() => setLoading(false))
   }, [id, canView]) // eslint-disable-line
@@ -122,7 +124,7 @@ export default function StudentProfilePage() {
 
   if (!canView) return (
     <div className="flex items-center gap-3 text-muted-foreground">
-      <ArrowLeft className="size-4" />
+      <ArrowLeft className="size-[18px]" />
       <span>Access denied.</span>
     </div>
   )
@@ -151,7 +153,7 @@ export default function StudentProfilePage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon-sm" onClick={() => history.back()}>
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-[18px]" />
         </Button>
         <div>
           <h1 className="text-2xl font-semibold">{student.firstName} {student.lastName}</h1>
@@ -164,10 +166,10 @@ export default function StudentProfilePage() {
       {/* Overview cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { icon: BookOpen,      label: 'Courses enrolled',  value: enrollments.length },
-          { icon: CalendarCheck, label: 'Avg attendance',    value: overallAtt === '—' ? '—' : `${overallAtt}%` },
-          { icon: Star,          label: 'Avg grade',         value: overallGrade },
-          { icon: BookOpen,      label: 'High-risk courses', value: highRiskCount },
+          { icon: BookOpen,      label: t('student.coursesEnrolled'), value: enrollments.length },
+          { icon: CalendarCheck, label: t('student.avgAttendance'),   value: overallAtt === '—' ? '—' : `${overallAtt}%` },
+          { icon: Star,          label: t('student.avgGrade'),        value: overallGrade },
+          { icon: BookOpen,      label: t('student.highRisk'),        value: highRiskCount },
         ].map(({ label, value }) => (
           <Card key={label} size="sm">
             <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground font-normal">{label}</CardTitle></CardHeader>
@@ -178,16 +180,16 @@ export default function StudentProfilePage() {
 
       {/* Tabs */}
       <div className="flex border-b">
-        {(['overview', 'analytics'] as Tab[]).map(t => (
+        {(['overview', 'analytics'] as Tab[]).map(tabKey => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tabKey}
+            onClick={() => setTab(tabKey)}
             className={`px-4 py-2 text-sm font-medium capitalize border-b-2 transition-colors ${
-              tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'overview' && <><BookOpen className="inline size-3.5 mr-1" />Overview</>}
-            {t === 'analytics' && <><BarChart2 className="inline size-3.5 mr-1" />Analytics</>}
+            {tabKey === 'overview' && <><BookOpen className="inline size-4 mr-1" />{t('student.overview')}</>}
+            {tabKey === 'analytics' && <><BarChart2 className="inline size-4 mr-1" />{t('student.analytics')}</>}
           </button>
         ))}
       </div>
@@ -195,23 +197,23 @@ export default function StudentProfilePage() {
       {/* Tab: Overview */}
       {tab === 'overview' && (
         <Card>
-          <CardHeader><CardTitle>Enrolled Courses</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('student.enrolledCourses')}</CardTitle></CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Course</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Attendance</TableHead>
-                  <TableHead>Avg Grade</TableHead>
-                  <TableHead>Dropout Risk</TableHead>
+                  <TableHead>{t('student.course')}</TableHead>
+                  <TableHead>{t('student.status')}</TableHead>
+                  <TableHead>{t('student.attendance')}</TableHead>
+                  <TableHead>{t('student.avgGrade')}</TableHead>
+                  <TableHead>{t('student.dropoutRisk')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {stats.map(s => (
                   <TableRow key={s.enrollmentId}>
                     <TableCell className="font-medium">
-                      <Link href={`/courses/${s.courseId}`} className="hover:underline">{s.courseTitle}</Link>
+                      <Link href={`/courses/${s.courseSlug ?? s.courseId}`} className="hover:underline">{s.courseTitle}</Link>
                     </TableCell>
                     <TableCell>
                       <Badge variant={s.status === 'ACTIVE' ? 'default' : 'outline'}>{s.status}</Badge>
@@ -279,10 +281,10 @@ export default function StudentProfilePage() {
               {/* KPI row */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { label: 'Attendance (overall)', value: `${analyticsData.attendance_rate.toFixed(1)}%` },
-                  { label: 'Attendance (2 weeks)', value: `${analyticsData.attendance_rate_2w.toFixed(1)}%` },
-                  { label: 'Avg Grade',            value: `${analyticsData.avg_grade.toFixed(1)}%` },
-                  { label: 'Assignments done',     value: `${analyticsData.assignments_completion.toFixed(1)}%` },
+                  { label: t('student.attendanceOverall'), value: `${analyticsData.attendance_rate.toFixed(1)}%` },
+                  { label: t('student.attendance2w'),      value: `${analyticsData.attendance_rate_2w.toFixed(1)}%` },
+                  { label: t('student.avgGrade'),          value: `${analyticsData.avg_grade.toFixed(1)}%` },
+                  { label: t('student.assignmentsDone'),   value: `${analyticsData.assignments_completion.toFixed(1)}%` },
                 ].map(({ label, value }) => (
                   <Card key={label} size="sm">
                     <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground font-normal">{label}</CardTitle></CardHeader>
@@ -295,7 +297,7 @@ export default function StudentProfilePage() {
                 {/* Grade trend */}
                 {analyticsData.grade_trend.length > 0 && (
                   <Card className="lg:col-span-2">
-                    <CardHeader><CardTitle className="text-base">Grade Trend</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-base">{t('student.gradeTrend')}</CardTitle></CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={180}>
                         <LineChart data={analyticsData.grade_trend}>
@@ -312,9 +314,10 @@ export default function StudentProfilePage() {
 
                 {/* Risk gauge */}
                 <Card>
-                  <CardHeader><CardTitle className="text-base">Dropout Risk</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-base">{t('student.dropoutRisk')}</CardTitle></CardHeader>
                   <CardContent className="flex flex-col items-center gap-3 pt-2">
-                    <RiskGauge score={analyticsData.dropout_risk_score} />
+                    <RiskGauge score={analyticsData.dropout_risk_score}
+                      labels={[t('student.riskHigh'), t('student.riskMedium'), t('student.riskLow')]} />
                     <div className="text-xs text-muted-foreground text-center">
                       Last login {analyticsData.days_since_login.toFixed(0)} days ago
                     </div>

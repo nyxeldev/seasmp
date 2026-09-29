@@ -6,7 +6,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from src.config.settings import MODEL_PATH, DROPOUT_THRESHOLD
+from src.config.settings import LEGACY_MODEL_PATH as MODEL_PATH, DROPOUT_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
