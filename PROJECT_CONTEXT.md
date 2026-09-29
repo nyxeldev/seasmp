@@ -524,9 +524,19 @@ Note: `apps/api/.env` has `ANALYTICS_API_URL=http://localhost:8000` — update t
 
 ## 10. Known Issues / Quirks
 
-Avvalgi ro'yxatdagi yettita band (root `package.json` dagi `apps/frontend`,
-ichma-ich `apps/web/.git`, jingalak qavsli axlat papkalar, create-next-app
-qoldiqlari, compose dagi `apps/frontend`) HAL QILINGAN. Hozirgi holat:
+Avvalgi ro'yxatdagi yettita band HAL QILINGAN (tekshirildi):
+
+1. ✅ Root `package.json` dagi `apps/frontend` — endi `apps/web` to'g'ri
+2. ✅ `apps/web/.git` ichma-ich repo — yo'q, bitta repo (`.git` faqat ildizda)
+3. ✅ Jingalak qavsli axlat papkalar (`{apps...`) — mavjud emas
+4. ✅ `apps/web/public/` — faqat `.gitkeep`, create-next-app qoldiqlari yo'q
+5. ✅ `docker-compose.yml` dagi `apps/frontend` — `apps/web` ga tuzatilgan
+6. ✅ `test-api.ps1` dagi refresh token izohi — endi README'da hujjatlashtirilgan
+7. ✅ API→Analytics proksi — `apps/api/src/routes/analytics.routes.ts` da
+   `PY_BASE = env.ANALYTICS_API_URL` orqali ishlaydi, `/v1/analytics/*`
+   marshrutlari Python servisiga proksilanadi
+
+Hozirgi holat — yangi topilgan cheklovlar:
 
 1. **Xatti-harakat profili muvaffaqiyatli so'rovlardan o'rganadi.** Imtiyozli
    aktorning muvaffaqiyatli murojaati keyingi `profiles/refresh` da me'yor
@@ -728,3 +738,232 @@ Ikkita nosozlik yopildi:
 Sentry ATAYLAB majburiy emas: `SENTRY_DSN` bo'lmasa modul jim ishlaydi va
 xatolar faqat Winston orqali yoziladi. Brauzer xatolari ham shu yo'ldan
 o'tadi: `ErrorBoundary` -> `POST /v1/telemetry/client-error`.
+
+---
+
+## 15. Ilmiy validatsiya — E1 (tashqi benchmark) va E2 (ko'r baholash)
+
+`evaluate.ts` dagi eng katta metodologik zaiflik: hujum/zararsiz stsenariylar
+HAM, ularni baholovchi tizim (chegaralar, vaznlar) HAM bir xil loyihada, bir
+xil odam tomonidan yozilgan — bu aylanma dalil, BMI himoyasida "tizim o'zi
+yozgan testni o'tadi" degan e'tirozga ochiq. Ikkita mustaqil tekshiruv
+qo'shildi.
+
+### E2 — Ko'r baholash (`apps/api/src/tools/blindEval.ts`)
+
+Ssenariylar FAQAT tahdid modeli nuqtai nazaridan yozilgan — yozish
+jarayonida `correlation.ts` yoki `behaviorScoring.ts` fayllariga murojaat
+qilinmagan. Har biri HAQIQIY HTTP so'rov bilan ishlab turgan API'ga
+yuborilgan, natija esa productiondagi HAQIQIY `correlate()` funksiyasi
+orqali o'qilgan (yangi hisoblash yo'q — deploy qilingan tizim o'lchandi).
+
+**MUHIM CHEKLOV:** server real vaqtdan (`new Date()`) foydalanadi, skript
+soatni sun'iy o'zgartira olmaydi — shuning uchun soat signali bu testda
+ishtirok etmaydi. Faqat vaqtdan mustaqil signallar sinaldi: avtorizatsiya
+(FOREIGN), notanish IP/qurilma, qamrov, chastota.
+
+**Natija (N=14, 7 hujum / 7 zararsiz, `npm run eval:blind --workspace=apps/api`):**
+
+| | |
+|---|---|
+| Confusion matrix | TP=6, FP=0, FN=1, TN=7 |
+| Aniqlik (precision) | **1.000** |
+| Qamrov (recall) | **0.857** |
+| F1 | **0.923** |
+| ROC AUC | **0.980** |
+
+Yagona o'tkazib yuborilgan holat: "Vakolatdan tashqari resurslarga sayohat"
+(o'qituvchi `/v1/users` ga ikki marta urinib, ikkalasida ham 403 oldi) —
+zaif rad etish signali (2 ta, to'yinish 5 ta) + o'rtacha xatti-harakat bali
+(0.47) birlashib ham `CORRELATED_THRESHOLD` (0.50) dan o'tolmadi. Haqiqiy,
+hujjatlashtirilgan cheklov.
+
+**Yo'l davomida topilgan metodologik xato:** birinchi yugurishlarda skript
+o'zi yaratgan HTTP trafigi audit jurnaliga yozilib qolib, KEYINGI
+`profiles/refresh` da aktorning me'yoriga qo'shilib ketgan — bu esa
+"Ommaviy ma'lumot chiqarish" ssenariysini ikkinchi yugurishda aniqlanmay
+qoldirgan (o'lchandi: reqPerHourMean 8.0/soat → MASS_ACCESS_FLOOR=160, 130
+so'rov yetmadi; tozalangandan keyin 3.4/soat → chegara 100, to'g'ri
+aniqlandi). Skript endi o'zini avtomatik tozalaydi (`--no-cleanup` bilan
+o'chirish mumkin).
+
+### E1 — Tashqi benchmark (`apps/api/src/tools/externalBenchmark.ts`)
+
+Manba: **CMU CERT Insider Threat Test Dataset, release r4.2**
+(https://kilthub.cmu.edu/articles/dataset/Insider_Threat_Test_Dataset/12841247,
+DOI 10.1184/R1/12841247, CC BY 4.0). To'g'ridan-to'g'ri yuklanadi —
+ro'yxatdan o'tish yoki so'rov formasi TALAB QILINMAYDI (dastlab shunday
+deb taxmin qilingan edi, amalda tekshirilib rad etildi).
+
+**Nega r4.2:** barcha versiyalar bo'yicha 191 ta belgilangan insayderdan 70
+tasi (36.6%) aynan shu versiyada — boshqa versiyalar (r2: 1 ta, r3.x: 2
+tadan, r4.1: 3 ta) statistik jihatdan ishonchsiz natija berardi.
+
+**Xaritalash:** CERT `logon.csv` (foydalanuvchi, sana, PC, Logon/Logoff)
+bizning HTTP so'rov oqimiga mos keladi; PC — IP+qurilma birlashtirilgan
+holda; foydalanuvchining eng ko'p ishlatgan PC'si — OWNER (tanish IP)
+ekvivalenti; boshqa PC'dan kirish — FOREIGN (1-qatlam signali). Baholovchi
+kod productiondan O'ZGARTIRMASDAN import qilingan: `scoreEvent`,
+`correlate`, `authzRisk`, `behaviorRisk` — maqsad yangi algoritm emas,
+MAVJUDINI tashqi ma'lumotda o'lchash.
+
+**Ochiq aytilgan soddalashtirishlar:**
+- productionda signal 15 daqiqalik oynada to'planadi; CERT foydalanuvchisi
+  kuniga 1-4 marta kiradi — shuning uchun har bir belgilangan SESSIYA
+  (answers faylidagi boshlanish-tugash) bitta holat sifatida olinadi
+- CERT da "rad etilgan urinish" tushunchasi yo'q (domenga kirish ochiq) —
+  boshqa PC'dan kirish har doim `authzAllowed=1` (to'liq risk) sifatida
+  hisoblanadi, `authzDenied` (qisman risk) ishlatilmaydi
+- Salbiy sinf uchun tasodifiy 300 foydalanuvchi tanlanadi (down-sampling
+  bosqichi kodda saqlandi, lekin amalda logon.csv da bor-yo'g'i 1000 ta
+  noyob foydalanuvchi chiqdi — dastlab taxmin qilingan ~4000 emas; ya'ni
+  salbiy sinf populyatsiyaning ~32%, kichik tasodifiy namuna emas)
+
+**Natija (70 insayder + 300 tasodifiy zararsiz, jami 367 holat):**
+
+| | |
+|---|---|
+| Confusion matrix | TP=19, FP=67, FN=51, TN=230 |
+| Aniqlik | **0.221** |
+| Qamrov | **0.271** |
+| F1 | **0.244** |
+| ROC AUC | **0.627** |
+
+E2 dan (0.980) sezilarli past. Diagnostika: TP bo'lgan 19 ta holatning
+HAMMASI risk=1 oldi (authzAllowed=1 -- sessiyada boshqa PC ishlatilgan),
+bitta ham faqat xatti-harakat signali orqali tutilmagan. Matematik jihatdan
+aniq: 19 / 70 = 0.2714 -- bu qamrov bilan bitta xonagacha mos keladi.
+
+Sabab: bu yugurish FAQAT logon.csv dan foydalandi (hisoblash vaqtini
+tejash uchun ataylab tanlangan qamrov qarori). CERT insayder
+ssenariylarining aksariyati boshqa PC'ga jismoniy kirish bilan
+CHEKLANMAYDI -- ular email orqali tashqariga yuborish, tashqi ish-qidiruv
+saytlariga tashrif, USB orqali fayl ko'chirish kabi KANALLARDA namoyon
+bo'ladi (email.csv, http.csv, device.csv -- bu yugurishda ishlatilmagan).
+Qolgan 51 ta insayder logon.csv nuqtai nazaridan zararsiz ko'rinadi --
+ularning haqiqiy zararli faoliyati boshqa kanalda.
+
+FP tomonida ham xuddi shu mexanizm teskarisiga ishladi: 67 ta yolg'on
+ishoraning aksariyati ham anyForeign=true dan kelib chiqadi -- ba'zi
+zararsiz xodimlar ham vaqti-vaqti bilan boshqa PC ishlatadi (umumiy
+kompyuter, IT yordami). Bizning LMS'da begona obyektga muvaffaqiyatli
+murojaat hech qachon qonuniy bo'lmaydi, CERT'da boshqa PC ishlatish
+bunday kafolatga ega emas -- xuddi shu vaznni ko'chirib olish noaniq
+proksi yaratdi.
+
+Xulosa (BMI muhokamasi uchun): past AUC gibrid-korrelyatsiya
+gipotezasining o'zi noto'g'ri ekanini ko'rsatmaydi -- E2 aynan shu
+gipotezani boy, ko'p signalli ma'lumotda tasdiqladi (AUC=0.980). E1 past
+natijasi ma'lumot boyligi cheklovini ko'rsatadi: bitta zaif proksi-signal
+(faqat PC identifikatori) productionda 5 xil signal bilan ishlaydigan
+behaviorScoring.ts ni to'liq almashtira olmaydi. Quyida email.csv/http.csv
+bilan boyitilgan ikkita qo'shimcha yugurish tavsiflanadi.
+
+### E1 — 2-urinish: email.csv ni avtorizatsiya signali sifatida qo'shish (rad etildi)
+
+Gipoteza: "tashqi email qabul qiluvchi" (domen `dtaa.com` dan tashqari)
+"boshqa PC" bilan bir xil -- ya'ni `authzAllowed=1` (to'liq risk) signalini
+uyg'otadi, deb faraz qilindi (`--with-email-authz` bayrog'i).
+
+**Natija (367 holat):**
+
+| | |
+|---|---|
+| Confusion matrix | TP=65, FP=299, FN=5, TN=1 |
+| Aniqlik | **0.179** |
+| Qamrov | **0.929** |
+| F1 | **0.300** |
+| ROC AUC | **0.466** (tasodifiydan HAM PAST) |
+
+Bu natija ochiq YOMONLASHUV, yashirilmaydi. Sabab aniq o'lchandi:
+email.csv dagi 974,395 ta tegishli hodisadan 475,302 tasi (**48%**) kamida
+bitta tashqi qabul qiluvchiga ega -- bu sintetik korpusda tashqi email
+juda oddiy, ko'pincha qonuniy ish jarayoni (mijozlar, hamkorlar,
+konferensiyalar). Uni "hech qachon qonuniy bo'lmagan" LMS IDOR bilan bir
+xil ishonch darajasida (`authzAllowed=1`) baholash noto'g'ri proksi
+yaratdi: deyarli barcha 300 zararsiz foydalanuvchi ham kamida bir marta
+tashqi email yuborgan -- shuning uchun FP=299/300. Xulosa: "tashqi
+qabul qiluvchi" xususiyati o'zi past ajratuvchanlikka ega, LMS domenidagi
+"begona resursga IDOR" bilan bir xil semantik og'irlikda ishlatib
+bo'lmaydi. Kod `--with-email-authz` bayrog'i ostida saqlangan (takrorlash
+uchun), lekin STANDART REJIM emas.
+
+### E1 — 3-urinish (yakuniy): email.csv/http.csv faqat xatti-harakat boyitishi uchun
+
+Tuzatilgan yondashuv: email.csv va http.csv hodisalari xatti-harakat
+profiliga (`resourceMix`, o'rtacha so'rov chastotasi, ko'proq o'qitish
+namunasi) qo'shiladi va avtorizatsiya QOIDASI o'zgarmaydi -- u hamon
+faqat "boshqa PC" holatiga asoslanadi, "tashqi email" alohida authz
+signali sifatida hisoblanmaydi (2-urinishdagi kabi emas). Bu standart
+rejim (`useEmailAsAuthz=false`, bayroqsiz ishga tushirish).
+
+**ANIQLASHTIRISH (kod ko'rib chiqishda topilgan):** qoidaning o'zi
+o'zgarmagan bo'lsa-da, uning KIRISH MA'LUMOTI o'zgargan -- "eng ko'p
+ishlatilgan PC" (`primaryPc()`) va "boshqa PC"lik (`anyForeign`) endi
+logon+http+email BIRLASHGAN hodisalar ustida hisoblanadi (barchasi CERT'da
+o'z `pc` ustuniga ega), 1-urinishdagi kabi FAQAT logon.csv emas. Ya'ni
+avtorizatsiya signali "o'zgarmagan" degan da'vo faqat QOIDA darajasida
+to'g'ri -- NATIJA darajasida emas, chunki ko'proq ma'lumot "asosiy PC"ni
+aniqroq belgilaydi. Quyidagi diagnostika shuni hisobga oladi.
+
+**Qayta ishlangan hajm:** email.csv -- 2,629,979 qator, 974,395 mos
+hodisa; http.csv -- 28,434,423 qator, 10,546,593 mos hodisa (370
+foydalanuvchi bo'yicha).
+
+**Natija (367 holat):**
+
+| | |
+|---|---|
+| Confusion matrix | TP=19, FP=59, FN=51, TN=241 |
+| Aniqlik | **0.244** |
+| Qamrov | **0.271** |
+| F1 | **0.257** |
+| ROC AUC | **0.650** |
+
+Solishtirish uchun uch yugurish:
+
+| Variant | TP | FP | FN | TN | Aniqlik | Qamrov | F1 | AUC |
+|---|---|---|---|---|---|---|---|---|
+| 1: faqat logon.csv | 19 | 67 | 51 | 230 | 0.221 | 0.271 | 0.244 | 0.627 |
+| 2: +email avtorizatsiya sifatida | 65 | 299 | 5 | 1 | 0.179 | 0.929 | 0.300 | **0.466** |
+| 3: +email/http xatti-harakat boyitishi | 19 | 59 | 51 | 241 | 0.244 | 0.271 | 0.257 | **0.650** |
+
+Diagnostika: qamrov (0.271, TP=19/70) O'ZGARMADI -- bu safar 70 ta
+insayderning aynan qaysi 19 tasi tutilgani ham 1-urinish bilan bir xil
+bo'lib chiqdi (empirik kuzatuv, qoidaning mantiqiy natijasi emas). FP esa
+67 dan 59 ga tushdi (12% kamaydi).
+
+**MUHIM:** bu FP kamayishini "xatti-harakat profili boyidi, shuning uchun
+ba'zi zararsiz xodimlar to'g'ri aniqlandi" deb izohlash CHALG'ITUVCHI
+bo'lar edi. `correlation.ts`dagi `correlate()` funksiyasi `authzAllowed=1`
+bo'lganda riskni SO'ZSIZ 1 ga tenglashtiradi (`authzRisk()` shart
+tekshirmasdan `return 1` qiladi) -- ya'ni `behaviorScore` bu holatlarda
+YAKUNIY qarorga UMUMAN TA'SIR QILMAYDI. FP'ning kamayishi xatti-harakat
+signali "kuchayganidan" emas, balki yuqorida aniqlangandek `primaryPc()`
+endi ko'proq ma'lumot (logon+http+email) asosida hisoblanib, ba'zi
+zararsiz-lekin-ko'p-PC-ishlatuvchi xodimlar uchun "asosiy PC" aniqroq
+belgilangani va shu bilan `anyForeign` noto'g'ri ko'tarilmagani uchun,
+degan ehtimol ancha kuchli. Bu ish doirasida ikkala mexanizmni ajratib
+o'lchash (ablation: `primaryPc`ni faqat logon.csv'dan hisoblab, faqat
+`behaviorScore` uchun http/email qo'shish) qilinmadi -- shuning uchun
+sabab "kuchli ehtimol" darajasida qoldirilmoqda, "isbotlangan" emas.
+
+Bu E1 ning eng yaxshi (lekin hamon E2 dan sezilarli past) natijasi.
+
+Xulosa: manba boyitish AUC'ni ozgina yaxshiladi (0.627 -> 0.650, +3.7 foiz
+punkti), ehtimol asosan `primaryPc()` aniqroq hisoblangani orqali (yuqoriga
+qarang), sof xatti-harakat signali orqali emas -- chunki qamrov (recall)
+umuman o'zgarmadi va `authzAllowed=1` bo'lgan holatlarda `behaviorScore`
+qarorga ta'sir qila olmaydi. E1 dagi asosiy cheklov avtorizatsiya
+signalining zaifligi (yagona proksi -- "boshqa PC"), behaviorScoring emas.
+Haqiqiy yaxshilanish uchun
+email/http hodisalarini alohida, LMS domeniga xos bo'lmagan avtorizatsiya
+semantikasi bilan (masalan, "tashqi ish-qidiruv sayti" kabi maxsus URL
+toifalari, shunchaki "tashqi qabul qiluvchi" emas) qayta modellashtirish
+kerak bo'ladi -- bu joriy ish doirasidan tashqarida, keyingi qadam
+sifatida qoldirildi.
+
+Ishlatish:
+```bash
+npx tsx apps/api/src/tools/externalBenchmark.ts --dir=<r4.2 papkasi> [--with-email-authz]
+```

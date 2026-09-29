@@ -19,7 +19,8 @@
     "db:seed:demo": "node scripts/with-env.js tsx prisma/seed-demo.ts",
     "db:seed:history": "node scripts/with-env.js tsx prisma/seed-history.ts",
     "demo:behavior": "node scripts/with-env.js tsx src/tools/behaviorDemo.ts",
-    "check:realtime": "node scripts/with-env.js tsx src/tools/realtimeCheck.ts"
+    "check:realtime": "node scripts/with-env.js tsx src/tools/realtimeCheck.ts",
+    "eval:blind": "node scripts/with-env.js tsx src/tools/blindEval.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
