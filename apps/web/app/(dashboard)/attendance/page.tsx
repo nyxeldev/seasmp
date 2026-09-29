@@ -64,6 +64,11 @@ export default function AttendancePage() {
   const [qrData, setQrData]           = useState<{ token: string; qrCodeUrl: string; expiresIn: number } | null>(null)
   const [countdown, setCountdown]     = useState(0)
   const countdownRef                  = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Guruh davomati: kurs + sana tanlanadi, so'ng har bir talabaga holat qo'yiladi
+  const [sheetCourse, setSheetCourse] = useState('')
+  const [sheetDate, setSheetDate]     = useState(new Date().toISOString().slice(0, 10))
+  const [sheet, setSheet]             = useState<Record<string, string>>({})
+  const [sheetSaving, setSheetSaving] = useState(false)
   const [form, setForm]               = useState({ enrollmentId: '', lessonDate: '', status: 'PRESENT' })
   const [qrForm, setQrForm]           = useState({ courseId: '', lessonDate: '' })
   const [qrLoading, setQrLoading]     = useState(false)
@@ -125,11 +130,66 @@ export default function AttendancePage() {
     ? courses
     : Array.from(new Map(enrollments.map(e => [e.course.id, e.course])).values())
 
+  // Base UI Select tugmada tanlangan QIYMATNI chizadi — qiymat kurs IDsi bo'lgani
+  // uchun u yerda xom UUID ko'rinardi. `items` qiymatdan yorliqqa moslikni beradi.
+  const courseItems = useMemo(
+    () => Object.fromEntries(teacherCourses.map(c => [c.id, c.title])),
+    [teacherCourses],
+  )
+
   // ── Filtered records ────────────────────────────────────────────────────────
-  const selectedCourseTitle = teacherCourses.find(c => c.id === selectedCourse)?.title
-  const filtered = selectedCourse === 'ALL' || !selectedCourseTitle
+  // Kurs IDsi bo'yicha. Ilgari bu yerda kurs NOMI solishtirilardi: bir xil nomli
+  // ikki kurs aralashib ketardi, kurs topilmasa esa filtr jimgina bekor bo'lib
+  // hamma yozuv ko'rsatilardi — ya'ni tanlov ishlamayotgandek tuyulardi.
+  const filtered = selectedCourse === 'ALL'
     ? records
-    : records.filter(r => r.enrollment.course.title === selectedCourseTitle)
+    : records.filter(r => r.enrollment.course.id === selectedCourse)
+
+  // ── Guruh davomati varaqasi ─────────────────────────────────────────────────
+  // Tanlangan kursning faol talabalari
+  const sheetRoster = useMemo(
+    () => enrollments.filter(e => e.course.id === sheetCourse && e.status === 'ACTIVE'),
+    [enrollments, sheetCourse],
+  )
+
+  // O'sha kun uchun allaqachon belgilangan holatlar — varaqa ular bilan to'ladi,
+  // shunda o'qituvchi xatosini ko'radi va tuzata oladi
+  const savedForDate = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const r of records) {
+      if (r.enrollment.course.id !== sheetCourse) continue
+      if (new Date(r.lessonDate).toISOString().slice(0, 10) !== sheetDate) continue
+      map[r.enrollment.id] = r.status
+    }
+    return map
+  }, [records, sheetCourse, sheetDate])
+
+  useEffect(() => { setSheet(savedForDate) }, [savedForDate])
+
+  const setAll = (status: string) =>
+    setSheet(Object.fromEntries(sheetRoster.map(e => [e.id, status])))
+
+  const saveSheet = async () => {
+    const entries = sheetRoster
+      .map(e => ({ enrollmentId: e.id, status: sheet[e.id] }))
+      .filter((r): r is { enrollmentId: string; status: string } => Boolean(r.status))
+
+    if (entries.length === 0) { toast.error(t('attendance.nothingToSave')); return }
+
+    setSheetSaving(true)
+    try {
+      const res = await attendanceApi.markBulk({
+        courseId: sheetCourse, lessonDate: sheetDate, records: entries,
+      })
+      toast.success(`${res.data.saved} ta yozuv saqlandi`)
+      setMarkOpen(false)
+      load()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Xato')
+    } finally {
+      setSheetSaving(false)
+    }
+  }
 
   // ── Calendar heatmap: last 30 days ──────────────────────────────────────────
   const heatmapDays = useMemo(() => {
@@ -181,44 +241,97 @@ export default function AttendancePage() {
                 style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)', background: 'transparent' }}
               />
             }>
-              <Plus className="size-4" /> {t('attendance.mark')}
+              <Plus className="size-[18px]" /> {t('attendance.mark')}
             </DialogTrigger>
-            <DialogContent>
+            {/* Guruh varaqasi: kurs → sana → butun ro'yxat bir ekranda.
+                Ilgari bu yerda barcha kurslarning hamma talabasi bitta ochiluvchi
+                ro'yxatda edi va har biri alohida saqlanardi. */}
+            <DialogContent className="max-w-2xl">
               <DialogHeader><DialogTitle>{t('attendance.markTitle')}</DialogTitle></DialogHeader>
-              <form onSubmit={mark} className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label>{t('attendance.enrollLabel')}</Label>
-                  <Select value={form.enrollmentId} onValueChange={v => setForm(f => ({...f, enrollmentId: v ?? ''}))}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder={t('attendance.selectStudent')} /></SelectTrigger>
-                    <SelectContent>
-                      {enrollments.map(e => (
-                        <SelectItem key={e.id} value={e.id}>
-                          {e.student.firstName} {e.student.lastName} — {e.course.title}
-                        </SelectItem>
+
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>{t('attendance.course')}</Label>
+                    <Select value={sheetCourse} onValueChange={v => setSheetCourse(v ?? '')} items={courseItems}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder={t('attendance.selectCourse')} /></SelectTrigger>
+                      <SelectContent>
+                        {teacherCourses.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>{t('attendance.lessonDate')}</Label>
+                    <Input type="date" value={sheetDate} onChange={e => setSheetDate(e.target.value)} />
+                  </div>
+                </div>
+
+                {!sheetCourse ? (
+                  <p className="text-sm py-8 text-center" style={{ color: 'var(--s-muted)' }}>
+                    {t('attendance.pickCourseFirst')}
+                  </p>
+                ) : sheetRoster.length === 0 ? (
+                  <p className="text-sm py-8 text-center" style={{ color: 'var(--s-muted)' }}>
+                    {t('attendance.noStudents')}
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs" style={{ color: 'var(--s-muted)' }}>{t('attendance.markAll')}:</span>
+                      {(['PRESENT', 'ABSENT', 'LATE'] as const).map(s => (
+                        <button key={s} type="button" onClick={() => setAll(s)}
+                          className="text-xs px-2 py-1 rounded-md border transition-colors"
+                          style={{ borderColor: STATUS_META[s].color, color: STATUS_META[s].color }}>
+                          {STATUS_META[s].label}
+                        </button>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>{t('attendance.lessonDate')}</Label>
-                  <Input type="date" value={form.lessonDate}
-                    onChange={e => setForm(f => ({...f, lessonDate: e.target.value}))} required />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>{t('common.status')}</Label>
-                  <Select value={form.status} onValueChange={v => setForm(f => ({...f, status: v ?? ''}))}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PRESENT">{t('attendance.present')}</SelectItem>
-                      <SelectItem value="ABSENT">{t('attendance.absent')}</SelectItem>
-                      <SelectItem value="LATE">{t('attendance.late')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                      <span className="ml-auto text-xs" style={{ color: 'var(--s-muted)' }}>
+                        {Object.keys(sheet).length} / {sheetRoster.length}
+                      </span>
+                    </div>
+
+                    <div className="max-h-[45vh] overflow-y-auto rounded-lg border divide-y"
+                      style={{ borderColor: 'var(--s-border)' }}>
+                      {sheetRoster.map(e => (
+                        <div key={e.id} className="flex items-center justify-between gap-3 px-3 py-2"
+                          style={{ borderColor: 'var(--s-border)' }}>
+                          <span className="text-sm truncate" style={{ color: 'var(--s-text)' }}>
+                            {e.student.firstName} {e.student.lastName}
+                          </span>
+                          <div className="flex gap-1 shrink-0">
+                            {(['PRESENT', 'ABSENT', 'LATE'] as const).map(s => {
+                              const active = sheet[e.id] === s
+                              const meta = STATUS_META[s]
+                              return (
+                                <button key={s} type="button"
+                                  onClick={() => setSheet(prev => ({ ...prev, [e.id]: s }))}
+                                  aria-pressed={active}
+                                  title={meta.label}
+                                  className="size-7 rounded-md border flex items-center justify-center transition-all"
+                                  style={{
+                                    borderColor: active ? meta.color : 'var(--s-border)',
+                                    background:  active ? meta.bg : 'transparent',
+                                    color:       active ? meta.color : 'var(--s-muted)',
+                                  }}>
+                                  <meta.Icon className="size-4" />
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
                 <DialogFooter showCloseButton>
-                  <Button type="submit">{t('common.save')}</Button>
+                  <Button onClick={saveSheet} disabled={sheetSaving || !sheetCourse || sheetRoster.length === 0}>
+                    {sheetSaving ? t('common.saving') : t('common.save')}
+                  </Button>
                 </DialogFooter>
-              </form>
+              </div>
             </DialogContent>
           </Dialog>
         )}
@@ -226,7 +339,7 @@ export default function AttendancePage() {
 
       {/* Course selector */}
       <div className="flex items-center gap-3">
-        <Select value={selectedCourse} onValueChange={v => setSelectedCourse(v ?? 'ALL')}>
+        <Select value={selectedCourse} onValueChange={v => setSelectedCourse(v ?? 'ALL')} items={{ ALL: t('attendance.allCourses'), ...courseItems }}>
           <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">{t('attendance.allCourses')}</SelectItem>
@@ -306,13 +419,13 @@ export default function AttendancePage() {
           {displayRecs.length > 0 && (
             <div className="flex items-center gap-3 text-xs">
               <span className="flex items-center gap-1" style={{ color: '#22C55E' }}>
-                <CheckCircle className="size-3.5" /> {stats.present}
+                <CheckCircle className="size-4" /> {stats.present}
               </span>
               <span className="flex items-center gap-1" style={{ color: '#F59E0B' }}>
-                <AlertCircle className="size-3.5" /> {stats.late}
+                <AlertCircle className="size-4" /> {stats.late}
               </span>
               <span className="flex items-center gap-1" style={{ color: '#EF4444' }}>
-                <XCircle className="size-3.5" /> {stats.absent}
+                <XCircle className="size-4" /> {stats.absent}
               </span>
             </div>
           )}
@@ -344,12 +457,12 @@ export default function AttendancePage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--s-muted)' }}>
-                    <Clock className="size-3" />
+                    <Clock className="size-3.5" />
                     {new Date(r.lessonDate).toLocaleDateString('uz-UZ', { month: 'short', day: 'numeric' })}
                   </div>
                   <span className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full"
                     style={{ color: meta.color, background: meta.bg }}>
-                    <Icon className="size-3" /> {meta.label}
+                    <Icon className="size-3.5" /> {meta.label}
                   </span>
                 </div>
               </motion.div>
@@ -387,7 +500,7 @@ export default function AttendancePage() {
               }}
             />
           }>
-            <QrCode className="size-4" /> {t('attendance.qr')}
+            <QrCode className="size-[18px]" /> {t('attendance.qr')}
           </DialogTrigger>
 
           <DialogContent className="max-w-sm">
@@ -438,7 +551,7 @@ export default function AttendancePage() {
                     disabled={qrLoading}
                     className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 transition-colors"
                   >
-                    <RefreshCw className="size-3.5" /> {t('attendance.refresh')}
+                    <RefreshCw className="size-4" /> {t('attendance.refresh')}
                   </button>
                 </div>
                 <p className="text-xs text-center" style={{ color: 'var(--s-muted)' }}>

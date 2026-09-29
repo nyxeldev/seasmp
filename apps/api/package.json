@@ -15,7 +15,11 @@
     "db:push": "node scripts/with-env.js prisma db push",
     "db:studio": "node scripts/with-env.js prisma studio",
     "db:seed": "node scripts/with-env.js tsx prisma/seed.ts",
-    "db:generate": "node scripts/with-env.js prisma generate"
+    "db:generate": "node scripts/with-env.js prisma generate",
+    "db:seed:demo": "node scripts/with-env.js tsx prisma/seed-demo.ts",
+    "db:seed:history": "node scripts/with-env.js tsx prisma/seed-history.ts",
+    "demo:behavior": "node scripts/with-env.js tsx src/tools/behaviorDemo.ts",
+    "check:realtime": "node scripts/with-env.js tsx src/tools/realtimeCheck.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -25,6 +29,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/swagger": "^8.14.0",
     "@prisma/client": "^6.0.0",
+    "@sentry/node": "^11.0.0",
     "@types/nodemailer": "^8.0.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.0.0",
@@ -35,6 +40,7 @@
     "otplib": "^12.0.1",
     "qrcode": "^1.5.3",
     "socket.io": "^4.2.0",
+    "socket.io-client": "^4.8.4",
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },

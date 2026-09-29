@@ -105,7 +105,7 @@ export function AvatarUpload({ currentUrl, initials, onUploadComplete }: AvatarU
           className="absolute -bottom-1 -right-1 size-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
           style={{ background: '#3B82F6', border: '2px solid var(--s-bg-card)' }}
         >
-          <Camera className="size-3 text-white" />
+          <Camera className="size-3.5 text-white" />
         </div>
       </div>
 
@@ -138,7 +138,7 @@ export function AvatarUpload({ currentUrl, initials, onUploadComplete }: AvatarU
             onClick={e => { e.stopPropagation(); setPreview(null) }}
             className="text-[11px] text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 mt-1"
           >
-            <X className="size-3" /> Bekor qilish
+            <X className="size-3.5" /> Bekor qilish
           </button>
         )}
       </div>

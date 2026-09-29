@@ -22,9 +22,9 @@ test.describe('Security page', () => {
 
   test('student is denied access to security page', async ({ studentPage }) => {
     await studentPage.goto('/security')
-    await studentPage.waitForSelector('aside', { timeout: 8000 }).catch(() => {})
-    const denied  = await studentPage.getByText(/kirish taqiqlangan|forbidden|403/i).isVisible().catch(() => false)
-    const redirected = studentPage.url().includes('login') || studentPage.url().includes('dashboard')
-    expect(denied || redirected).toBe(true)
+    // RoleGuard rol yuklangandan KEYIN router.replace chaqiradi, shuning uchun
+    // yo'naltirishni kutish kerak — darhol url() ni o'qish poygaga tushadi.
+    await studentPage.waitForURL(/\/(dashboard|login)/, { timeout: 10000 })
+    await expect(studentPage).not.toHaveURL(/\/security/)
   })
 })

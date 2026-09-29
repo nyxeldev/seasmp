@@ -145,17 +145,17 @@ function AuditLogView() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/security">
-            <Button variant="ghost" size="sm"><ArrowLeft className="size-4 mr-1" />Orqaga</Button>
+            <Button variant="ghost" size="sm"><ArrowLeft className="size-[18px] mr-1" />Orqaga</Button>
           </Link>
           <h1 className="text-2xl font-semibold">Audit Log</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`size-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`size-[18px] mr-1.5 ${loading ? 'animate-spin' : ''}`} />
             Yangilash
           </Button>
           <Button variant="outline" size="sm" onClick={exportCsv}>
-            <Download className="size-4 mr-1.5" />
+            <Download className="size-[18px] mr-1.5" />
             CSV
           </Button>
         </div>
@@ -233,7 +233,7 @@ function AuditLogView() {
                     >
                       <TableCell>
                         {hasDetail && (
-                          isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />
+                          isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">

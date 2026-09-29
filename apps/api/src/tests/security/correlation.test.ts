@@ -3,12 +3,15 @@
  */
 import {
   correlate, authzRisk, behaviorRisk, combineRisk, singleLayerVerdict,
+  privilegedScopeRisk,
   SINGLE_THRESHOLD, CORRELATED_THRESHOLD,
+  PRIVILEGED_SCOPE_FLOOR, PRIVILEGED_SCOPE_SATURATION, PRIVILEGED_SCOPE_CAP,
   type LayerSignals,
 } from '../../services/correlation'
 
 const sig = (o: Partial<LayerSignals> = {}): LayerSignals => ({
-  authzDenied: 0, authzAllowed: 0, behaviorScore: 0, massAccess: false, ...o,
+  authzDenied: 0, authzAllowed: 0, behaviorScore: 0, massAccess: false,
+  privilegedOwners: 0, ...o,
 })
 
 describe('qatlam risklari', () => {
@@ -95,3 +98,63 @@ describe('singleLayerVerdict — eksperiment uchun taqqoslash', () => {
     expect(correlate(both).alert).toBe(true)
   })
 })
+
+/**
+ * IMTIYOZLI AKTOR (admin) uchun 1-qatlam.
+ *
+ * Ilgari resolveAccess admin uchun darhol PRIVILEGED qaytarardi va egalikni
+ * umuman hisoblamasdi — ya'ni 1-qatlam adminlar uchun butunlay jim edi va
+ * korrelyatsiya ular uchun hech qachon ishlamasdi. Ichki tahdid haqidagi
+ * da'vo esa aynan imtiyozli rollar haqida.
+ *
+ * Yechim: adminning begona obyektga tegishi hodisa emas (bu uning ishi),
+ * lekin QAMROV o'lchanadi — oynada nechta har xil egaga tegdi.
+ */
+describe('imtiyozli qamrov — 1-qatlamning admin uchun signali', () => {
+  it('kam sonli egaga tegish signal emas', () => {
+    expect(privilegedScopeRisk(0)).toBe(0)
+    expect(privilegedScopeRisk(PRIVILEGED_SCOPE_FLOOR)).toBe(0)
+  })
+
+  it('qamrov kengaygan sari risk oshadi', () => {
+    const mid = Math.round((PRIVILEGED_SCOPE_FLOOR + PRIVILEGED_SCOPE_SATURATION) / 2)
+    expect(privilegedScopeRisk(mid)).toBeGreaterThan(0)
+    expect(privilegedScopeRisk(mid)).toBeLessThan(privilegedScopeRisk(PRIVILEGED_SCOPE_SATURATION))
+  })
+
+  it('tepa chegara SINGLE_THRESHOLD dan past — yolg\'iz ogohlantira olmaydi', () => {
+    expect(PRIVILEGED_SCOPE_CAP).toBeLessThan(SINGLE_THRESHOLD)
+    expect(privilegedScopeRisk(100_000)).toBe(PRIVILEGED_SCOPE_CAP)
+  })
+
+  it('eng keng qamrov ham yolg\'iz turganda ogohlantirmaydi', () => {
+    const v = correlate(sig({ privilegedOwners: 100_000 }))
+    expect(v.layer).toBe('AUTHORIZATION')
+    expect(v.alert).toBe(false)
+  })
+
+  it('odatdagi admin kuni — qamrov bor, xatti-harakat tinch, ogohlantirish yo\'q', () => {
+    const v = correlate(sig({ privilegedOwners: 45, behaviorScore: 0.09 }))
+    expect(v.alert).toBe(false)
+  })
+
+  // ASOSIY DALIL: ikkala qatlam ham yolg'iz o'tkazib yuboradi, gibrid tutadi
+  it('o\'g\'irlangan admin hisobi — faqat birgalikda aniqlanadi', () => {
+    const stolen = sig({ privilegedOwners: 70, behaviorScore: 0.67 })
+
+    expect(singleLayerVerdict(stolen, 'AUTHORIZATION')).toBe(false)
+    expect(singleLayerVerdict(stolen, 'BEHAVIOR')).toBe(false)
+
+    const v = correlate(stolen)
+    expect(v.layer).toBe('CORRELATED')
+    expect(v.alert).toBe(true)
+    expect(v.reasons).toContain('PRIVILEGED_BROAD_SCOPE')
+  })
+
+  it('qamrov rad etishlar bilan birlashadi, ularni almashtirmaydi', () => {
+    const onlyDenied = authzRisk(sig({ authzDenied: 3 }))
+    const both       = authzRisk(sig({ authzDenied: 3, privilegedOwners: 60 }))
+    expect(both).toBeGreaterThan(onlyDenied)
+  })
+})
+

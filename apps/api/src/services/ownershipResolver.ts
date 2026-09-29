@@ -81,6 +81,11 @@ function unknown(): OwnershipVerdict {
   return { relation: 'UNKNOWN', ownerId: null, hasOwnerRule: false }
 }
 
+/** Imtiyozli aktor, lekin resurs turi uchun qoida yo'q yoki obyekt ko'rsatilmagan */
+function privilegedUnknown(): OwnershipVerdict {
+  return { relation: 'PRIVILEGED', ownerId: null, hasOwnerRule: false }
+}
+
 /**
  * Aktor va resurs o'rtasidagi munosabatni aniqlaydi.
  * FOREIGN — ruxsatsiz obyektga murojaat belgisi.
@@ -93,20 +98,36 @@ export async function resolveAccess(
   actorRole: string | null,
 ): Promise<OwnershipVerdict> {
   if (!actorId) return unknown()
-  if (actorRole && PRIVILEGED_ROLES.includes(actorRole)) {
-    return { relation: 'PRIVILEGED', ownerId: null, hasOwnerRule: false }
-  }
+
+  // Ilgari bu yerda imtiyozli rol uchun darhol qaytish bor edi: egalik umuman
+  // hisoblanmasdi va ownerId null bo'lib qolardi. Ikkita oqibati bor edi.
+  //
+  // Birinchisi audit: admin KIMNING obyektiga tegganini jurnal saqlamasdi,
+  // ya'ni `resource_owner_id` adminlar uchun doim bo'sh edi — tekshiruvda eng
+  // kerakli ustun aynan o'sha.
+  //
+  // Ikkinchisi aniqlash: 1-qatlam adminlar uchun HECH QANDAY signal
+  // bermasdi, shuning uchun korrelyatsiya ham ishlamasdi — admin uchun
+  // hukm faqat 2-qatlamdan chiqishi mumkin edi. Ichki tahdid haqidagi
+  // da'vo esa aynan imtiyozli rollar haqida.
+  //
+  // Endi egalik hamma uchun hisoblanadi. Imtiyozli aktor uchun natija
+  // baribir PRIVILEGED (u haqiqatan ham haqli), lekin ownerId bilan —
+  // qamrovni requestAudit o'shandan o'lchaydi.
+  const privileged = !!actorRole && PRIVILEGED_ROLES.includes(actorRole)
 
   const rules = (await loadRules()).get(resourceType)
-  if (!rules || rules.length === 0) return unknown()
-  if (!resourceId) return unknown()
+  if (!rules || rules.length === 0) return privileged ? privilegedUnknown() : unknown()
+  if (!resourceId) return privileged ? privilegedUnknown() : unknown()
 
   const hasOwnerRule = rules.some((r) => r.role === 'OWNER')
 
   if (resourceType === 'users') {
-    return resourceId === actorId
-      ? { relation: 'SELF', ownerId: actorId, matchedPath: 'id', hasOwnerRule }
-      : { relation: 'FOREIGN', ownerId: resourceId, hasOwnerRule }
+    if (resourceId === actorId) {
+      return { relation: 'SELF', ownerId: actorId, matchedPath: 'id', hasOwnerRule }
+    }
+    // `users` da obyektning o'zi ega — bazaga borish shart emas
+    return { relation: privileged ? 'PRIVILEGED' : 'FOREIGN', ownerId: resourceId, hasOwnerRule }
   }
 
   const modelName = MODEL_BY_RESOURCE[resourceType]
@@ -133,5 +154,5 @@ export async function resolveAccess(
       return { relation: r.role, ownerId, matchedPath: r.ownerPath, hasOwnerRule }
     }
   }
-  return { relation: 'FOREIGN', ownerId, hasOwnerRule }
+  return { relation: privileged ? 'PRIVILEGED' : 'FOREIGN', ownerId, hasOwnerRule }
 }

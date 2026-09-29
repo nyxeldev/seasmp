@@ -5,10 +5,13 @@
  */
 import {
   surprise, surpriseMap, rateScore, scoreEvent, updateProfile, emptyProfile,
-  smoothCircular, combine, isMassAccess,
+  smoothCircular, combine, isMassAccess, HOUR_KERNEL,
   MIN_SAMPLES, ALERT_THRESHOLD,
   type BehaviorProfile, type ObservedEvent,
 } from '../../services/behaviorScoring'
+// Yolg'iz qatlam uchun haqiqiy chegara shu yerda — behaviorScoring dagi
+// ALERT_THRESHOLD qaror yo'lida ishlatilmaydi.
+import { SINGLE_THRESHOLD } from '../../services/correlation'
 
 /** Kunduzgi talaba: 9:00–17:00, bitta IP, bitta qurilma */
 function dayStudent(): BehaviorProfile {
@@ -213,3 +216,65 @@ describe('updateProfile — onlayn o\'rganish', () => {
     expect(p.knownIps).not.toContain('9.9.9.9')
   })
 })
+
+/**
+ * REGRESSIYA: soat yadrosi haqiqatan masofani kodlashi kerak.
+ *
+ * Yadro [0.25, 0.5, 0.25] bo'lganda u faqat ±1 soatga yetardi: 9-17 profilida
+ * 18:00 yumshoq baholanardi, lekin 19:00 dan boshlab hamma soat 03:00 bilan
+ * BIR XIL ball olardi. Natijada "uydan kechqurun kirish" bilan "tungi
+ * o'g'irlangan hisob" farqlanmasdi va yolg'on ishora chiqardi.
+ */
+describe('soat yadrosi — masofa bilan asta o\'sadi', () => {
+  const evening = [18, 19, 20, 21, 22]
+
+  it('kechki soatlar ketma-ket shubhaliroq bo\'lib boradi', () => {
+    const sm = smoothCircular(dayStudent().hourHistogram)
+    const scores = evening.map((h) => surprise(sm, h))
+    for (let i = 1; i < scores.length; i++) {
+      expect(scores[i]).toBeGreaterThan(scores[i - 1])
+    }
+  })
+
+  it('19:00-21:00 tungi 03:00 dan kam shubhali', () => {
+    const sm = smoothCircular(dayStudent().hourHistogram)
+    const night = surprise(sm, 3)
+    for (const h of [19, 20, 21]) {
+      expect(surprise(sm, h)).toBeLessThan(night)
+    }
+  })
+
+  it('yadro massani saqlaydi (yig\'indisi 1)', () => {
+    expect(HOUR_KERNEL.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10)
+  })
+})
+
+/**
+ * REGRESSIYA: yolg'iz xatti-harakat signali chegaradan o'tmasligi kerak.
+ *
+ * Bu ikki holat eksperiment stendidagi eng tortishuvli juftlik. Ular deyarli
+ * bir xil ko'rinadi — ikkalasida ham notanish IP va notanish qurilma — va
+ * ularni faqat SOAT ajratadi. Yadro tor bo'lganda soat ham ajratmasdi.
+ */
+describe('tortishuvli juftlik — kechqurun uydan / tunda o\'g\'irlangan hisob', () => {
+  const foreign = { ip: '78.40.1.55', userAgent: 'Safari-Mobile' }
+
+  it('zararsiz kechki kirish yolg\'iz ogohlantirmaydi', () => {
+    const s = scoreEvent(dayStudent(), ev({ hour: 20, ...foreign }))
+    expect(s.score).toBeLessThan(SINGLE_THRESHOLD)
+  })
+
+  it('tungi kirish esa chegaradan o\'tadi', () => {
+    const s = scoreEvent(dayStudent(), ev({ hour: 3, ...foreign }))
+    expect(s.score).toBeGreaterThanOrEqual(SINGLE_THRESHOLD)
+  })
+
+  it('tungi ball kechki balldan yuqori — farqni aynan soat beradi', () => {
+    const night   = scoreEvent(dayStudent(), ev({ hour: 3,  ...foreign }))
+    const evening = scoreEvent(dayStudent(), ev({ hour: 20, ...foreign }))
+    expect(night.score).toBeGreaterThan(evening.score)
+    expect(evening.reasons).toContain('NEW_IP')
+    expect(night.reasons).toContain('UNUSUAL_HOUR')
+  })
+})
+

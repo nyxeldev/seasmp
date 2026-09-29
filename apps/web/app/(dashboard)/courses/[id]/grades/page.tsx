@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { assessmentsApi, enrollmentsApi, type Assessment, type Enrollment, type Grade } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { useCourse } from '@/lib/use-course'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -25,10 +26,14 @@ export default function CourseGradesPage() {
   const [edits, setEdits]             = useState<Record<string, string>>({})
   const [saving, setSaving]           = useState<Record<string, boolean>>({})
 
+  // Manzildagi qism slug bo'lishi mumkin — quyidagi so'rovlar esa UUID kutadi
+  const { courseId } = useCourse(id)
+
   const load = useCallback(async () => {
+    if (!courseId) return
     const [assRes, enrollRes] = await Promise.all([
-      assessmentsApi.byCourse(id).catch(() => ({ data: [] as Assessment[] })),
-      enrollmentsApi.list(`courseId=${id}&limit=200`).catch(() => ({ data: [] as Enrollment[] })),
+      assessmentsApi.byCourse(courseId).catch(() => ({ data: [] as Assessment[] })),
+      enrollmentsApi.list(`courseId=${courseId}&limit=200`).catch(() => ({ data: [] as Enrollment[] })),
     ])
     setAssessments(assRes.data)
     setEnrollments(enrollRes.data)
@@ -43,7 +48,7 @@ export default function CourseGradesPage() {
       })
     }))
     setGradeMap(map)
-  }, [id])
+  }, [courseId])
 
   useEffect(() => { load() }, [load])
 
@@ -103,7 +108,7 @@ export default function CourseGradesPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon-sm" render={<Link href={`/courses/${id}`} />}>
-          <ArrowLeft className="size-4" />
+          <ArrowLeft className="size-[18px]" />
         </Button>
         <h1 className="text-2xl font-semibold">Grades</h1>
       </div>
@@ -111,7 +116,7 @@ export default function CourseGradesPage() {
       {/* Legend */}
       <div className="flex gap-4 text-sm text-muted-foreground">
         <span>• Click a cell to edit (teacher/admin only)</span>
-        <span>• Press Enter or click <Save className="inline size-3" /> to save</span>
+        <span>• Press Enter or click <Save className="inline size-3.5" /> to save</span>
         <span>• Last column = weighted average</span>
       </div>
 
@@ -176,7 +181,7 @@ export default function CourseGradesPage() {
                                 onClick={() => saveGrade(e.id, a)}
                                 disabled={saving[k]}
                               >
-                                <Save className="size-3" />
+                                <Save className="size-3.5" />
                               </Button>
                             )}
                           </div>

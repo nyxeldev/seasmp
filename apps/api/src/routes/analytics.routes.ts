@@ -46,6 +46,18 @@ export default async function analyticsRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data })
   })
 
+  // GET /v1/analytics/overview?days=30
+  // Bosh sahifa va Analitika sahifasining barcha ko'rsatkichlari — bitta so'rovda.
+  // O'qituvchi ham ko'ra oladi: u o'z sahifasida umumiy manzarani ko'radi.
+  app.get('/overview', {
+    onRequest: [app.authenticate, app.requireRoles('ADMIN', 'SUPER_ADMIN', 'TEACHER')],
+  }, async (request, reply) => {
+    const q = request.query as { days?: string }
+    const days = q.days ? parseInt(q.days, 10) : undefined
+    const data = await analyticsService.overview({ days: Number.isFinite(days) ? days : undefined })
+    return reply.send({ success: true, data })
+  })
+
   // ─── Python-powered: student enrollment analytics ──────────────────────────
   app.get('/students/:studentId/enrollment/:enrollmentId', {
     onRequest: [app.authenticate],

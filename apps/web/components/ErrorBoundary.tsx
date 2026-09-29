@@ -1,6 +1,7 @@
 'use client'
 
-import { Component, type ReactNode } from 'react'
+import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { telemetryApi } from '@/lib/api'
 
 interface Props { children: ReactNode; fallback?: ReactNode }
 interface State { hasError: boolean; error?: Error }
@@ -10,6 +11,22 @@ export class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error }
+  }
+
+  /**
+   * Xato SERVERGA ham yuboriladi.
+   *
+   * Ilgari foydalanuvchi "Xatolik yuz berdi" ni ko'rardi, xato esa faqat
+   * o'sha odamning konsolida qolardi — jamoada hech kim bilmasdi. Endi u
+   * serverdagi bir xil yo'ldan o'tadi (log + Sentry sozlangan bo'lsa).
+   */
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    telemetryApi.clientError({
+      message: error.message,
+      stack:   error.stack,
+      path:    typeof window === 'undefined' ? undefined : window.location.pathname,
+      componentStack: info.componentStack ?? undefined,
+    })
   }
 
   render() {

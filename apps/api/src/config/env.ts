@@ -82,6 +82,16 @@ const envSchema = z.object({
    */
   TRUST_PROXY:          z.string().default('false'),
 
+  /**
+   * ADMIN/TEACHER uchun 2FA majburiyligini o'chiradi ('true' bo'lsa o'chadi).
+   *
+   * Ilgari bu yagona o'zgaruvchi edi, qolganlari zoddan o'tsa-da, u
+   * to'g'ridan-to'g'ri process.env dan o'qilardi. Ya'ni xato yozilgan nom
+   * (masalan DISABLE_2FA) jimgina e'tiborsiz qolardi va 2FA kutilmaganda
+   * yoqilib turardi. Endi sxemada.
+   */
+  DISABLE_2FA_REQUIRED: z.string().optional(),
+
   JWT_ACCESS_SECRET:    z.string().min(32),
   JWT_REFRESH_SECRET:   z.string().min(32),
   JWT_ACCESS_EXPIRES_IN:  z.string().default('15m'),
@@ -92,6 +102,14 @@ const envSchema = z.object({
   CORS_ORIGIN:          z.string().default('http://localhost:3000'),
   ANALYTICS_API_URL:    z.string().url().default('http://localhost:5000'),
   ANALYTICS_INTERNAL_KEY: z.string().default('internal-dev-key-change-in-prod'),
+
+  /**
+   * Xato monitoringi. Berilmasa Sentry umuman ishga tushmaydi va xatolar
+   * faqat log faylga yoziladi — loyihani ishga tushirish uchun tashqi
+   * hisob talab qilinmasligi kerak.
+   */
+  SENTRY_DSN:     z.string().optional(),
+  SENTRY_RELEASE: z.string().optional(),
 
   // Email (optional — dev can be empty)
   SMTP_HOST:  z.string().optional(),

@@ -1,5 +1,6 @@
 import { prisma } from '../config/prisma'
 import { auditService } from './audit.service'
+import { notificationService } from './notification.service'
 import type { EnrollmentStatus, UserRole } from '@prisma/client'
 
 export const enrollmentService = {
@@ -36,7 +37,7 @@ export const enrollmentService = {
         orderBy: { enrolledAt: 'desc' },
         include: {
           student: { select: { id: true, firstName: true, lastName: true, email: true } },
-          course:  { select: { id: true, title: true, category: true } },
+          course:  { select: { id: true, slug: true, title: true, category: true } },
         },
       }),
       prisma.enrollment.count({ where }),
@@ -53,7 +54,7 @@ export const enrollmentService = {
       where: { id },
       include: {
         student: { select: { id: true, firstName: true, lastName: true, email: true } },
-        course:  { select: { id: true, title: true, category: true, teacherId: true } },
+        course:  { select: { id: true, slug: true, title: true, category: true, teacherId: true } },
         grades:  { include: { assessment: true } },
       },
     })
@@ -98,6 +99,32 @@ export const enrollmentService = {
       userId: actorId, action: 'ENROLL', resource: 'enrollments',
       resourceId: enrollment.id, newData: { studentId, courseId }, ipAddress,
     })
+
+    // Ikki tomonga xabar: talabaga yozilgani, o'qituvchiga yangi talaba.
+    // Amalni o'zi bajargan odamga xabar bormaydi — talaba o'zini yozsa,
+    // faqat o'qituvchi xabar oladi.
+    const courseLink = `/courses/${course.slug ?? course.id}`
+    const recipients = []
+    if (studentId !== actorId) {
+      recipients.push({
+        userId: studentId,
+        type:   'ENROLLED' as const,
+        title:  `Kursga yozildingiz: ${course.title}`,
+        link:   courseLink,
+        data:   { enrollmentId: enrollment.id, courseId },
+      })
+    }
+    if (course.teacherId !== actorId) {
+      recipients.push({
+        userId: course.teacherId,
+        type:   'ENROLLED' as const,
+        title:  `Kursingizga yangi talaba: ${course.title}`,
+        body:   `${student.firstName} ${student.lastName}`,
+        link:   courseLink,
+        data:   { enrollmentId: enrollment.id, studentId, courseId },
+      })
+    }
+    await notificationService.createMany(recipients)
 
     return enrollment
   },
