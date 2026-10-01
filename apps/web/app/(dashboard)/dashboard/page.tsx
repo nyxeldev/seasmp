@@ -123,12 +123,8 @@ function DashCard({
 }) {
   return (
     <div
-      className={`rounded-xl border p-5 ${className}`}
-      style={{
-        background:   'var(--s-bg-card)',
-        borderColor:  'var(--s-border)',
-        ...style,
-      }}
+      className={`glass-surface rounded-xl p-5 ${className}`}
+      style={style}
     >
       {children}
     </div>

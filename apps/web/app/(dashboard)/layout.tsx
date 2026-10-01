@@ -82,8 +82,13 @@ function TopHeader() {
 
   return (
     <header
-      className="h-14 flex items-center justify-between px-6 shrink-0 border-b"
-      style={{ background: 'var(--s-header)', borderColor: 'var(--s-border)' }}
+      className="h-14 flex items-center justify-between px-6 shrink-0 border-b z-10 relative"
+      style={{
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(20px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(150%)',
+        borderColor: 'var(--glass-border)',
+      }}
     >
       <Breadcrumb />
 
@@ -137,8 +142,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--s-bg)' }}>
-        <div className="size-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+      <div className="glass-ambient min-h-screen flex flex-col items-center justify-center gap-3" style={{ background: 'var(--s-bg)' }}>
+        <div className="size-9 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+        <span className="text-xs font-medium tracking-wide" style={{ color: 'var(--s-muted)' }}>SEASMP</span>
       </div>
     )
   }
@@ -150,7 +156,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Provider TopHeader'ni ham, sahifani ham qamrab olishi kerak:
           sahifa nomni yozadi, breadcrumb esa uni o'qiydi. */}
       <BreadcrumbTitleProvider>
-      <div className="flex h-screen overflow-hidden" style={{ background: 'var(--s-bg)' }}>
+      <div className="glass-ambient flex h-screen overflow-hidden" style={{ background: 'var(--s-bg)' }}>
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <TopHeader />

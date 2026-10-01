@@ -200,7 +200,12 @@ export function Sidebar() {
         animate={{ width: collapsed ? RAIL_W : FULL_W }}
         transition={widthTransition}
         className="flex h-screen flex-col border-r overflow-hidden"
-        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
+        style={{
+          background: 'var(--glass-bg)',
+          backdropFilter: 'blur(20px) saturate(150%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(150%)',
+          borderColor: 'var(--glass-border)',
+        }}
       >
         {/* Brand + toggle */}
         <div className="flex items-center gap-2 border-b px-3"
