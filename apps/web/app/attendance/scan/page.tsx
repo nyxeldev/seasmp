@@ -19,7 +19,7 @@
  * sidebar/navbar kerak emas — faqat natija.
  */
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth, PENDING_QR_TOKEN_KEY } from '@/lib/auth-context'
@@ -28,7 +28,21 @@ import { CheckCircle2, XCircle, Loader2, ShieldAlert } from 'lucide-react'
 
 type Status = 'checking' | 'marking' | 'success' | 'error' | 'no-token'
 
+/**
+ * `useSearchParams()` CSR bailout talab qiladi — aks holda production build
+ * (`next build`) "/attendance/scan"ni prerender qilishga urinib, Suspense
+ * chegarasi yo'qligi uchun yiqiladi. Shuning uchun asosiy mantiq ichki
+ * komponentga ko'chirilgan, tashqarisi esa uni Suspense bilan o'raydi.
+ */
 export default function ScanAttendancePage() {
+  return (
+    <Suspense fallback={null}>
+      <ScanAttendanceInner />
+    </Suspense>
+  )
+}
+
+function ScanAttendanceInner() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
