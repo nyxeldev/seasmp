@@ -9,10 +9,11 @@ import { useCourse } from '@/lib/use-course'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, ClipboardList } from 'lucide-react'
 
 interface CellKey { enrollmentId: string; assessmentId: string }
 type GradeMap = Record<string, Record<string, Grade>>
@@ -25,29 +26,31 @@ export default function CourseGradesPage() {
   const [gradeMap, setGradeMap]       = useState<GradeMap>({})
   const [edits, setEdits]             = useState<Record<string, string>>({})
   const [saving, setSaving]           = useState<Record<string, boolean>>({})
+  const [loading, setLoading]         = useState(true)
 
   // Manzildagi qism slug bo'lishi mumkin — quyidagi so'rovlar esa UUID kutadi
   const { courseId } = useCourse(id)
 
   const load = useCallback(async () => {
     if (!courseId) return
-    const [assRes, enrollRes] = await Promise.all([
+    setLoading(true)
+    const [assRes, enrollRes, gradesRes] = await Promise.all([
       assessmentsApi.byCourse(courseId).catch(() => ({ data: [] as Assessment[] })),
       enrollmentsApi.list(`courseId=${courseId}&limit=200`).catch(() => ({ data: [] as Enrollment[] })),
+      // Ilgari bu yerda HAR BIR baholash uchun alohida so'rov yuborilardi
+      // (N+1) — endi bitta so'rov butun kurs uchun barcha baholarni oladi.
+      assessmentsApi.gradesByCourse(courseId).catch(() => ({ data: [] as Grade[] })),
     ])
     setAssessments(assRes.data)
     setEnrollments(enrollRes.data)
 
-    // Load grades for each assessment
     const map: GradeMap = {}
-    await Promise.all(assRes.data.map(async a => {
-      const gRes = await assessmentsApi.grades(a.id).catch(() => ({ data: [] as Grade[] }))
-      gRes.data.forEach(g => {
-        if (!map[g.enrollmentId]) map[g.enrollmentId] = {}
-        map[g.enrollmentId][g.assessmentId] = g
-      })
-    }))
+    for (const g of gradesRes.data) {
+      if (!map[g.enrollmentId]) map[g.enrollmentId] = {}
+      map[g.enrollmentId][g.assessmentId] = g
+    }
     setGradeMap(map)
+    setLoading(false)
   }, [courseId])
 
   useEffect(() => { load() }, [load])
@@ -71,16 +74,22 @@ export default function CourseGradesPage() {
 
     const score = Number(scoreStr)
     if (isNaN(score) || score < 0 || score > Number(assessment.maxScore)) {
-      toast.error(`Score must be 0–${assessment.maxScore}`)
+      toast.error(`Ball 0 dan ${assessment.maxScore} gacha bo'lishi kerak`)
       return
     }
 
     setSaving(prev => ({ ...prev, [k]: true }))
     try {
-      await assessmentsApi.submitGrade(assessment.id, { enrollmentId, score })
-      toast.success('Grade saved')
+      const res = await assessmentsApi.submitGrade(assessment.id, { enrollmentId, score })
+      toast.success('Baho saqlandi')
       setEdits(prev => { const n = { ...prev }; delete n[k]; return n })
-      await load()
+      // Butun sahifani qayta yuklash o'rniga faqat shu katakni yangilaymiz —
+      // ilgari bitta baho saqlansa ham butun jadval (va N+1 so'rovlar
+      // to'plami) qayta ishga tushardi.
+      setGradeMap(prev => ({
+        ...prev,
+        [enrollmentId]: { ...prev[enrollmentId], [assessment.id]: res.data },
+      }))
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -110,20 +119,28 @@ export default function CourseGradesPage() {
         <Button variant="ghost" size="icon-sm" render={<Link href={`/courses/${id}`} />}>
           <ArrowLeft className="size-[18px]" />
         </Button>
-        <h1 className="text-2xl font-semibold">Grades</h1>
+        <h1 className="text-2xl font-semibold">Baholar</h1>
       </div>
 
       {/* Legend */}
-      <div className="flex gap-4 text-sm text-muted-foreground">
-        <span>• Click a cell to edit (teacher/admin only)</span>
-        <span>• Press Enter or click <Save className="inline size-3.5" /> to save</span>
-        <span>• Last column = weighted average</span>
-      </div>
+      {isTeacher && (
+        <div className="flex gap-4 text-sm text-muted-foreground flex-wrap">
+          <span>• Katakni bosib tahrirlang (o'qituvchi/admin)</span>
+          <span>• Saqlash uchun Enter yoki <Save className="inline size-3.5" /> bosing</span>
+          <span>• Oxirgi ustun = vaznli o'rtacha</span>
+        </div>
+      )}
 
-      {assessments.length === 0 ? (
+      {loading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+        </div>
+      ) : assessments.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            No assessments yet. Create assessments on the <Link href={`/courses/${id}`} className="underline">course page</Link>.
+          <CardContent className="py-12 flex flex-col items-center gap-2 text-center text-muted-foreground">
+            <ClipboardList className="size-7 opacity-50" />
+            <p>Hali baholash yo'q.</p>
+            <Link href={`/courses/${id}`} className="underline text-sm">Kurs sahifasida yarating</Link>
           </CardContent>
         </Card>
       ) : (
@@ -131,7 +148,7 @@ export default function CourseGradesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="sticky left-0 bg-background min-w-[160px]">Student</TableHead>
+                <TableHead className="sticky left-0 bg-background min-w-[160px]">Talaba</TableHead>
                 {assessments.map(a => (
                   <TableHead key={a.id} className="min-w-[120px] text-center">
                     <div className="flex flex-col gap-0.5">
@@ -143,7 +160,7 @@ export default function CourseGradesPage() {
                     </div>
                   </TableHead>
                 ))}
-                <TableHead className="min-w-[100px] text-center font-semibold">Avg</TableHead>
+                <TableHead className="min-w-[100px] text-center font-semibold">O'rtacha</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -199,7 +216,7 @@ export default function CourseGradesPage() {
               {enrollments.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={assessments.length + 2} className="text-center text-muted-foreground py-8">
-                    No students enrolled in this course
+                    Bu kursda talaba yo'q
                   </TableCell>
                 </TableRow>
               )}

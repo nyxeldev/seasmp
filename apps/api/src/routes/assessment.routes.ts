@@ -37,6 +37,13 @@ export default async function assessmentRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: assessments })
   })
 
+  // GET /v1/assessments/course/:courseId/grades — kursning barcha baholari, bitta so'rovda
+  app.get('/course/:courseId/grades', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const { courseId } = request.params as { courseId: string }
+    const grades = await assessmentService.gradesByCourse(courseId, request.user.sub, request.user.role)
+    return reply.send({ success: true, data: grades })
+  })
+
   // POST /v1/assessments  (teacher + admin)
   app.post('/', { onRequest: [app.authenticate, app.requireRoles('ADMIN', 'SUPER_ADMIN', 'TEACHER')] }, async (request, reply) => {
     const body = createAssessmentSchema.safeParse(request.body)

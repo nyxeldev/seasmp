@@ -136,6 +136,38 @@ export const assessmentService = {
     })
   },
 
+  /**
+   * Kursning BARCHA baholash va baholarini bitta so'rovda qaytaradi.
+   *
+   * Ilgari frontend (grades sahifasi) buni har bir baholash uchun alohida
+   * so'rov bilan yig'ardi (`listGrades` N marta — N+1). Baholash soni
+   * oshgan sari sahifa sekinlashardi, har bir baho saqlangandan keyin esa
+   * BUTUN sahifa qayta yuklanardi. Bu yerda bitta `IN` so'rov bilan hal
+   * qilinadi.
+   */
+  async gradesByCourse(courseId: string, actorId: string, actorRole: UserRole) {
+    const course = await prisma.course.findUnique({ where: { id: courseId } })
+    if (!course) throw Object.assign(new Error('Kurs topilmadi'), { statusCode: 404 })
+
+    if (actorRole === 'TEACHER' && course.teacherId !== actorId) {
+      throw Object.assign(new Error("Ruxsat yo'q"), { statusCode: 403 })
+    }
+
+    if (actorRole === 'STUDENT') {
+      const enrollment = await prisma.enrollment.findFirst({ where: { courseId, studentId: actorId } })
+      if (!enrollment) throw Object.assign(new Error("Bu kursga yozilmagansiz"), { statusCode: 403 })
+      return prisma.grade.findMany({
+        where: { assessment: { courseId }, enrollmentId: enrollment.id },
+        include: { gradedUser: { select: { id: true, firstName: true, lastName: true } } },
+      })
+    }
+
+    return prisma.grade.findMany({
+      where: { assessment: { courseId } },
+      include: { gradedUser: { select: { id: true, firstName: true, lastName: true } } },
+    })
+  },
+
   async gradesByEnrollment(enrollmentId: string, actorId: string, actorRole: UserRole) {
     const enrollment = await prisma.enrollment.findUnique({
       where: { id: enrollmentId },

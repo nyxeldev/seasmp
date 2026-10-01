@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Shield, AlertTriangle, Users, Ban, RefreshCw, CheckCircle, ExternalLink } from 'lucide-react'
+import { Shield, AlertTriangle, Users, Ban, RefreshCw, CheckCircle, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLocale } from '@/store/locale'
 
 // ─── Severity helpers ─────────────────────────────────────────────────────────
@@ -95,6 +95,10 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const [showResolved, setShowResolved] = useState(false)
   const [loading, setLoading] = useState(false)
   const [sessLoading, setSessLoading] = useState(false)
+  const [page, setPage]   = useState(1)
+  const [total, setTotal] = useState(0)
+  const ALERTS_PAGE_SIZE = 50
+  const totalPages = Math.max(1, Math.ceil(total / ALERTS_PAGE_SIZE))
 
   const loadStats = useCallback(async () => {
     try {
@@ -106,16 +110,17 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const loadAlerts = useCallback(async () => {
     setLoading(true)
     try {
-      const q = new URLSearchParams({ limit: '50' })
+      const q = new URLSearchParams({ limit: String(ALERTS_PAGE_SIZE), page: String(page) })
       if (typeFilter !== 'ALL')  q.set('type', typeFilter)
       if (sevFilter !== 'ALL')   q.set('severity', sevFilter)
       if (showResolved)          q.set('resolved', 'true')
       else                       q.set('resolved', 'false')
       const r = await securityApi.alerts(q.toString())
       setAlerts(r.data)
+      setTotal(r.meta?.total ?? r.data.length)
     } catch (e: any) { toast.error(e.message) }
     finally { setLoading(false) }
-  }, [typeFilter, sevFilter, showResolved])
+  }, [typeFilter, sevFilter, showResolved, page])
 
   const loadSessions = useCallback(async () => {
     setSessLoading(true)
@@ -126,11 +131,13 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     finally { setSessLoading(false) }
   }, [])
 
-  useEffect(() => {
-    loadStats()
-    loadAlerts()
-    loadSessions()
-  }, [loadStats, loadAlerts, loadSessions])
+  // Ilgari bitta useEffect loadStats/loadAlerts/loadSessions uchinchisini
+  // ham ulardi — filtr almashsa (loadAlerts identitetiga ta'sir qiladi)
+  // KPI va sessiyalar ham keraksiz qayta so'ralardi. Endi alohida.
+  useEffect(() => { loadStats() }, [loadStats])
+  useEffect(() => { loadSessions() }, [loadSessions])
+  useEffect(() => { loadAlerts() }, [loadAlerts])
+  useEffect(() => { setPage(1) }, [typeFilter, sevFilter, showResolved])
 
   // Jonli ogohlantirish. Ro'yxatga qo'lda qo'shmaymiz, balki qayta yuklaymiz:
   // amaldagi filtr (tur, daraja, hal qilinganlari) serverda qo'llanadi, mijoz
@@ -240,7 +247,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <AlertTriangle className="size-[18px] text-destructive" />
-            Xavfsizlik Alertlari ({alerts.length})
+            Xavfsizlik Alertlari ({total})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -298,6 +305,22 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t">
+              <p className="text-xs text-muted-foreground">
+                {total} tadan {(page - 1) * ALERTS_PAGE_SIZE + 1}–{Math.min(page * ALERTS_PAGE_SIZE, total)}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button variant="outline" size="icon-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <span className="text-xs px-2 tabular-nums">{page} / {totalPages}</span>
+                <Button variant="outline" size="icon-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
