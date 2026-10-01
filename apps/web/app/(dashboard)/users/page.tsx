@@ -15,17 +15,9 @@ import { toast } from 'sonner'
 import { Plus, Search, ToggleLeft, ChevronLeft, ChevronRight, Users as UsersIcon } from 'lucide-react'
 import { useLocale } from '@/store/locale'
 import { RoleGuard } from '@/components/RoleGuard'
+import { useDebounced } from '@/lib/use-debounced'
 
 const PAGE_SIZE = 20
-
-function useDebounced<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delayMs)
-    return () => clearTimeout(id)
-  }, [value, delayMs])
-  return debounced
-}
 
 export default function UsersPage() {
   return (

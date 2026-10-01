@@ -263,8 +263,10 @@ export default function StudentProfilePage() {
 
           {analyticsOffline && (
             <Card>
-              <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                Analytics service offline — run <code className="font-mono">.\apps\analytics\start.ps1</code>
+              <CardContent className="py-10 flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
+                <BarChart2 className="size-6 opacity-50" />
+                <p>Tahlil xizmati hozircha mavjud emas</p>
+                <p className="text-xs">Birozdan keyin qayta urinib ko'ring</p>
               </CardContent>
             </Card>
           )}
