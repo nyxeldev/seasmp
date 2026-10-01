@@ -149,7 +149,7 @@ export const authApi = {
 // ─── Users ───────────────────────────────────────────────────────────────────
 export const usersApi = {
   me:           () => api.get<{ success: boolean; data: User }>('/v1/users/me'),
-  list:         (q?: string) => api.get<{ success: boolean; data: User[]; total: number }>(`/v1/users${q ? `?${q}` : ''}`),
+  list:         (q?: string) => api.get<{ success: boolean; data: User[]; meta: PaginationMeta }>(`/v1/users${q ? `?${q}` : ''}`),
   getById:      (id: string) => api.get<{ success: boolean; data: User }>(`/v1/users/${id}`),
   create:       (body: Partial<User> & { password: string }) => api.post<{ success: boolean; data: User }>('/v1/users', body),
   update:       (id: string, body: Partial<User>) => api.patch<{ success: boolean; data: User }>(`/v1/users/${id}`, body),

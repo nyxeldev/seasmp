@@ -74,6 +74,7 @@ function Breadcrumb() {
 function TopHeader() {
   const { user, logout } = useAuth()
   const { t } = useLocale()
+  const router = useRouter()
   if (!user) return null
 
   const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
@@ -111,7 +112,7 @@ function TopHeader() {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/settings')}>
               <User /> {t('settings.profile')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
