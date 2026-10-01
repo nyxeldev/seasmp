@@ -10,6 +10,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { RoleGuard } from '@/components/RoleGuard'
+import { useDebounced } from '@/lib/use-debounced'
 import { Download, ChevronDown, ChevronRight, ArrowLeft, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
@@ -97,7 +98,8 @@ function AuditLogView() {
   const [resource, setResource] = useState('ALL')
   const [from,     setFrom]     = useState('')
   const [to,       setTo]       = useState('')
-  const [search,   setSearch]   = useState('')  // userId or name search
+  const [searchInput, setSearchInput] = useState('')  // userId or name search
+  const search = useDebounced(searchInput, 350)
   const [page,     setPage]     = useState(1)
 
   const load = useCallback(async () => {
@@ -116,6 +118,7 @@ function AuditLogView() {
     finally { setLoading(false) }
   }, [action, resource, from, to, search, page])
 
+  useEffect(() => { setPage(1) }, [search])
   useEffect(() => { load() }, [load])
 
   const toggleExpand = (id: string) => {
@@ -126,27 +129,61 @@ function AuditLogView() {
     })
   }
 
-  const exportCsv = () => {
-    const header = ['id','createdAt','action','resource','resourceId','user','ip','userAgent','status']
-    const rows = logs.map(l => [
-      l.id,
-      l.createdAt,
-      l.action,
-      l.resource,
-      l.resourceId ?? '',
-      l.user ? `${l.user.firstName} ${l.user.lastName}` : '',
-      l.ipAddress ?? '',
-      (l.userAgent ?? '').replace(/,/g, ';'),
-      l.statusCode ?? '',
-    ])
-    const csv = [header, ...rows].map(r => r.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href = url
-    a.download = `audit_${new Date().toISOString().slice(0,10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  const [exporting, setExporting] = useState(false)
+
+  /**
+   * Ilgari bu funksiya faqat `logs` (joriy sahifaning 50 qatori) dan CSV
+   * yasardi — filtrlangan natija 50 dan ko'p bo'lsa, eksport JIM ravishda
+   * to'liqsiz chiqardi. Xavfsizlik jurnali uchun bu ishonchni yo'qotadi:
+   * admin "shu oraliqni eksport qildim" deb o'ylaydi, aslida faqat bitta
+   * sahifani olgan bo'ladi. Endi joriy filtrlar bo'yicha BARCHA sahifalar
+   * (100 tadan, backend chegarasi) ketma-ket o'qiladi.
+   */
+  const exportCsv = async () => {
+    setExporting(true)
+    try {
+      const all: AuditLog[] = []
+      let p = 1
+      const MAX_PAGES = 100 // 100 * 100 = 10,000 qatorgacha xavfsiz chegara
+      while (p <= MAX_PAGES) {
+        const q = new URLSearchParams({ page: String(p), limit: '100' })
+        if (action !== 'ALL')    q.set('action', action)
+        if (resource !== 'ALL')  q.set('resource', resource)
+        if (from)                q.set('from', from)
+        if (to)                  q.set('to', to)
+        if (search)              q.set('userId', search)
+        const r = await securityApi.auditLogs(q.toString())
+        all.push(...r.data)
+        if (p >= r.meta.totalPages) break
+        p++
+      }
+
+      const header = ['id','createdAt','action','resource','resourceId','user','ip','userAgent','status']
+      const rows = all.map(l => [
+        l.id,
+        l.createdAt,
+        l.action,
+        l.resource,
+        l.resourceId ?? '',
+        l.user ? `${l.user.firstName} ${l.user.lastName}` : '',
+        l.ipAddress ?? '',
+        (l.userAgent ?? '').replace(/,/g, ';'),
+        l.statusCode ?? '',
+      ])
+      const csv = [header, ...rows].map(r => r.join(',')).join('\n')
+      const blob = new Blob([csv], { type: 'text/csv' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url
+      a.download = `audit_${new Date().toISOString().slice(0,10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success(`${all.length} ta yozuv eksport qilindi`)
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -163,9 +200,9 @@ function AuditLogView() {
             <RefreshCw className={`size-[18px] mr-1.5 ${loading ? 'animate-spin' : ''}`} />
             Yangilash
           </Button>
-          <Button variant="outline" size="sm" onClick={exportCsv}>
-            <Download className="size-[18px] mr-1.5" />
-            CSV
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={exporting}>
+            <Download className={`size-[18px] mr-1.5 ${exporting ? 'animate-pulse' : ''}`} />
+            {exporting ? 'Eksport qilinmoqda...' : 'CSV'}
           </Button>
         </div>
       </div>
@@ -203,8 +240,8 @@ function AuditLogView() {
         <input
           className="border rounded px-2 py-1 text-sm h-9 w-48"
           placeholder="Foydalanuvchi ID..."
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1) }}
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
         />
       </div>
 

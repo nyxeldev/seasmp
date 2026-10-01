@@ -275,6 +275,59 @@ body {
   50%       { opacity: 0.4; }
 }
 
+/* ── Liquid glass surface ──────────────────────────────────
+ * Shaffof, xira fon ustida chuqurlik hissi beruvchi yuza. Faqat blur
+ * qo'yish yetarli emas — orqada rang/harakat bo'lmasa shisha "tekis"
+ * ko'rinadi, shuning uchun .glass-ambient fonli konteynerlar bilan
+ * birga ishlatiladi (`(dashboard)/layout.tsx`dagi asosiy konteyner).
+ */
+.glass-surface {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 1px 0 0 var(--glass-sheen) inset,
+    0 8px 30px -12px var(--glass-shadow);
+}
+
+:root {
+  --glass-bg:     rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.45);
+  --glass-sheen:  rgba(255, 255, 255, 0.5);
+  --glass-shadow: rgba(15, 23, 42, 0.12);
+}
+.dark {
+  --glass-bg:     rgba(30, 41, 59, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-sheen:  rgba(255, 255, 255, 0.06);
+  --glass-shadow: rgba(0, 0, 0, 0.35);
+}
+
+/* Ambient fon — shisha yuzalar ostida ko'rinadigan yumshoq rang dog'lari.
+ * `fixed` bilan sahifa skrolida qimirlamaydi, `pointer-events: none` bilan
+ * bosishga xalaqit bermaydi. */
+.glass-ambient {
+  position: relative;
+}
+.glass-ambient::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 0%,   rgba(59,130,246,0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 35% at 100% 20%, rgba(99,102,241,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 35% at 20% 100%, rgba(16,185,129,0.06) 0%, transparent 60%);
+}
+.dark .glass-ambient::before {
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 0%,   rgba(59,130,246,0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 35% at 100% 20%, rgba(99,102,241,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 35% at 20% 100%, rgba(16,185,129,0.08) 0%, transparent 60%);
+}
+
 /* ── Responsive breakpoints ──────────────────────────────── */
 @media (max-width: 640px) {
   .kpi-grid              { grid-template-columns: 1fr 1fr !important; }

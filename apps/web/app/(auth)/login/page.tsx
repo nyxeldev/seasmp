@@ -20,24 +20,6 @@ type Step =
   | 'setup_verify'
   | 'setup_codes'
 
-// ── Animated counter ──────────────────────────────────────────────────────────
-function useCounter(target: number, duration = 2200) {
-  const [count, setCount] = useState(0)
-  useEffect(() => {
-    let raf: number
-    const t0 = performance.now()
-    const tick = (now: number) => {
-      const p = Math.min((now - t0) / duration, 1)
-      const eased = 1 - Math.pow(1 - p, 3)
-      setCount(Math.round(eased * target))
-      if (p < 1) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [target, duration])
-  return count
-}
-
 // ── Floating label input ──────────────────────────────────────────────────────
 function FloatingInput({
   id, label, type = 'text', value, onChange, required, autoFocus,
@@ -140,16 +122,6 @@ function GradientButton({
 
 // ── Left panel (persistent across all steps) ─────────────────────────────────
 function LeftPanel() {
-  const students   = useCounter(247)
-  const attendance = useCounter(94)
-  const courses    = useCounter(12)
-
-  const stats = [
-    { value: students,   suffix: '',  label: 'Students' },
-    { value: attendance, suffix: '%', label: 'Attendance' },
-    { value: courses,    suffix: '',  label: 'Active Courses' },
-  ]
-
   const pills = [
     { icon: <BarChart3 size={13} />, label: 'Analytics' },
     { icon: <Shield size={13} />,    label: 'Security' },
@@ -250,34 +222,6 @@ function LeftPanel() {
           Smart Education Analytics &<br className="hidden lg:block" />
           Security Monitoring Platform
         </p>
-
-        {/* Stat counters */}
-        <div className="flex items-center gap-6 lg:gap-8 mt-10">
-          {stats.map((s, i) => (
-            <div key={i} className="flex items-center gap-6 lg:gap-8">
-              {i > 0 && (
-                <div
-                  className="self-stretch w-px"
-                  style={{ background: 'rgba(255,255,255,0.08)', minHeight: '3rem' }}
-                />
-              )}
-              <motion.div
-                className="flex flex-col"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.55 + i * 0.12, duration: 0.45 }}
-              >
-                <span
-                  className="font-bold text-white tabular-nums leading-none"
-                  style={{ fontSize: '3rem' }}
-                >
-                  {s.value}{s.suffix}
-                </span>
-                <span className="text-white/35 text-[11px] mt-1.5 font-medium">{s.label}</span>
-              </motion.div>
-            </div>
-          ))}
-        </div>
       </motion.div>
 
       {/* Feature pills */}
@@ -324,6 +268,7 @@ export default function LoginPage() {
 
   const [setupToken, setSetupToken]     = useState('')
   const [qrCodeUrl, setQrCodeUrl]       = useState('')
+  const [qrError, setQrError]           = useState(false)
   const [secret, setSecret]             = useState('')
   const [setupCode, setSetupCode]       = useState('')
   const [backupCodes, setBackupCodes]   = useState<string[]>([])
@@ -339,6 +284,7 @@ export default function LoginPage() {
       .then(res => {
         if (cancelled) return
         setQrCodeUrl(res.data.qrCodeUrl)
+        setQrError(false)
         setSecret(res.data.secret)
         setStep('setup_qr')
       })
@@ -477,6 +423,10 @@ export default function LoginPage() {
                     <div className="flex justify-end mt-0.5">
                       <button
                         type="button"
+                        onClick={() => toast.info(
+                          "Parolni tiklash uchun tizim administratoriga murojaat qiling",
+                          { description: 'Hozircha avtomatik tiklash mavjud emas.' },
+                        )}
                         className="text-[11px] hover:text-blue-400 transition-colors"
                         style={{ color: 'var(--s-muted)' }}
                       >
@@ -489,12 +439,6 @@ export default function LoginPage() {
                       {loading && 'Kirilmoqda...'}
                     </GradientButton>
                   </form>
-
-                  <div className="mt-9 pt-6 border-t" style={{ borderColor: 'var(--s-border)' }}>
-                    <p className="text-[11px] text-center font-mono" style={{ color: 'var(--s-muted)' }}>
-                      admin@seasmp.uz · Admin@1234
-                    </p>
-                  </div>
                 </motion.div>
               )}
 
@@ -627,9 +571,21 @@ export default function LoginPage() {
                   </div>
 
                   <div className="flex flex-col items-center gap-4">
-                    {qrCodeUrl && (
+                    {qrCodeUrl && !qrError && (
                       <div className="p-3 bg-white rounded-2xl shadow-[0_0_32px_rgba(59,130,246,0.2)]">
-                        <img src={qrCodeUrl} alt="2FA QR Code" className="w-44 h-44" />
+                        <img
+                          src={qrCodeUrl} alt="2FA QR Code" className="w-44 h-44"
+                          onError={() => setQrError(true)}
+                        />
+                      </div>
+                    )}
+                    {qrError && (
+                      <div className="w-44 h-44 rounded-2xl border flex flex-col items-center justify-center gap-2 text-center px-3"
+                        style={{ borderColor: 'var(--s-border)', background: 'var(--s-input)' }}>
+                        <ShieldCheck size={22} style={{ color: 'var(--s-muted)' }} />
+                        <p className="text-[11px]" style={{ color: 'var(--s-muted)' }}>
+                          QR kod yuklanmadi — pastdagi kalitni qo'lda kiriting
+                        </p>
                       </div>
                     )}
                     <div className="w-full">

@@ -99,8 +99,12 @@ function AdminAnalytics() {
   // Radar diagrammasi ilgari uchta o'ylab topilgan o'qituvchining qattiq
   // yozilgan ko'rsatkichlarini chizardi. Endi haqiqiy KPI endpointidan.
   const [teacherKpis, setTeacherKpis] = useState<{ name: string; kpi: PyTeacherKpi }[]>([])
-  const [dateFrom, setDateFrom]   = useState('')
-  const [dateTo, setDateTo]       = useState('')
+  // Ilgari bu yerda ikkita sana kiritish maydoni bor edi, lekin hech
+  // narsaga ulanmagan edi — tanlangan sana hech qachon so'rovga
+  // qo'shilmasdi. Backend faqat "oxirgi N kun" oynasini qo'llaydi, aniq
+  // sana oralig'ini emas — shuning uchun ishlaydigan narsa taklif
+  // qilinadi: haqiqatan API'ga boradigan oyna uzunligi.
+  const [windowDays, setWindowDays] = useState(120)
 
   const loadDashboard = () =>
     analyticsApi.dashboard().then(r => setStats(r.data)).catch(e => toast.error(e.message))
@@ -118,7 +122,7 @@ function AdminAnalytics() {
 
   useEffect(() => {
     let cancelled = false
-    analyticsApi.overview(120)
+    analyticsApi.overview(windowDays)
       .then(r => { if (!cancelled) setOv(r.data) })
       .catch(() => { if (!cancelled) setOv(null) })
 
@@ -137,7 +141,7 @@ function AdminAnalytics() {
       .catch(() => { if (!cancelled) setTeacherKpis([]) })
 
     return () => { cancelled = true }
-  }, [])
+  }, [windowDays])
 
   const triggerCalc = async () => {
     setTriggering(true)
@@ -270,14 +274,14 @@ function AdminAnalytics() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Date range */}
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg text-xs outline-none"
-            style={{ background: 'var(--s-bg-card)', border: '1px solid var(--s-border)', color: 'var(--s-text)' }} />
-          <span className="text-xs" style={{ color: 'var(--s-muted)' }}>—</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg text-xs outline-none"
-            style={{ background: 'var(--s-bg-card)', border: '1px solid var(--s-border)', color: 'var(--s-text)' }} />
+          {/* Oyna uzunligi — API faqat "oxirgi N kun"ni qo'llab-quvvatlaydi */}
+          <select value={windowDays} onChange={e => setWindowDays(Number(e.target.value))}
+            className="px-2.5 py-1.5 rounded-lg text-xs outline-none cursor-pointer"
+            style={{ background: 'var(--s-bg-card)', border: '1px solid var(--s-border)', color: 'var(--s-text)' }}>
+            <option value={30}>So'nggi 30 kun</option>
+            <option value={60}>So'nggi 60 kun</option>
+            <option value={120}>So'nggi 120 kun</option>
+          </select>
           <button onClick={loadHighRisk} disabled={riskLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors"
             style={{ borderColor: 'var(--s-border)', color: 'var(--s-muted)' }}

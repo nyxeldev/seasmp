@@ -13,6 +13,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { toast } from 'sonner'
 import { ArrowLeft, RefreshCw, AlertTriangle } from 'lucide-react'
 import { RoleGuard } from '@/components/RoleGuard'
+import { useDebounced } from '@/lib/use-debounced'
 
 function RiskBar({ score }: { score: number }) {
   const pct = Math.round(score * 100)
@@ -41,7 +42,8 @@ function RiskPageInner() {
   const [total, setTotal]       = useState(0)
   const [courses, setCourses]   = useState<Course[]>([])
   const [courseId, setCourseId] = useState('')
-  const [threshold, setThreshold] = useState('0.65')
+  const [thresholdInput, setThresholdInput] = useState('0.65')
+  const threshold = useDebounced(thresholdInput, 400)
   const [loading, setLoading]   = useState(false)
   const [pyOffline, setPyOffline] = useState(false)
   const [page, setPage]         = useState(0)
@@ -96,8 +98,8 @@ function RiskPageInner() {
           <span className="text-sm text-muted-foreground">Threshold:</span>
           <Input
             type="number" min="0" max="1" step="0.05"
-            value={threshold}
-            onChange={e => { setThreshold(e.target.value); setPage(0) }}
+            value={thresholdInput}
+            onChange={e => { setThresholdInput(e.target.value); setPage(0) }}
             className="w-20 h-8"
           />
         </div>

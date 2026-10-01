@@ -20,6 +20,7 @@ import {
   ShieldCheck, FileText, ArrowRight,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { SkeletonKpi, SkeletonRow } from '@/components/ui/skeleton'
 
 type Icon = React.ElementType<{ className?: string; style?: React.CSSProperties }>
 
@@ -123,12 +124,8 @@ function DashCard({
 }) {
   return (
     <div
-      className={`rounded-xl border p-5 ${className}`}
-      style={{
-        background:   'var(--s-bg-card)',
-        borderColor:  'var(--s-border)',
-        ...style,
-      }}
+      className={`glass-surface rounded-xl p-5 ${className}`}
+      style={style}
     >
       {children}
     </div>
@@ -333,7 +330,9 @@ function AdminDashboard() {
         initial="initial"
         animate="animate"
       >
-        {kpis.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)
+          : kpis.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}
       </motion.div>
 
       {/* Middle row: chart + risk list */}
@@ -411,6 +410,7 @@ function AdminDashboard() {
             </div>
 
             <div className="space-y-3">
+              {loading && Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)}
               {(data?.topRisk ?? []).map((s, i) => (
                 <motion.div
                   key={s.enrollmentId}
@@ -445,6 +445,7 @@ function AdminDashboard() {
           </div>
 
           <div className="space-y-0.5">
+            {loading && Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
             {activity.length === 0 && !loading && (
               <p className="text-xs py-6 text-center" style={{ color: 'var(--s-muted)' }}>
                 Hozircha voqea yo&apos;q
@@ -528,12 +529,15 @@ function TeacherDashboard() {
         className="kpi-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
         variants={stagger} initial="initial" animate="animate"
       >
-        {kpis.map(k => <KpiCard key={k.label} {...k} />)}
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)
+          : kpis.map(k => <KpiCard key={k.label} {...k} />)}
       </motion.div>
 
       <motion.div {...fadeUp(0.2)}>
         <DashCard>
           <div className="space-y-0.5">
+            {loading && Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)}
             {!loading && courses.length === 0 && (
               <p className="text-xs py-6 text-center" style={{ color: 'var(--s-muted)' }}>{t('teacher.noCourses')}</p>
             )}
@@ -611,12 +615,15 @@ function StudentDashboard() {
         className="kpi-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
         variants={stagger} initial="initial" animate="animate"
       >
-        {kpis.map(k => <KpiCard key={k.label} {...k} />)}
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)
+          : kpis.map(k => <KpiCard key={k.label} {...k} />)}
       </motion.div>
 
       <motion.div {...fadeUp(0.2)}>
         <DashCard>
           <div className="space-y-1">
+            {loading && Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)}
             {!loading && courses.length === 0 && (
               <p className="text-xs py-6 text-center" style={{ color: 'var(--s-muted)' }}>{t('student.noCourses')}</p>
             )}
