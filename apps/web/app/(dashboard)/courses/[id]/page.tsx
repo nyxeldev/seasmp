@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth-context'
 import { useBreadcrumbTitle } from '@/lib/breadcrumb'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton, SkeletonKpi } from '@/components/ui/skeleton'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, QrCode, Users, ClipboardList, Star } from 'lucide-react'
+import { ArrowLeft, Plus, QrCode, Users, ClipboardList, Star, AlertTriangle } from 'lucide-react'
 
 type Tab = 'students' | 'attendance' | 'grades'
 
@@ -27,6 +28,7 @@ export default function CourseDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { user } = useAuth()
   const [course, setCourse]           = useState<Course | null>(null)
+  const [courseError, setCourseError] = useState(false)
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [students, setStudents]       = useState<User[]>([])
@@ -50,7 +52,9 @@ export default function CourseDetailPage() {
   // sini kutadi, shuning uchun ular kurs yuklangandan KEYIN ishga tushadi.
   const courseId = course?.id ?? null
 
-  const loadCourse     = () => coursesApi.getById(id).then(r => setCourse(r.data)).catch(e => toast.error(e.message))
+  const loadCourse     = () => coursesApi.getById(id)
+    .then(r => { setCourse(r.data); setCourseError(false) })
+    .catch(e => { toast.error(e.message); setCourseError(true) })
   const loadEnrollments= () => courseId && enrollmentsApi.list(`courseId=${courseId}&limit=200`).then(r => setEnrollments(r.data)).catch(() => {})
   const loadAssessments= () => courseId && assessmentsApi.byCourse(courseId).then(r => setAssessments(r.data)).catch(() => {})
 
@@ -117,7 +121,38 @@ export default function CourseDetailPage() {
     } catch (err: any) { toast.error(err.message) }
   }
 
-  if (!course) return <div className="animate-pulse h-8 w-48 bg-muted rounded" />
+  if (courseError) {
+    return (
+      <Card>
+        <CardContent className="py-14 flex flex-col items-center gap-3 text-center">
+          <AlertTriangle className="size-7 text-muted-foreground opacity-60" />
+          <div>
+            <p className="font-medium">Kurs yuklanmadi</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Kurs topilmadi yoki unga kirish huquqingiz yo'q
+            </p>
+          </div>
+          <Button variant="outline" size="sm" render={<Link href="/courses" />}>
+            <ArrowLeft className="size-4" /> Kurslarga qaytish
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!course) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Skeleton className="size-8 rounded" />
+          <Skeleton className="h-7 w-56" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonKpi key={i} />)}
+        </div>
+      </div>
+    )
+  }
 
   const isTeacher = user?.role === 'TEACHER' || user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
   const isAdmin   = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'

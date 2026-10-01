@@ -171,7 +171,7 @@ export const coursesApi = {
 
 // ─── Enrollments ─────────────────────────────────────────────────────────────
 export const enrollmentsApi = {
-  list:         (q?: string) => api.get<{ success: boolean; data: Enrollment[]; total: number }>(`/v1/enrollments${q ? `?${q}` : ''}`),
+  list:         (q?: string) => api.get<{ success: boolean; data: Enrollment[]; meta: PaginationMeta }>(`/v1/enrollments${q ? `?${q}` : ''}`),
   getById:      (id: string) => api.get<{ success: boolean; data: Enrollment }>(`/v1/enrollments/${id}`),
   enroll:       (studentId: string, courseId: string) =>
     api.post<{ success: boolean; data: Enrollment }>('/v1/enrollments', { studentId, courseId }),
@@ -204,6 +204,7 @@ export const assessmentsApi = {
   update:             (id: string, body: Partial<Assessment>) => api.patch<{ success: boolean; data: Assessment }>(`/v1/assessments/${id}`, body),
   delete:             (id: string) => api.delete(`/v1/assessments/${id}`),
   grades:             (id: string) => api.get<{ success: boolean; data: Grade[] }>(`/v1/assessments/${id}/grades`),
+  gradesByCourse:     (courseId: string) => api.get<{ success: boolean; data: Grade[] }>(`/v1/assessments/course/${courseId}/grades`),
   gradesByEnrollment: (enrollmentId: string) =>
     api.get<{ success: boolean; data: GradeWithAssessment[] }>(`/v1/assessments/enrollment/${enrollmentId}/grades`),
   submitGrade:        (id: string, body: { enrollmentId: string; score: number; feedback?: string }) =>
