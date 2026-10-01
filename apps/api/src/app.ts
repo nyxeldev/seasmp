@@ -1,13 +1,17 @@
 import Fastify from 'fastify'
+import { Prisma } from '@prisma/client'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
+import multipart from '@fastify/multipart'
+import fastifyStatic from '@fastify/static'
 
 import { env } from './config/env'
 import { logger } from './config/logger'
 import { reportError } from './config/errorReporter'
 import { registerAuthMiddleware } from './middlewares/auth.middleware'
+import { AVATAR_MAX_BYTES, avatarStaticRoot, ensureAvatarDir } from './services/avatarStorage.service'
 
 import authRoutes       from './routes/auth.routes'
 import userRoutes       from './routes/user.routes'
@@ -53,6 +57,35 @@ export async function buildApp() {
   })
 
   await app.register(cookie, { secret: env.JWT_REFRESH_SECRET })
+
+  // Avatar yuklash — hajm chegarasi shu yerda ham qo'yiladi (himoya
+  // qatlamlaridan biri; haqiqiy tur tekshiruvi avatarStorage.service'da
+  // bayt imzosi bo'yicha amalga oshiriladi, kengaytma/MIME'ga ishonilmaydi).
+  await app.register(multipart, {
+    limits: { fileSize: AVATAR_MAX_BYTES, files: 1 },
+  })
+
+  // Yuklangan avatarlarni xizmat qiladi. Fayl nomlari faqat serverda
+  // crypto.randomUUID() bilan generatsiya qilinadi — mijoz kiritgan yo'l
+  // hech qachon fayl tizimi yo'liga aralashmaydi, shuning uchun path
+  // traversal xavfi yo'q. Bu papka ichida faqat tekshirilgan rasm baytlari
+  // saqlanadi — bajariluvchi/skript kontent hech qachon yozilmaydi.
+  await ensureAvatarDir()
+  await app.register(fastifyStatic, {
+    root: avatarStaticRoot(),
+    prefix: '/v1/uploads/avatars/',
+    index: false,
+    list: false,
+    setHeaders: (reply) => {
+      reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+      reply.header('X-Content-Type-Options', 'nosniff')
+      // Helmet standart bo'yicha Cross-Origin-Resource-Policy: same-origin
+      // qo'yadi — dev'da frontend (3000) va API (4000) turli origin bo'lgani
+      // uchun brauzer <img src> yuklashni bloklaydi. Avatarlar ochiq
+      // ko'rsatiladigan rasm bo'lgani uchun shu yerda ataylab bo'shatiladi.
+      reply.header('Cross-Origin-Resource-Policy', 'cross-origin')
+    },
+  })
 
   await registerAuthMiddleware(app)
 
@@ -112,6 +145,37 @@ export async function buildApp() {
         success: false,
         error: { code: 'VALIDATION_ERROR', message: "Ma'lumotlar noto'g'ri formatda", details: error.validation },
       })
+    }
+
+    // Prisma xatolari — bu yergacha yetib kelsa, degani servis qatlamida
+    // ushlanmagan (ko'pchilik joyda check-then-insert DB'ning real UNIQUE/FK
+    // cheklovi bilan himoyalangan, lekin natijaviy xato tarjima qilinmagan
+    // edi: mijoz 409 o'rniga umumiy 500 olardi). Bu yerda faqat ikkita eng
+    // keng tarqalgan holat tarjima qilinadi — Prisma/Postgres ichki xabari
+    // hech qachon mijozga chiqmaydi.
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        const target = error.meta?.target
+        const fields = Array.isArray(target) ? target.join(', ') : typeof target === 'string' ? target : null
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'UNIQUE_CONSTRAINT_VIOLATION',
+            message: fields
+              ? `Bu qiymat allaqachon band: ${fields}`
+              : "Bu yozuv allaqachon mavjud",
+          },
+        })
+      }
+      if (error.code === 'P2003') {
+        return reply.status(409).send({
+          success: false,
+          error: {
+            code: 'FOREIGN_KEY_CONSTRAINT',
+            message: "Bu amalni bajarib bo'lmaydi: ushbu obyektga bog'liq boshqa yozuvlar mavjud",
+          },
+        })
+      }
     }
 
     const statusCode = error.statusCode ?? 500

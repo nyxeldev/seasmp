@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma'
 import { auditService } from './audit.service'
 import type { User, UserRole } from '@prisma/client'
@@ -86,7 +87,29 @@ export const userService = {
     const user = await prisma.user.findUnique({ where: { id } })
     if (!user) throw Object.assign(new Error('Foydalanuvchi topilmadi'), { statusCode: 404 })
 
-    await prisma.user.delete({ where: { id } })
+    // courses.teacher_id / enrollments.student_id / grades.graded_by /
+    // attendance.marked_by hammasi ON DELETE RESTRICT — bu ataylab shunday:
+    // kurs o'qitgan yoki talaba sifatida tarix qoldirgan hisobni jimgina
+    // o'chirib, o'sha tarixni yetim qoldirish xavfsizlik va audit nuqtai
+    // nazaridan noto'g'ri. Hard delete faqat HECH QANDAY tarixi yo'q
+    // hisoblar uchun ishlaydi; qolganlari uchun to'g'ri yo'l — deaktivatsiya
+    // (`toggleStatus` / `isActive=false`), u allaqachon ishlaydi va hisobni
+    // tizimga kira olmaydigan holga keltiradi, tarixni yo'qotmaydi.
+    try {
+      await prisma.user.delete({ where: { id } })
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+        throw Object.assign(
+          new Error(
+            "Bu foydalanuvchini o'chirib bo'lmaydi: unga bog'liq kurslar, ro'yxatga olishlar, baholar yoki " +
+            "davomat yozuvlari mavjud. Buning o'rniga hisobni deaktivatsiya qiling " +
+            "(PATCH /v1/users/:id/toggle-status) — bu tarixni saqlab, foydalanuvchining tizimga kirishini to'xtatadi."
+          ),
+          { statusCode: 409 },
+        )
+      }
+      throw err
+    }
 
     await auditService.log({
       userId: actorId, action: 'DELETE', resource: 'users',

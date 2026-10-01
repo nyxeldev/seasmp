@@ -202,7 +202,12 @@ model Enrollment {
   enrolledAt       DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz
   status           EnrollmentStatus @default(ACTIVE)
   dropoutRiskScore Decimal?         @map("dropout_risk_score") @db.Decimal(5, 4) // 0.0000 - 1.0000
-  finalGrade       Decimal?         @map("final_grade") @db.Decimal(5, 2)
+  // Qaysi model/versiya dropoutRiskScore'ni hisoblagani — faqat bitta qonuniy
+  // (kanonik) quvur bor: apps/analytics src/services/etl.py + ml_model.py.
+  // Ikkinchi (legacy) quvur olib tashlandi, lekin kelajakda shu ustunlar
+  // bo'lmasa, qaysi model yozganini bilishning iloji yo'q edi.
+  scoreModelVersion String?         @map("score_model_version") @db.VarChar(50)
+  scoredAt          DateTime?       @map("scored_at") @db.Timestamptz
 
   // Relations
   student    User         @relation(fields: [studentId], references: [id])
@@ -243,7 +248,7 @@ model Assessment {
   title     String         @db.VarChar(255)
   type      AssessmentType
   maxScore  Decimal        @default(100) @map("max_score") @db.Decimal(5, 2)
-  weight    Decimal        @default(0.1) @db.Decimal(5, 4) // Yakuniy bahoga ta'sir (0-1)
+  weight    Decimal        @default(0.1) @db.Decimal(5, 4) // Yakuniy bahoga ta'sir (0-1) — DB CHECK (see migrations)
   dueDate   DateTime?      @map("due_date") @db.Timestamptz
   createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz
 
@@ -304,6 +309,10 @@ model AuditLog {
   @@index([resourceOwnerId])
   @@index([userId, resourceOwnerId])
   @@index([accessRelation])
+  // behaviorProfiler.aggregate() har bir faol foydalanuvchi uchun kechasi
+  // "WHERE user_id = ? AND created_at > now() - 30 kun" so'raydi — yagona
+  // user_id indeksi o'rniga shu juftlik jadval o'sgani sari tezroq qoladi.
+  @@index([userId, createdAt])
   @@map("audit_logs")
 }
 
@@ -334,7 +343,7 @@ model SecurityAlert {
 
   // ── Qaysi qatlam aniqladi ───────────────────────────────────────────────
   layer           DetectionLayer? 
-  score           Decimal?        @db.Decimal(5, 4)
+  score           Decimal?        @db.Decimal(5, 4) // 0.0000 - 1.0000 — DB CHECK (see migrations)
   detectorVersion String?         @map("detector_version") @db.VarChar(50)
   auditLogId      BigInt?         @map("audit_log_id")
 
@@ -367,7 +376,7 @@ model OwnershipRule {
   ownerPath    String          @map("owner_path") @db.VarChar(255)
   role         OwnerRole       @default(OWNER)
   source       OwnershipSource @default(MANUAL)
-  confidence   Decimal?        @db.Decimal(5, 4)
+  confidence   Decimal?        @db.Decimal(5, 4) // 0.0000 - 1.0000 — DB CHECK (see migrations)
   supportCount Int             @default(0) @map("support_count")
   active       Boolean         @default(true)
   createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz

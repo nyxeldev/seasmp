@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
+import { resolveMediaUrl } from '@/lib/api'
 import { Sidebar, SidebarProvider } from '@/components/nav/sidebar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -79,7 +80,7 @@ function TopHeader() {
   if (!user) return null
 
   const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-  const avatarUrl = user.avatarUrl
+  const avatarUrl = resolveMediaUrl(user.avatarUrl)
 
   return (
     <header

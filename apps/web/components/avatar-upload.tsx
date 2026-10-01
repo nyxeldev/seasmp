@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Camera, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { usersApi } from '@/lib/api'
+import { usersApi, resolveMediaUrl } from '@/lib/api'
 
 interface AvatarUploadProps {
   currentUrl?: string
@@ -34,15 +34,9 @@ export function AvatarUpload({ currentUrl, initials, onUploadComplete }: AvatarU
 
     setUploading(true)
     try {
-      const body = new FormData()
-      body.append('file', file)
-
-      const res = await fetch('/api/avatar', { method: 'POST', body })
-      if (!res.ok) throw new Error('Yuklash muvaffaqiyatsiz')
-      const { url } = await res.json() as { url: string }
-
-      await usersApi.updateMe({ avatarUrl: url })
-      onUploadComplete(url)
+      const { data } = await usersApi.uploadAvatar(file)
+      if (!data.avatarUrl) throw new Error('Yuklash muvaffaqiyatsiz')
+      onUploadComplete(data.avatarUrl)
       toast.success('Avatar yangilandi')
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Xato yuz berdi')
@@ -52,7 +46,7 @@ export function AvatarUpload({ currentUrl, initials, onUploadComplete }: AvatarU
     }
   }
 
-  const displaySrc = preview ?? currentUrl
+  const displaySrc = preview ?? resolveMediaUrl(currentUrl)
 
   return (
     <div className="flex items-center gap-4">

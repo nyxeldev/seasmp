@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { userService } from '../services/user.service'
+import { saveAvatar, InvalidAvatarError } from '../services/avatarStorage.service'
 import type { UserRole } from '@prisma/client'
 
 const createSchema = z.object({
@@ -40,6 +41,58 @@ export default async function userRoutes(app: FastifyInstance) {
     if (!body.success) return validationError(reply, body.error.errors[0].message)
 
     const user = await userService.update(request.user.sub, body.data, request.user.sub, request.ip)
+    return reply.send({ success: true, data: user })
+  })
+
+  // POST /v1/users/me/avatar
+  //
+  // Mijoz Next.js'ning o'z Route Handler'i (hech qanday auth'siz) orqali
+  // emas, shu yerda — autentifikatsiya, hajm chegarasi va haqiqiy bayt
+  // imzosi (magic bytes) tekshiruvi bilan yuklaydi. Fayl nomi/kengaytma/
+  // MIME mijozdan OLINMAYDI — hammasi serverda aniqlanadi va generatsiya
+  // qilinadi (batafsili: avatarStorage.service.ts).
+  app.post('/me/avatar', { onRequest: [app.authenticate] }, async (request, reply) => {
+    let data
+    try {
+      data = await request.file()
+    } catch {
+      return reply.status(413).send({
+        success: false,
+        error: { code: 'FILE_TOO_LARGE', message: 'Fayl 2MB dan katta' },
+      })
+    }
+
+    if (!data) return validationError(reply, 'Fayl topilmadi')
+
+    let buffer: Buffer
+    try {
+      buffer = await data.toBuffer()
+    } catch {
+      return reply.status(413).send({
+        success: false,
+        error: { code: 'FILE_TOO_LARGE', message: 'Fayl 2MB dan katta' },
+      })
+    }
+
+    let saved
+    try {
+      saved = await saveAvatar(buffer)
+    } catch (err) {
+      if (err instanceof InvalidAvatarError) {
+        return reply.status(err.statusCode).send({
+          success: false,
+          error: { code: 'INVALID_FILE', message: err.message },
+        })
+      }
+      throw err
+    }
+
+    const user = await userService.update(
+      request.user.sub,
+      { avatarUrl: saved.relativeUrl },
+      request.user.sub,
+      request.ip,
+    )
     return reply.send({ success: true, data: user })
   })
 

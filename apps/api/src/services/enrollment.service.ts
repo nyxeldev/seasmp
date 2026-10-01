@@ -81,19 +81,49 @@ export const enrollmentService = {
       throw Object.assign(new Error("Talaba topilmadi"), { statusCode: 404 })
     }
 
+    // Tezkor, qulfsiz dastlabki tekshiruv: kurs umuman topilmasa, faol
+    // bo'lmasa yoki talaba allaqachon yozilgan bo'lsa, qator qulfini
+    // olishning hojati yo'q — bu holatlar tezlik bilan bog'liq emas.
+    // Haqiqiy sig'im qarori pastda, qator qulflangan holda qabul qilinadi;
+    // takroriy yozilish esa baribir DB'ning @@unique([studentId, courseId])
+    // cheklovi bilan himoyalangan (global P2002 ishlovchisi — app.ts).
     const course = await prisma.course.findUnique({ where: { id: courseId } })
     if (!course) throw Object.assign(new Error('Kurs topilmadi'), { statusCode: 404 })
     if (course.status !== 'ACTIVE') throw Object.assign(new Error("Kurs faol emas"), { statusCode: 400 })
 
-    const enrollmentCount = await prisma.enrollment.count({ where: { courseId, status: 'ACTIVE' } })
-    if (enrollmentCount >= course.maxStudents) {
-      throw Object.assign(new Error("Kurs to'lgan"), { statusCode: 400 })
-    }
-
     const existing = await prisma.enrollment.findUnique({ where: { studentId_courseId: { studentId, courseId } } })
     if (existing) throw Object.assign(new Error("Talaba bu kursga allaqachon yozilgan"), { statusCode: 409 })
 
-    const enrollment = await prisma.enrollment.create({ data: { studentId, courseId } })
+    // Sig'im (maxStudents) tekshiruvi ilgari oddiy "sana-solishtir-yoz" edi:
+    // ikkita bir vaqtdagi so'rov ikkalasi ham eski sanoqni ko'rib, ikkalasi
+    // ham sig'imdan oshib yozilishi mumkin edi — bu DB darajasida hech qanday
+    // cheklov bilan himoyalanmagan (maxStudents uchun UNIQUE/CHECK yo'q,
+    // chunki u statik qiymat emas, faol yozilishlar soni bilan solishtiriladi).
+    //
+    // Yechim: shu KURS qatorini `SELECT ... FOR UPDATE` bilan qulflash.
+    // Qulf faqat shu tranzaksiya ichida va faqat shu bitta kurs qatorida —
+    // boshqa kursga yozilish yoki shu kursni o'qish/ro'yxatlash bilan hech
+    // qanday ziddiyatga kirmaydi. Qulf olingach sig'im YANGIDAN, haqiqiy
+    // qatorlar asosida hisoblanadi, shuning uchun navbatdagi so'rov eskirgan
+    // sanoqqa emas, qulf bo'shagandan keyingi haqiqiy holatga qaraydi.
+    const enrollment = await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<{ id: string; maxStudents: number; status: string }[]>`
+        SELECT id, max_students AS "maxStudents", status
+        FROM courses
+        WHERE id = ${courseId}::uuid
+        FOR UPDATE
+      `
+      const lockedCourse = rows[0]
+      if (!lockedCourse) throw Object.assign(new Error('Kurs topilmadi'), { statusCode: 404 })
+      if (lockedCourse.status !== 'ACTIVE') throw Object.assign(new Error("Kurs faol emas"), { statusCode: 400 })
+
+      const activeCount = await tx.enrollment.count({ where: { courseId, status: 'ACTIVE' } })
+      if (activeCount >= lockedCourse.maxStudents) {
+        throw Object.assign(new Error("Kurs to'lgan"), { statusCode: 400 })
+      }
+
+      return tx.enrollment.create({ data: { studentId, courseId } })
+    })
 
     await auditService.log({
       userId: actorId, action: 'ENROLL', resource: 'enrollments',
