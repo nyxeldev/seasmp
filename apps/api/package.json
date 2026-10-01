@@ -18,9 +18,12 @@
     "db:generate": "node scripts/with-env.js prisma generate",
     "db:seed:demo": "node scripts/with-env.js tsx prisma/seed-demo.ts",
     "db:seed:history": "node scripts/with-env.js tsx prisma/seed-history.ts",
+    "db:seed:ownership": "node scripts/with-env.js tsx prisma/seed-ownership.ts",
     "demo:behavior": "node scripts/with-env.js tsx src/tools/behaviorDemo.ts",
+    "demo:ownership-traffic": "node scripts/with-env.js tsx src/tools/ownershipTrafficDemo.ts",
     "check:realtime": "node scripts/with-env.js tsx src/tools/realtimeCheck.ts",
-    "eval:blind": "node scripts/with-env.js tsx src/tools/blindEval.ts"
+    "eval:blind": "node scripts/with-env.js tsx src/tools/blindEval.ts",
+    "infer:ownership": "node scripts/with-env.js tsx src/tools/inferOwnership.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
