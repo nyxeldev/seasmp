@@ -1,5 +1,6 @@
 import * as crypto from 'crypto'
 import * as QRCode from 'qrcode'
+import { env } from '../config/env'
 import { prisma } from '../config/prisma'
 import { redis } from '../config/redis'
 import { auditService } from './audit.service'
@@ -221,7 +222,12 @@ export const attendanceService = {
     const token = crypto.randomBytes(32).toString('hex')
     await redis.setex(`qr_attendance:${token}`, QR_TTL_SECONDS, JSON.stringify({ courseId, lessonDate }))
 
-    const qrCodeUrl = await QRCode.toDataURL(token, { errorCorrectionLevel: 'M', width: 300 })
+    // Ilgari QR kod xom tokenni o'zini kodlagan edi — telefon kamerasi bilan
+    // skanerlansa, faqat uzun tasodifiy matn ko'rsatardi, hech qayerga olib
+    // bormasdi. Endi to'liq havola kodlanadi: talaba skanerlasa, brauzer
+    // to'g'ridan-to'g'ri davomat belgilaydigan sahifaga ochiladi.
+    const scanUrl = `${env.CORS_ORIGIN}/attendance/scan?token=${token}`
+    const qrCodeUrl = await QRCode.toDataURL(scanUrl, { errorCorrectionLevel: 'M', width: 300 })
 
     return { token, qrCodeUrl, expiresIn: QR_TTL_SECONDS }
   },

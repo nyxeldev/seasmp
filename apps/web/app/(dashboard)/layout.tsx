@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ChevronRight, User, LogOut } from 'lucide-react'
 import { LanguageSwitcher } from '@/components/lang-switcher'
+import { ThemeSwitcher } from '@/components/theme-switcher'
 import { NotificationBell } from '@/components/notification-bell'
 import { GlobalSearch } from '@/components/global-search'
 import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
@@ -93,10 +94,12 @@ function TopHeader() {
       <Breadcrumb />
 
       <div className="flex items-center gap-1">
+        <ThemeSwitcher />
         <LanguageSwitcher />
         <NotificationBell />
 
-        {/* Avatar dropdown */}
+        {/* Avatar dropdown — ism matni olib tashlandi (joy tejash uchun),
+            to'liq ism va rol hamon ochilganda ko'rinadi */}
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--s-hover)] transition-colors outline-none cursor-pointer ml-1">
             <Avatar className="size-7">
@@ -105,9 +108,6 @@ function TopHeader() {
                 {initials}
               </AvatarFallback>
             </Avatar>
-            <span className="text-sm hidden sm:block select-none" style={{ color: 'var(--s-muted)' }}>
-              {user.firstName}
-            </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-52">
             <DropdownMenuGroup>
