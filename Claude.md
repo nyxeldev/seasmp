@@ -26,11 +26,15 @@ Hujjatni o'qish: `cat SEASMP_TechSpec_v2.pdf` yoki `docs/` papkasida.
 | **Phase 3** | Analitika servisi (FastAPI): xavf tahlili, ML dropout bashorati (RandomForest), Celery kechasi hisob-kitob | ✅ tugallangan |
 | **Phase 4** | Ikki qatlamli xavfsizlik aniqlash: 1-qatlam avtorizatsiya (SELF/OWNER/CUSTODIAN/PRIVILEGED/FOREIGN/UNKNOWN), 2-qatlam xatti-harakat (UEBA, 30 kunlik profil), korrelyatsiya qatlami | ✅ tugallangan |
 | **Phase 5** | Real vaqt (autentifikatsiyalangan Socket.io), foydalanuvchi bildirishnomalari, xato monitoringi (Sentry, ixtiyoriy), N+1 optimallashtirish | ✅ tugallangan |
-| **Phase 6** | Ilmiy validatsiya (BMI uchun): E1 — tashqi benchmark (CMU CERT Insider Threat r4.2) ustida haqiqiy ROC/AUC; E2 — ko'r baholash (threshold/vaznlardan mustaqil yozilgan ssenariylar, haqiqiy DB orqali) | 🔄 ishlanmoqda — `claude/e1-e2-experiments` shoxida |
+| **Phase 6** | Ilmiy validatsiya (BMI uchun): E1 (CMU CERT tashqi benchmark), E2 (ko'r baholash), Bosqich B (egalik munosabatlarini trafikdan avtomatik chiqarish — ilmiy yangilikning yadrosi) | 🔄 ishlanmoqda |
 
-**Hozir:** Phase 6 — natijalar `apps/api/src/tools/blindEval.ts` (E2, tugallangan) va
-tashqi CMU CERT dataset asosidagi baholash skriptida (E1) hisoblanmoqda. Batafsil:
-[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) 13- va 15-bo'limlar.
+**Hozir:** E1/E2 tugallangan va `main`da (AUC: E1=0.650, E2=0.980 — batafsil
+[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) 15-bo'lim). Bosqich B — avtomatik
+egalik chiqarish algoritmi (`services/ownershipInference.ts`,
+`tools/inferOwnership.ts`) yozilgan va haqiqiy trafikda sinalgan: 4/4
+tekshirilishi mumkin bo'lgan MANUAL qoida 0.929–1.000 ishonch bilan
+qayta kashf etildi. Batafsil: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md)
+16-bo'lim.
 
 ## Muhim eslatmalar
 - Versiyalarni o'zgartirma — barchasi tekshirilgan

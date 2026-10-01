@@ -967,3 +967,113 @@ Ishlatish:
 ```bash
 npx tsx apps/api/src/tools/externalBenchmark.ts --dir=<r4.2 papkasi> [--with-email-authz]
 ```
+
+## 16. Bosqich B — egalik munosabatlarini avtomatik chiqarish
+
+BMI rejasidagi ilmiy yangilikning markaziy qismi: "tizim trafigini
+kuzatib, qaysi rol qaysi obyekt turiga qanday chastotada murojaat
+qilishini o'rganadi va egalik munosabatlarini o'zi shakllantiradi."
+
+Bosqich A (`ownershipResolver.ts`) qo'lda yozilgan qoidalarga tayanadi —
+bu ishlaydi, lekin yangilik emas: xuddi shunday qoidani har qanday tizim
+uchun qo'lda yozish mumkin. Bosqich B boshqa savolga javob beradi: qoidani
+ODAM YOZMASDAN, faqat (a) Prisma sxemasining o'zidan va (b) audit
+jurnalidagi haqiqiy trafikdan chiqarib bo'ladimi?
+
+### Muhim boshlang'ich topilma — hujjatlashtirilmagan qoidalar
+
+Kodni tekshirishda aniqlandi: `ownership_rules` jadvalidagi 9 ta MANUAL
+qoida (courses/enrollments/attendance/assessments/grades uchun) ishchi
+bazada MAVJUD edi, lekin reponing HECH BIR joyida (seed, migratsiya)
+yozilmagan — faqat qo'lda (Prisma Studio yoki SQL orqali) kiritilgan.
+Toza o'rnatishda `ownership_rules` bo'sh qoladi va butun 1-qatlam jimgina
+ishlamay qoladi. Tuzatildi: `apps/api/prisma/seed-ownership.ts` (npm run
+db:seed:ownership) endi shu 9 ta qoidani reproducible qiladi.
+
+### Algoritm — ikki bosqich
+
+**1. Nomzod yo'llarni topish** (`discoverCandidatePaths`,
+`services/ownershipInference.ts`): Prisma `dmmf.datamodel` orqali
+modeldan `User`ga olib boradigan barcha to-one (FK ushlab turuvchi
+tomon) yo'llarni topadi, 3 segmentgacha (`enrollment.course.teacherId`
+kabi). Hech qanday resurs turiga xos bilim yozilmagan — faqat sxema
+grafigi bo'ylab BFS. Tsiklik bog'lanishdan `visited` to'plami bilan
+saqlaniladi.
+
+**2. Ishonchni audit jurnalidan o'lchash** (`aggregateCandidateScores`,
+`services/ownershipPaths.ts` — sof funksiya, bazasiz test qilinadi): har
+bir nomzod yo'l uchun audit_logs dagi haqiqiy ACCESS hodisalaridan
+necha foizda `readPath(resurs, yo'l) === aktyorId` ekanini hisoblaydi.
+
+**MUHIM TUZATISH yo'l davomida topildi:** boshlang'ich versiya BARCHA
+rollarni aralashtirib bitta ishonch hisoblardi. Haqiqiy trafikda bu
+chalg'ituvchi chiqdi: `courses -> teacherId` (CUSTODIAN nomzodi) umumiy
+ishonchi atigi 0.096 (13/136) chiqdi — past ko'rinadi, lekin sabab shuki
+136 murojaatning aksariyati TALABALARDAN (o'z kursini ko'rish), ular
+hech qachon `teacherId`ga teng bo'la olmaydi. Tuzatish: ishonch endi HAR
+BIR AKTYOR ROLI bo'yicha ALOHIDA hisoblanadi (`byRole`), taklif/tasdiqlash
+esa eng yaxshi rol bo'yicha ishonchga (`bestRole`) asoslanadi — xuddi shu
+nomzod TEACHER roli ichida 0.929 (13/14) chiqdi.
+
+### Natija — haqiqiy trafikda (2026-09-30/10-01, haqiqiy HTTP so'rovlar)
+
+CMU CERT/ko'r baholashdan farqli, bu "ichki" tekshiruv: algoritm ODAM
+YOZGAN 9 ta qoidani mustaqil ravishda qayta kashf eta oladimi?
+
+Trafik manbai: `apps/api/src/tools/ownershipTrafficDemo.ts` — 85 talaba
+va 8 o'qituvchi nomidan HAQIQIY login + GET so'rovlari (sintetik
+hisoblash emas), real seed ma'lumotlari (13 kurs, 191 ro'yxatga olish)
+ustida. Jami 249 ta so'rov.
+
+| Resurs turi | Yo'l | MANUAL qoida | Algoritm (eng mos rol) | Natija |
+|---|---|---|---|---|
+| courses | teacherId | CUSTODIAN | TEACHER: 0.929 (26/28) | ✓ tasdiqlandi |
+| enrollments | studentId | OWNER | STUDENT: 1.000 (206/206) | ✓ tasdiqlandi |
+| enrollments | course.teacherId | CUSTODIAN | TEACHER: 1.000 (39/39) | ✓ tasdiqlandi |
+| assessments | course.teacherId | CUSTODIAN | TEACHER: 1.000 (44/44) | ✓ tasdiqlandi |
+| attendance | (2 qoida) | OWNER/CUSTODIAN | — | tekshirib bo'lmadi (pastga qarang) |
+| grades | (2 qoida) | OWNER/CUSTODIAN | — | tekshirib bo'lmadi (pastga qarang) |
+
+**4/4 tekshirilishi mumkin bo'lgan qoida 0.929–1.000 oralig'ida ishonch
+bilan tasdiqlandi.**
+
+### Ikkinchi topilma — qamrov bo'shlig'i (band 4, "qamrov auditi")
+
+`attendance` va `grades` uchun MANUAL qoida bor, lekin ularni hech qachon
+tekshirib bo'lmaydi: kodni tekshirish shuni ko'rsatdiki, ishlab turgan
+tizimda `attendance.routes.ts` va `assessment.routes.ts` da bitta ham GET
+yo'li yo'q, unda resurs o'zining `id`'si bilan so'raladi (faqat
+`/attendance/courses/:courseId`, `/attendance/stats/:enrollmentId`,
+`/assessments/:id/grades` kabi — bularning hech biri attendance yoki
+grade'ning o'z ID'si bilan so'ralmaydi). Natija: `resolveAccess
+('attendance', ...)` va `resolveAccess('grades', ...)` productionda
+HECH QACHON chaqirilmaydi — bu ikki MANUAL qoida "o'lik kod". Bu BMI
+rejasining 4-bandi ("qamrov auditi") kutgan turdagi topilma, faqat
+teskari yo'nalishda: yo'q qoida emas, ishlamaydigan qoida.
+
+### Tasdiqlash tajribasi — "leave-one-out"
+
+Algoritm shunchaki mavjud qoidalarni TASDIQLASHI emas, haqiqatan YANGI
+qoida TOPA OLISHI kerak. Tekshirish uchun: `assessments/course.teacherId`
+MANUAL qoidasi vaqtincha o'chirildi, `inferOwnership.ts --write` ishga
+tushirildi. Natija: algoritm uni mustaqil ravishda, confidence=1.000
+(44/44) bilan qayta topdi va `ownership_rules`ga `source=INFERRED,
+active=false` bilan yozdi (production avtorizatsiyasiga hech qachon
+so'zsiz ta'sir qilmaydi — inson tasdiqlashi kerak). Keyin asl MANUAL
+holat tiklandi (`db:seed:ownership`).
+
+### Cheklovlar (ochiq aytiladi)
+
+- Namuna hajmi (209–249 so'rov) kichik — ishonch oraliqlari keng.
+Statistik qat'iylik keyingi ishda kerak.
+- `attendance`/`grades` uchun hali birorta ham tasdiqlangan/rad etilgan
+natija yo'q — bu kod cheklovi (yo'l yo'qligi), algoritm cheklovi emas.
+- OWNER/CUSTODIAN farqlanishi segment chuqurligiga (1 vs ≥2) asoslangan
+evristika — umumiy qonun emas, bu loyihaning sxemasida ishlaydi.
+
+Ishlatish:
+```bash
+npm run db:seed:ownership --workspace=apps/api        # 9 ta MANUAL qoidani tiklash
+npm run demo:ownership-traffic --workspace=apps/api   # haqiqiy trafik generatsiya qilish
+npm run infer:ownership --workspace=apps/api           # [--write] [--json]
+```
