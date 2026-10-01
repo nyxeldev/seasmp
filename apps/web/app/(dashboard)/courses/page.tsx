@@ -135,6 +135,7 @@ export default function CoursesPage() {
   const [status, setStatus]     = useState('ALL')
   const [search, setSearch]     = useState('')
   const [open, setOpen]         = useState(false)
+  const [creating, setCreating] = useState(false)
   const [loadingCourses, setLoadingCourses] = useState(true)
   const [form, setForm] = useState({
     title: '', category: 'IT', durationWeeks: 8, price: 0, maxStudents: 20,
@@ -158,6 +159,7 @@ export default function CoursesPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault()
+    setCreating(true)
     try {
       const teacherId = user?.role === 'TEACHER' ? user.id : form.teacherId
       await coursesApi.create({
@@ -169,7 +171,11 @@ export default function CoursesPage() {
       toast.success("Kurs yaratildi")
       setOpen(false)
       load()
-    } catch (err: any) { toast.error(err.message) }
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setCreating(false)
+    }
   }
 
   const changeStatus = async (id: string, s: string) => {
@@ -276,7 +282,7 @@ export default function CoursesPage() {
                   </div>
                 </div>
                 <DialogFooter showCloseButton>
-                  <Button type="submit">Yaratish</Button>
+                  <Button type="submit" disabled={creating}>{creating ? 'Yaratilmoqda...' : 'Yaratish'}</Button>
                 </DialogFooter>
               </form>
             </DialogContent>

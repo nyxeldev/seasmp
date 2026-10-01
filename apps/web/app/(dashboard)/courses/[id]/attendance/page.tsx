@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
@@ -39,14 +40,21 @@ export default function CourseAttendancePage() {
 
   const [form, setForm]               = useState({ enrollmentId: '', lessonDate: '', status: 'PRESENT' as AttStatus })
   const [qrDate, setQrDate]           = useState(new Date().toISOString().slice(0, 10))
+  const [loading, setLoading]         = useState(true)
+  const [marking, setMarking]         = useState(false)
+  const [qrGenerating, setQrGenerating] = useState(false)
 
   // Manzildagi qism slug bo'lishi mumkin — quyidagi so'rovlar esa UUID kutadi
   const { courseId } = useCourse(id)
 
   const load = useCallback(() => {
     if (!courseId) return
+    setLoading(true)
     const q = filterDate ? `lessonDate=${filterDate}&limit=500` : 'limit=500'
-    attendanceApi.byCourse(courseId, q).then(r => setRecords(r.data)).catch(e => toast.error(e.message))
+    attendanceApi.byCourse(courseId, q)
+      .then(r => setRecords(r.data))
+      .catch(e => toast.error(e.message))
+      .finally(() => setLoading(false))
   }, [courseId, filterDate])
 
   useEffect(() => { load() }, [load])
@@ -77,7 +85,7 @@ export default function CourseAttendancePage() {
     if (qrCountdown <= 0) return
     const t = setTimeout(() => {
       setQrCountdown(c => {
-        if (c <= 1) { setQrToken(null); toast.info('QR token expired') }
+        if (c <= 1) { setQrToken(null); toast.info("QR tokenning muddati tugadi") }
         return c - 1
       })
     }, 1000)
@@ -86,25 +94,35 @@ export default function CourseAttendancePage() {
 
   const mark = async (e: React.FormEvent) => {
     e.preventDefault()
+    setMarking(true)
     try {
       await attendanceApi.mark(form)
-      toast.success('Attendance marked')
+      toast.success("Davomat belgilandi")
       setOpen(false)
       setForm({ enrollmentId: '', lessonDate: '', status: 'PRESENT' })
       load()
-    } catch (err: any) { toast.error(err.message) }
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setMarking(false)
+    }
   }
 
   const generateQr = async () => {
+    // `id` — manzildagi qism, u slug bo'lishi mumkin. API bu yerda UUID kutadi,
+    // shuning uchun aniqlangan kursning identifikatori yuboriladi.
+    if (!courseId) return
+    setQrGenerating(true)
     try {
-      // `id` — manzildagi qism, u slug bo'lishi mumkin. API bu yerda UUID kutadi,
-      // shuning uchun aniqlangan kursning identifikatori yuboriladi.
-      if (!courseId) return
       const res = await attendanceApi.generateQr(courseId, qrDate)
       setQrToken(res.data.token)
       setQrImage(res.data.qrCodeUrl)
       setQrCountdown(res.data.expiresIn)
-    } catch (err: any) { toast.error(err.message) }
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setQrGenerating(false)
+    }
   }
 
   // Aggregate by date — show summary stats
@@ -129,17 +147,17 @@ export default function CourseAttendancePage() {
         <Button variant="ghost" size="icon-sm" render={<Link href={`/courses/${id}`} />}>
           <ArrowLeft className="size-[18px]" />
         </Button>
-        <h1 className="text-2xl font-semibold">Attendance</h1>
+        <h1 className="text-2xl font-semibold">Davomat</h1>
       </div>
 
       {/* Summary cards */}
       {statsByDate.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: 'Total lessons', value: uniqueDates.length },
-            { label: 'Present avg', value: statsByDate.length ? `${Math.round(statsByDate.reduce((s,d) => s + (d.present/Math.max(d.total,1)*100), 0)/statsByDate.length)}%` : '—' },
-            { label: 'Total records', value: records.length },
-            { label: 'Students', value: enrollments.length },
+            { label: "Jami darslar", value: uniqueDates.length },
+            { label: "O'rtacha davomat", value: statsByDate.length ? `${Math.round(statsByDate.reduce((s,d) => s + (d.present/Math.max(d.total,1)*100), 0)/statsByDate.length)}%` : '—' },
+            { label: "Jami yozuvlar", value: records.length },
+            { label: "Talabalar", value: enrollments.length },
           ].map(({ label, value }) => (
             <Card key={label} size="sm">
               <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground font-normal">{label}</CardTitle></CardHeader>
@@ -156,25 +174,25 @@ export default function CourseAttendancePage() {
           value={filterDate}
           onChange={e => setFilterDate(e.target.value)}
           className="w-40"
-          placeholder="Filter by date"
+          placeholder="Sana bo'yicha"
         />
         {filterDate && (
-          <Button variant="ghost" size="sm" onClick={() => setFilterDate('')}>Clear</Button>
+          <Button variant="ghost" size="sm" onClick={() => setFilterDate('')}>Tozalash</Button>
         )}
 
         {isTeacher && (
           <>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger render={<Button variant="outline" />}>
-                <Plus className="size-[18px]" /> Mark Manual
+                <Plus className="size-[18px]" /> Qo'lda belgilash
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>Davomat belgilash</DialogTitle></DialogHeader>
                 <form onSubmit={mark} className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1.5">
-                    <Label>Student</Label>
+                    <Label>Talaba</Label>
                     <Select value={form.enrollmentId} onValueChange={v => setForm(f => ({...f, enrollmentId: v ?? ''}))}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Select student" /></SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Talabani tanlang" /></SelectTrigger>
                       <SelectContent>
                         {enrollments.map(e => (
                           <SelectItem key={e.id} value={e.id}>
@@ -185,11 +203,11 @@ export default function CourseAttendancePage() {
                     </Select>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label>Lesson date</Label>
+                    <Label>Dars sanasi</Label>
                     <Input type="date" value={form.lessonDate} onChange={e => setForm(f => ({...f, lessonDate: e.target.value}))} required />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label>Status</Label>
+                    <Label>Holat</Label>
                     <Select value={form.status} onValueChange={v => setForm(f => ({...f, status: (v ?? 'PRESENT') as AttStatus}))}>
                       <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -198,7 +216,9 @@ export default function CourseAttendancePage() {
                     </Select>
                   </div>
                   <DialogFooter showCloseButton>
-                    <Button type="submit" disabled={!form.enrollmentId || !form.lessonDate}>Mark</Button>
+                    <Button type="submit" disabled={!form.enrollmentId || !form.lessonDate || marking}>
+                      {marking ? 'Saqlanmoqda...' : 'Belgilash'}
+                    </Button>
                   </DialogFooter>
                 </form>
               </DialogContent>
@@ -206,21 +226,23 @@ export default function CourseAttendancePage() {
 
             <Dialog open={qrOpen} onOpenChange={v => { setQrOpen(v); if (!v) { setQrToken(null); setQrImage(null); setQrCountdown(0) } }}>
               <DialogTrigger render={<Button />}>
-                <QrCode className="size-[18px]" /> QR Attendance
+                <QrCode className="size-[18px]" /> QR davomat
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>QR Attendance Token</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>QR davomat tokeni</DialogTitle></DialogHeader>
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1.5">
-                    <Label>Lesson date</Label>
+                    <Label>Dars sanasi</Label>
                     <Input type="date" value={qrDate} onChange={e => setQrDate(e.target.value)} />
                   </div>
                   {!qrToken ? (
-                    <Button onClick={generateQr}>Generate Token</Button>
+                    <Button onClick={generateQr} disabled={qrGenerating}>
+                      {qrGenerating ? 'Yaratilmoqda...' : 'Token yaratish'}
+                    </Button>
                   ) : (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Expires in</span>
+                        <span className="text-sm text-muted-foreground">Muddati tugaydi</span>
                         <Badge variant={qrCountdown < 60 ? 'destructive' : 'default'} className="text-lg px-3 py-1 font-mono">
                           {qrFmt}
                         </Badge>
@@ -230,11 +252,13 @@ export default function CourseAttendancePage() {
                           "skanerlang" deyilsa-da, skanerlaydigan narsa yo'q edi. */}
                       {qrImage && (
                         <div className="flex justify-center bg-white rounded-lg p-3">
-                          <img src={qrImage} alt="QR attendance code" className="size-44" />
+                          <img src={qrImage} alt="QR davomat kodi" className="size-44" />
                         </div>
                       )}
                       <p className="font-mono text-xs break-all bg-muted p-3 rounded select-all">{qrToken}</p>
-                      <Button variant="outline" onClick={generateQr} className="w-full">Regenerate</Button>
+                      <Button variant="outline" onClick={generateQr} disabled={qrGenerating} className="w-full">
+                        {qrGenerating ? 'Yaratilmoqda...' : 'Qayta yaratish'}
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -248,15 +272,24 @@ export default function CourseAttendancePage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Student</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Marked at</TableHead>
-            <TableHead>Via QR</TableHead>
+            <TableHead>Sana</TableHead>
+            <TableHead>Talaba</TableHead>
+            <TableHead>Holat</TableHead>
+            <TableHead>Belgilangan vaqt</TableHead>
+            <TableHead>QR orqali</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {records.map(r => (
+          {loading && Array.from({ length: 5 }).map((_, i) => (
+            <TableRow key={`sk-${i}`}>
+              <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+              <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+              <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+              <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+              <TableCell><Skeleton className="h-4 w-6" /></TableCell>
+            </TableRow>
+          ))}
+          {!loading && records.map(r => (
             <TableRow key={r.id}>
               <TableCell className="font-mono text-sm">{r.lessonDate?.toString().slice(0,10)}</TableCell>
               <TableCell className="font-medium">
@@ -273,10 +306,10 @@ export default function CourseAttendancePage() {
               </TableCell>
             </TableRow>
           ))}
-          {records.length === 0 && (
+          {!loading && records.length === 0 && (
             <TableRow>
               <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                No attendance records{filterDate ? ` for ${filterDate}` : ''}
+                Davomat yozuvlari yo'q{filterDate ? ` (${filterDate})` : ''}
               </TableCell>
             </TableRow>
           )}
