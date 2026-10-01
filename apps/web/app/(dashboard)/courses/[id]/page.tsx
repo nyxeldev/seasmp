@@ -36,9 +36,12 @@ export default function CourseDetailPage() {
   const [tab, setTab]                 = useState<Tab>('students')
   const [assOpen, setAssOpen]         = useState(false)
   const [assForm, setAssForm]         = useState({ title: '', type: 'QUIZ', maxScore: 100, weight: 0.2 })
+  const [creatingAss, setCreatingAss] = useState(false)
   const [enrollOpen, setEnrollOpen]   = useState(false)
   const [enrollStudentId, setEnrollStudentId] = useState('')
+  const [enrolling, setEnrolling]     = useState(false)
   const [qrOpen, setQrOpen]           = useState(false)
+  const [qrGenerating, setQrGenerating] = useState(false)
   const [qrDate, setQrDate]           = useState(new Date().toISOString().slice(0, 10))
   const [qrToken, setQrToken]         = useState<string | null>(null)
   const [qrImage, setQrImage]         = useState<string | null>(null)
@@ -82,43 +85,62 @@ export default function CourseDetailPage() {
   }, [qrCountdown]) // eslint-disable-line
 
   const generateQr = async () => {
+    setQrGenerating(true)
     try {
       const res = await attendanceApi.generateQr(course!.id, qrDate)
       setQrToken(res.data.token)
       setQrImage(res.data.qrCodeUrl)
       setQrCountdown(res.data.expiresIn)
-      toast.success('QR token generated — 5 minutes')
-    } catch (err: any) { toast.error(err.message) }
+      toast.success("QR token yaratildi — 5 daqiqa amal qiladi")
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setQrGenerating(false)
+    }
   }
 
   const createAssessment = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (Number(assForm.maxScore) <= 0) {
+      toast.error("Maksimal ball 0 dan katta bo'lishi kerak")
+      return
+    }
+    setCreatingAss(true)
     try {
       await assessmentsApi.create({ ...assForm, courseId: course!.id, maxScore: Number(assForm.maxScore), weight: Number(assForm.weight) })
-      toast.success('Assessment created')
+      toast.success("Baholash yaratildi")
       setAssOpen(false)
       loadAssessments()
-    } catch (err: any) { toast.error(err.message) }
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setCreatingAss(false)
+    }
   }
 
   const deleteAssessment = async (aid: string) => {
-    if (!confirm('Delete this assessment?')) return
+    if (!confirm("Bu baholashni o'chirasizmi?")) return
     try {
       await assessmentsApi.delete(aid)
-      toast.success('Deleted')
+      toast.success("O'chirildi")
       setAssessments(prev => prev.filter(a => a.id !== aid))
     } catch (err: any) { toast.error(err.message) }
   }
 
   const enrollStudent = async (e: React.FormEvent) => {
     e.preventDefault()
+    setEnrolling(true)
     try {
       await enrollmentsApi.enrollToCourse(course!.id, enrollStudentId)
-      toast.success('Student enrolled')
+      toast.success("Talaba kursga yozildi")
       setEnrollOpen(false)
       setEnrollStudentId('')
       loadEnrollments()
-    } catch (err: any) { toast.error(err.message) }
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setEnrolling(false)
+    }
   }
 
   if (courseError) {
@@ -192,14 +214,16 @@ export default function CourseDetailPage() {
               <QrCode className="size-[18px]" /> {t('courses.qrAttendance')}
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>QR Attendance Token</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>QR davomat tokeni</DialogTitle></DialogHeader>
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
                   <Label>Lesson date</Label>
                   <Input type="date" value={qrDate} onChange={e => setQrDate(e.target.value)} />
                 </div>
                 {!qrToken ? (
-                  <Button onClick={generateQr}>Generate QR</Button>
+                  <Button onClick={generateQr} disabled={qrGenerating}>
+                    {qrGenerating ? 'Yaratilmoqda...' : 'QR yaratish'}
+                  </Button>
                 ) : (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -222,7 +246,9 @@ export default function CourseDetailPage() {
                       </CardContent>
                     </Card>
                     <p className="text-xs text-muted-foreground">Share this token with students. It auto-marks attendance when scanned.</p>
-                    <Button variant="outline" onClick={generateQr} className="w-full">Regenerate</Button>
+                    <Button variant="outline" onClick={generateQr} disabled={qrGenerating} className="w-full">
+                      {qrGenerating ? 'Yaratilmoqda...' : 'Qayta yaratish'}
+                    </Button>
                   </div>
                 )}
               </div>
@@ -265,7 +291,7 @@ export default function CourseDetailPage() {
                   <Plus className="size-[18px]" /> Enroll
                 </DialogTrigger>
                 <DialogContent>
-                  <DialogHeader><DialogTitle>Enroll Student</DialogTitle></DialogHeader>
+                  <DialogHeader><DialogTitle>Talabani kursga yozish</DialogTitle></DialogHeader>
                   <form onSubmit={enrollStudent} className="flex flex-col gap-3">
                     <div className="flex flex-col gap-1.5">
                       <Label>Student</Label>
@@ -279,7 +305,9 @@ export default function CourseDetailPage() {
                       </Select>
                     </div>
                     <DialogFooter showCloseButton>
-                      <Button type="submit" disabled={!enrollStudentId}>{t('courses.enroll')}</Button>
+                      <Button type="submit" disabled={!enrollStudentId || enrolling}>
+                        {enrolling ? 'Yozilmoqda...' : t('courses.enroll')}
+                      </Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>
@@ -340,7 +368,7 @@ export default function CourseDetailPage() {
                     <Plus className="size-[18px]" /> Add Assessment
                   </DialogTrigger>
                   <DialogContent>
-                    <DialogHeader><DialogTitle>New Assessment</DialogTitle></DialogHeader>
+                    <DialogHeader><DialogTitle>Yangi baholash</DialogTitle></DialogHeader>
                     <form onSubmit={createAssessment} className="flex flex-col gap-3">
                       <div className="flex flex-col gap-1.5">
                         <Label>Title</Label>
@@ -361,7 +389,7 @@ export default function CourseDetailPage() {
                         </div>
                         <div className="flex flex-col gap-1.5">
                           <Label>Max score</Label>
-                          <Input type="number" value={assForm.maxScore} onChange={e => setAssForm(f => ({...f, maxScore: +e.target.value}))} />
+                          <Input type="number" min={1} value={assForm.maxScore} onChange={e => setAssForm(f => ({...f, maxScore: +e.target.value}))} />
                         </div>
                         <div className="flex flex-col gap-1.5">
                           <Label>Weight</Label>
@@ -369,7 +397,7 @@ export default function CourseDetailPage() {
                         </div>
                       </div>
                       <DialogFooter showCloseButton>
-                        <Button type="submit">Create</Button>
+                        <Button type="submit" disabled={creatingAss}>{creatingAss ? 'Yaratilmoqda...' : 'Yaratish'}</Button>
                       </DialogFooter>
                     </form>
                   </DialogContent>
