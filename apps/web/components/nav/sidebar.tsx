@@ -4,7 +4,6 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
-import { useTheme } from 'next-themes'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useLocale } from '@/store/locale'
 import type { TKey } from '@/store/locale'
@@ -92,67 +91,6 @@ function NavTooltip({ label, children }: { label: string; children: ReactNode })
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  )
-}
-
-// ── Theme toggle section ──────────────────────────────────────────────────────
-function ThemeSection({ collapsed }: { collapsed: boolean }) {
-  const { theme, setTheme } = useTheme()
-  const { t } = useLocale()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-  if (!mounted) return null
-
-  const isDark = theme === 'dark'
-
-  return (
-    <div style={{
-      padding:         collapsed ? '10px 0' : '10px 16px',
-      borderTop:       '1px solid var(--color-border)',
-      display:         'flex',
-      alignItems:      'center',
-      justifyContent:  collapsed ? 'center' : 'space-between',
-      gap:             '8px',
-    }}>
-      {!collapsed && (
-        <span style={{ fontSize: '12px', color: 'var(--color-text2)', userSelect: 'none' }}>
-          {isDark ? `🌙 ${t('theme.dark')}` : `☀️ ${t('theme.light')}`}
-        </span>
-      )}
-      <button
-        onClick={() => setTheme(isDark ? 'light' : 'dark')}
-        aria-label="Toggle theme"
-        style={{
-          width:        '44px',
-          height:       '24px',
-          borderRadius: '12px',
-          border:       'none',
-          cursor:       'pointer',
-          position:     'relative',
-          background:   isDark ? '#3b82f6' : '#e2e8f0',
-          transition:   'background 0.3s',
-          flexShrink:   0,
-        }}
-      >
-        <span style={{
-          position:       'absolute',
-          top:            '2px',
-          left:           isDark ? '22px' : '2px',
-          width:          '20px',
-          height:         '20px',
-          borderRadius:   '50%',
-          background:     'white',
-          transition:     'left 0.3s',
-          display:        'flex',
-          alignItems:     'center',
-          justifyContent: 'center',
-          fontSize:       '11px',
-          boxShadow:      '0 1px 3px rgba(0,0,0,0.2)',
-        }}>
-          {isDark ? '🌙' : '☀️'}
-        </span>
-      </button>
     </div>
   )
 }
@@ -268,9 +206,6 @@ export function Sidebar() {
               : link
           })}
         </nav>
-
-        {/* Theme toggle */}
-        <ThemeSection collapsed={collapsed} />
 
         {/* User footer */}
         <div className="p-3 flex items-center gap-2 min-w-0"

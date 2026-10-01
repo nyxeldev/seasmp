@@ -9,7 +9,7 @@ import {
   type AnalyticsOverview, type Course, type PyTeacherKpi, type StudentStats,
 } from '@/lib/api'
 import { useRole } from '@/hooks/useRole'
-import { useLocale } from '@/store/locale'
+import { useLocale, type TKey } from '@/store/locale'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -62,21 +62,22 @@ interface Activity {
   id: number; type: ActivityType; actor: string; msg: string; time: string; icon: Icon
 }
 
-/** Audit harakatini tasmadagi ko'rinishga bog'laydi. Ro'yxatda yo'q harakat chiqmaydi. */
-const AUDIT_ACTIVITY: Record<string, { type: ActivityType; msg: string; icon: Icon }> = {
-  LOGIN:            { type: 'login',      msg: 'Tizimga kirdi',            icon: LogIn },
-  LOGIN_FAILED:     { type: 'security',   msg: 'Kirishda xatolik',         icon: AlertTriangle },
-  ATTENDANCE_MARK:  { type: 'attendance', msg: 'Davomat belgilandi',       icon: CalendarCheck },
-  GRADE_SUBMIT:     { type: 'grade',      msg: "Baho qo'yildi",            icon: Star },
-  CREATE:           { type: 'user',       msg: 'Yangi yozuv yaratildi',    icon: UserPlus },
-  UPDATE:           { type: 'course',     msg: 'Yozuv yangilandi',         icon: BookOpen },
-  DELETE:           { type: 'security',   msg: "Yozuv o'chirildi",         icon: AlertTriangle },
-  ENROLL:           { type: 'user',       msg: 'Kursga yozildi',           icon: UserPlus },
-  ROLE_CHANGE:      { type: 'security',   msg: "Rol o'zgartirildi",        icon: ShieldCheck },
-  PASSWORD_CHANGE:  { type: 'security',   msg: "Parol o'zgartirildi",      icon: ShieldCheck },
-  TWO_FA_SETUP:     { type: 'security',   msg: '2FA yoqildi',              icon: ShieldCheck },
-  ACCESS_DENIED:    { type: 'security',   msg: 'Ruxsatsiz urinish',        icon: AlertTriangle },
-  IP_BLOCKED:       { type: 'security',   msg: 'IP bloklandi',             icon: AlertTriangle },
+/** Audit harakatini tasmadagi ko'rinishga bog'laydi. Ro'yxatda yo'q harakat chiqmaydi.
+ *  Matn joriy tilda `activity.<ACTION>` kaliti orqali olinadi. */
+const AUDIT_ACTIVITY: Record<string, { type: ActivityType; icon: Icon }> = {
+  LOGIN:            { type: 'login',      icon: LogIn },
+  LOGIN_FAILED:     { type: 'security',   icon: AlertTriangle },
+  ATTENDANCE_MARK:  { type: 'attendance', icon: CalendarCheck },
+  GRADE_SUBMIT:     { type: 'grade',      icon: Star },
+  CREATE:           { type: 'user',       icon: UserPlus },
+  UPDATE:           { type: 'course',     icon: BookOpen },
+  DELETE:           { type: 'security',   icon: AlertTriangle },
+  ENROLL:           { type: 'user',       icon: UserPlus },
+  ROLE_CHANGE:      { type: 'security',   icon: ShieldCheck },
+  PASSWORD_CHANGE:  { type: 'security',   icon: ShieldCheck },
+  TWO_FA_SETUP:     { type: 'security',   icon: ShieldCheck },
+  ACCESS_DENIED:    { type: 'security',   icon: AlertTriangle },
+  IP_BLOCKED:       { type: 'security',   icon: AlertTriangle },
 }
 
 /**
@@ -94,12 +95,12 @@ function shortDate(iso: string, locale: string): string {
 }
 
 /** Qisqa nisbiy vaqt — tasma uchun */
-function relTime(iso: string): string {
+function relTime(iso: string, t: (key: TKey) => string): string {
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
-  if (s < 60)    return 'hozir'
-  if (s < 3600)  return `${Math.round(s / 60)} daqiqa oldin`
-  if (s < 86400) return `${Math.round(s / 3600)} soat oldin`
-  return `${Math.round(s / 86400)} kun oldin`
+  if (s < 60)    return t('activity.now')
+  if (s < 3600)  return `${Math.round(s / 60)} ${t('activity.minutesAgo')}`
+  if (s < 86400) return `${Math.round(s / 3600)} ${t('activity.hoursAgo')}`
+  return `${Math.round(s / 86400)} ${t('activity.daysAgo')}`
 }
 
 const ACTIVITY_COLORS: Record<ActivityType, string> = {
@@ -196,6 +197,7 @@ interface KpiProps {
 
 function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, trendColor, pulse }: KpiProps) {
   const count = useCounter(target)
+  const { t } = useLocale()
 
   const colorMap = {
     green: { text: '#22C55E', bg: 'rgba(34,197,94,0.1)'  },
@@ -235,7 +237,7 @@ function KpiCard({ label, target, suffix = '', icon: Icon, trendDir, trendVal, t
                 <TrendIcon className="size-3.5" />
                 {trendVal}
               </span>
-              <span className="text-xs" style={{ color: 'var(--s-muted)' }}>oldingi davrga nisbatan</span>
+              <span className="text-xs" style={{ color: 'var(--s-muted)' }}>{t('dashboard.vsPreviousPeriod')}</span>
             </>
           )}
         </div>
@@ -302,9 +304,9 @@ function AdminDashboard() {
             return {
               id:    i,
               type:  cfg.type,
-              actor: l.user ? `${l.user.firstName} ${l.user.lastName}` : (l.ipAddress ?? 'Tizim'),
-              msg:   `${cfg.msg}${l.resource ? ` — ${l.resource}` : ''}`,
-              time:  relTime(l.createdAt),
+              actor: l.user ? `${l.user.firstName} ${l.user.lastName}` : (l.ipAddress ?? t('activity.system')),
+              msg:   `${t(`activity.${l.action}` as TKey)}${l.resource ? ` — ${l.resource}` : ''}`,
+              time:  relTime(l.createdAt, t),
               icon:  cfg.icon,
             } satisfies Activity
           })
@@ -441,7 +443,7 @@ function AdminDashboard() {
         <DashCard>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold" style={{ color: 'var(--s-text)' }}>{t('dashboard.recentActivity')}</h2>
-            <span className="text-xs" style={{ color: 'var(--s-muted)' }}>{activity.length} ta voqea</span>
+            <span className="text-xs" style={{ color: 'var(--s-muted)' }}>{activity.length} {t('dashboard.eventsCount')}</span>
           </div>
 
           <div className="space-y-0.5">

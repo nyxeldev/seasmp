@@ -6,7 +6,44 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+/**
+ * base-ui'ning `<Select.Value>` komponenti tanlangan qiymatning matnini
+ * FAQAT `<Select.Root items={...}>` orqali berilgan xaritadan oladi — agar
+ * bu prop berilmasa, xom `value`ni (masalan "ALL", "BRUTE_FORCE") ko'rsatadi,
+ * `<Select.Item>`ning bolalari (masalan "Barchasi") umuman e'tiborga
+ * olinmaydi. Ilgari loyihada bu prop hech qayerda berilmagan edi — shuning
+ * uchun ko'p sahifada filtr tugmasi tarjima o'rniga xom INGLIZCHA/ENUM
+ * qiymatni ko'rsatardi, garchi ro'yxatdagi variantlar to'g'ri tarjima
+ * qilingan bo'lsa ham.
+ *
+ * Shu yerda bolalar daraxtini aylanib, har bir `<SelectItem value=...>`dan
+ * labelni (matn bolasi yoki aniq `label` prop) avtomatik yig'ib, `items`
+ * sifatida uzatamiz — har bir alohida sahifada qo'lda takrorlash shart emas.
+ */
+function extractItemLabels(node: React.ReactNode, acc: Record<string, React.ReactNode> = {}): Record<string, React.ReactNode> {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { value?: unknown; children?: React.ReactNode; label?: React.ReactNode }
+    if (child.type === SelectItem) {
+      if (props.value != null) {
+        const text = props.label ?? (typeof props.children === 'string' || typeof props.children === 'number' ? props.children : undefined)
+        if (text != null) acc[String(props.value)] = text
+      }
+      return
+    }
+    if (props.children != null) extractItemLabels(props.children, acc)
+  })
+  return acc
+}
+
+function Select({ children, items, ...props }: SelectPrimitive.Root.Props<string, false>) {
+  const derivedItems = React.useMemo(() => items ?? extractItemLabels(children), [children, items])
+  return (
+    <SelectPrimitive.Root items={derivedItems} {...props}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
