@@ -15,7 +15,9 @@ import {
   checkUnusualHour,
   checkMultiDevice,
   removeSessionIp,
+  flagRefreshTokenReuse,
 } from './securityMonitor'
+import { securityService } from './security.service'
 import type { User } from '@prisma/client'
 import * as jwt from 'jsonwebtoken'
 
@@ -99,6 +101,28 @@ async function generateBackupCodes(userId: string): Promise<string[]> {
   return codes
 }
 
+// ─── M3: timing-based user-enumeration himoyasi ────────────────────────────────
+//
+// Ilgari: foydalanuvchi topilmasa, bcrypt.compare UMUMAN chaqirilmasdi —
+// darhol 401. Topilgan bo'lsa, haqiqiy hesh bilan compare ishga tushardi
+// (bcryptjs'da ~o'nlab millisekund, cost=12). Bu ikki yo'l orasidagi javob
+// vaqti farqi email ro'yxatdan o'tganini sezilarli darajada aniq aytib
+// berardi (klassik timing-based enumeration).
+//
+// Yechim: hisob topilmasa ham, xuddi shu xarajat omili (12) bilan
+// oldindan tayyorlangan "qo'g'irchoq" hesh bilan bitta bcrypt.compare
+// baribir bajariladi — natija hech qachon ishlatilmaydi (har doim false),
+// faqat vaqt bo'yicha mavjud-foydalanuvchi yo'liga o'xshash bo'lishi uchun.
+// Qiymatning o'zi tasodifiy va ma'nosiz — bu parol emas, faqat vaqt
+// profilini tenglashtirish uchun.
+let dummyPasswordHashPromise: Promise<string> | null = null
+function getDummyPasswordHash(): Promise<string> {
+  if (!dummyPasswordHashPromise) {
+    dummyPasswordHashPromise = bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12)
+  }
+  return dummyPasswordHashPromise
+}
+
 // ─── Auth Service ─────────────────────────────────────────────────────────────
 export const authService = {
 
@@ -114,24 +138,19 @@ export const authService = {
     // 2. Foydalanuvchi qidirish
     const user = await prisma.user.findUnique({ where: { email } })
 
-    if (!user || !user.isActive) {
+    // 3. Parol tekshirish — foydalanuvchi topilmagan bo'lsa ham, bitta
+    // bcrypt.compare (xuddi shu xarajat omili bilan) baribir bajariladi.
+    // Natija darhol tashlab yuborilmaydi: quyidagi shartda ishlatiladi,
+    // lekin hisob topilmagan/faol bo'lmagan holatda uning qiymati
+    // ahamiyatsiz (har doim false bo'ladi).
+    const isPasswordValid = user
+      ? await bcrypt.compare(password, user.passwordHash)
+      : await bcrypt.compare(password, await getDummyPasswordHash())
+
+    if (!user || !user.isActive || !isPasswordValid) {
       await recordFailedLogin(ipAddress, user?.id ?? null)
       await auditService.log({
         userId: user?.id ?? null,
-        action: 'LOGIN_FAILED',
-        resource: 'users',
-        ipAddress,
-        userAgent,
-      })
-      throw Object.assign(new Error("Email yoki parol noto'g'ri"), { statusCode: 401 })
-    }
-
-    // 3. Parol tekshirish
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash)
-    if (!isPasswordValid) {
-      await recordFailedLogin(ipAddress, user.id)
-      await auditService.log({
-        userId: user.id,
         action: 'LOGIN_FAILED',
         resource: 'users',
         ipAddress,
@@ -259,12 +278,39 @@ export const authService = {
     })
 
     if (!storedToken || storedToken.expiresAt < new Date()) {
+      // M4: rotatsiya qattiq o'chirish bilan ishlaydi (pastda) — qator
+      // o'chirilgandan keyin bazada hech qanday iz qolmaydi, shuning uchun
+      // "allaqachon ishlatilgan (o'g'irlangan) token qayta taqdim etildi"
+      // holatini bazadan farqlab bo'lmaydi. Shu farq uchun Redis'da
+      // qisqa muddatli "shu hash yaqinda rotatsiya qilindi" belgisi
+      // qoldiriladi (pastda, muvaffaqiyatli rotatsiya chog'ida) — agar
+      // o'sha belgi topilsa, bu haqiqiy qayta ishlatish: tokenning o'zi
+      // haqiqiy edi, lekin allaqachon ISHLATILGAN. Oddiy muddati tugagan/
+      // soxta token uchun bu belgi hech qachon qo'yilmagan bo'ladi.
+      const reusedUserId = await redis.get(`refresh_used:${tokenHash}`)
+      if (reusedUserId) {
+        await flagRefreshTokenReuse(reusedUserId, ipAddress)
+        await securityService.revokeAllSessions(reusedUserId)
+        await auditService.log({
+          userId: reusedUserId, action: 'ACCESS_DENIED', resource: 'refresh_tokens', ipAddress, userAgent,
+        })
+      }
       throw Object.assign(new Error('Refresh token yaroqsiz yoki muddati tugagan'), { statusCode: 401 })
     }
 
     if (!storedToken.user.isActive) {
       throw Object.assign(new Error("Akkaunt faol emas"), { statusCode: 401 })
     }
+
+    // Shu hashni "yaqinda rotatsiya qilindi" deb belgilaymiz — qolgan
+    // umr muddati bilan (undan keyin bu tokenning o'zi allaqachon
+    // haqiqiy TTL'dan o'tgan bo'lardi, demak qayta ishlatish ham ortiq
+    // signal emas). Bu DB'dan o'chirishdan OLDIN qo'yiladi: shu tartibda
+    // qisqa oraliqda ikkinchi so'rov kelsa, u baribir yo haqiqiy qatorni
+    // (hali o'chirilmagan) topadi, yo belgini — hech qachon ikkisini ham
+    // yo'qotib qo'ymaydi.
+    const ttlSeconds = Math.max(1, Math.ceil((storedToken.expiresAt.getTime() - Date.now()) / 1000))
+    await redis.setex(`refresh_used:${tokenHash}`, ttlSeconds, storedToken.userId)
 
     await prisma.refreshToken.delete({ where: { tokenHash } })
     return this._createTokenPair(storedToken.user.id, storedToken.user.role, ipAddress, userAgent)

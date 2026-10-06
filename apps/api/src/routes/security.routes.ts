@@ -28,6 +28,16 @@ export default async function securityRoutes(app: FastifyInstance) {
     onRequest: [app.authenticate, app.requireRoles('ADMIN', 'SUPER_ADMIN')],
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
+    // `id` — DB'dagi BigInt ustunga mos. `BigInt("abc")` SyntaxError
+    // tashlaydi (statusCode'siz), bu global handlerda 500'ga aylanardi.
+    // Shakl shu yerda tekshiriladi — butun marshrutni try/catch'ga
+    // o'rash shart emas.
+    if (!/^\d+$/.test(id)) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: "Identifikator noto'g'ri" },
+      })
+    }
     const log = await securityService.getAuditLog(BigInt(id))
     return reply.send({ success: true, data: { ...log, id: log.id.toString() } })
   })

@@ -248,18 +248,40 @@ export const attendanceService = {
     })
     if (existing) throw Object.assign(new Error("Davomat allaqachon belgilangan"), { statusCode: 409 })
 
+    // H4 fix: token BUTUN guruh uchun — bir vaqtning o'zida bir nechta
+    // talaba uni skanerlashi mo'ljallangan (QR bir necha daqiqa ekranda
+    // ko'rsatiladi). Ilgari shu yerda muvaffaqiyatli belgilashdan keyin
+    // `redis.del` chaqirilardi — token birinchi skanerlashdan keyin
+    // butunlay o'chib, qolgan talabalar "yaroqsiz" xatosini olardi. Endi
+    // token faqat o'zining tabiiy TTL'si (generateQrToken'dagi `setex`,
+    // QR_TTL_SECONDS) bilan tugaydi.
+    //
+    // `attendance.qr_token` ustuni DB darajasida UNIQUE (schema.prisma) —
+    // bu ilgari xom tokenni to'g'ridan-to'g'ri saqlagan edi, ya'ni xuddi
+    // shu tokendan ikkinchi talaba foydalansa, P2002 (unique constraint)
+    // bilan yiqilardi. Sxemaga tegmasdan: bu yerda token + shu talabaning
+    // enrollment ID'si birgalikda heshlanadi — natija har bir qator uchun
+    // alohida (chunki enrollmentId har doim boshqacha), lekin baribir
+    // "QR orqali belgilangan" belgisi sifatida null-bo'lmagan qiymat
+    // bo'lib qoladi (frontend shu ustunni faqat bor/yo'qligi bo'yicha
+    // ko'rsatadi). Bitta talabaning ikki marta belgilashi yuqoridagi
+    // `enrollmentId_lessonDate` unique tekshiruvi (246-249 qatorlar) bilan
+    // baribir to'xtatiladi — bu hech qachon `qrToken`ga bog'liq emas edi.
+    const qrTokenMark = crypto
+      .createHash('sha256')
+      .update(`${token}:${enrollment.id}`)
+      .digest('hex')
+
     const record = await prisma.attendance.create({
       data: {
         enrollmentId: enrollment.id,
         lessonDate:   new Date(lessonDate),
         status:       'PRESENT',
         markedBy:     actorId,
-        qrToken:      token,
+        qrToken:      qrTokenMark,
         ipAddress,
       },
     })
-
-    await redis.del(`qr_attendance:${token}`)
 
     emitAttendanceMarked({
       attendanceId: record.id,
