@@ -116,4 +116,75 @@ describe('M3 — login behaves identically for nonexistent user vs wrong passwor
       await cleanup(inactive.id)
     }
   })
+
+  // Closeout Item 2 — code read of auth.service.ts (lines ~140-161) shows
+  // `isPasswordValid` is computed BEFORE the `!user.isActive` branch of the
+  // combined `if`, and the ternary only switches on `user` truthiness, not
+  // `user.isActive`. So a deactivated user with the CORRECT password still
+  // runs bcrypt.compare against their real hash before being rejected —
+  // there is no early return that skips the hash step. These two tests
+  // prove that directly instead of trusting the response shape alone.
+  it('nonexistent user, wrong-password, and deactivated-but-correct-password all produce a BYTE-IDENTICAL 401 body', async () => {
+    const bcrypt = await import('bcryptjs')
+    const inactive = await prisma.user.create({
+      data: {
+        email: `inactive_identical_${Date.now()}@test.com`,
+        passwordHash: await bcrypt.default.hash('RealPassword1', 12),
+        firstName: 'Inactive', lastName: 'User', role: 'STUDENT', isActive: false,
+      },
+    })
+    try {
+      const resNonexistent = await app.inject({
+        method: 'POST', url: '/v1/auth/login',
+        payload: { email: `nobody_${Date.now()}@test.com`, password: 'Whatever1' },
+      })
+      const resWrongPassword = await app.inject({
+        method: 'POST', url: '/v1/auth/login',
+        payload: { email: studentEmail, password: 'TotallyWrong1' },
+      })
+      const resInactiveCorrectPassword = await app.inject({
+        method: 'POST', url: '/v1/auth/login',
+        payload: { email: inactive.email, password: 'RealPassword1' }, // the REAL password
+      })
+
+      expect(resNonexistent.statusCode).toBe(401)
+      expect(resWrongPassword.statusCode).toBe(401)
+      expect(resInactiveCorrectPassword.statusCode).toBe(401)
+
+      expect(resNonexistent.body).toBe(resWrongPassword.body)
+      expect(resWrongPassword.body).toBe(resInactiveCorrectPassword.body)
+    } finally {
+      await cleanup(inactive.id)
+    }
+  })
+
+  it('bcrypt.compare actually runs against the REAL password hash on the deactivated-user path (spy, not timing)', async () => {
+    const bcryptModule = await import('bcryptjs')
+    const inactive = await prisma.user.create({
+      data: {
+        email: `inactive_spy_${Date.now()}@test.com`,
+        passwordHash: await bcryptModule.default.hash('RealPassword1', 12),
+        firstName: 'Inactive', lastName: 'User', role: 'STUDENT', isActive: false,
+      },
+    })
+    const compareSpy = jest.spyOn(bcryptModule.default, 'compare')
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/login',
+        payload: { email: inactive.email, password: 'RealPassword1' },
+      })
+      expect(res.statusCode).toBe(401)
+
+      // Must have been called with the user's REAL stored hash — not
+      // skipped, and not swapped for the nonexistent-user dummy hash.
+      const callWithRealHash = compareSpy.mock.calls.find(
+        ([, hash]) => hash === inactive.passwordHash,
+      )
+      expect(callWithRealHash).toBeDefined()
+    } finally {
+      compareSpy.mockRestore()
+      await cleanup(inactive.id)
+    }
+  })
 })

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { securityService } from '../services/security.service'
 import { checkBulkDelete } from '../services/securityMonitor'
 import { refreshProfilesNow } from '../jobs/profileRefresh'
+import { PG_BIGINT_MAX } from '../lib/prismaErrors'
 import type { AuditAction, AlertType, AlertSeverity } from '@prisma/client'
 
 export default async function securityRoutes(app: FastifyInstance) {
@@ -24,6 +25,9 @@ export default async function securityRoutes(app: FastifyInstance) {
     return reply.send({ success: true, ...result })
   })
 
+  // `id` ustuni autoincrement bo'lgani uchun har doim musbat — faqat yuqori
+  // chegara tekshiriladi (PG_BIGINT_MAX lib/prismaErrors.ts da e'lon qilingan).
+
   app.get('/audit-logs/:id', {
     onRequest: [app.authenticate, app.requireRoles('ADMIN', 'SUPER_ADMIN')],
   }, async (request, reply) => {
@@ -32,7 +36,14 @@ export default async function securityRoutes(app: FastifyInstance) {
     // tashlaydi (statusCode'siz), bu global handlerda 500'ga aylanardi.
     // Shakl shu yerda tekshiriladi — butun marshrutni try/catch'ga
     // o'rash shart emas.
-    if (!/^\d+$/.test(id)) {
+    //
+    // Raqamli shakl yetarli emas: JS BigInt cheksiz aniqlikka ega, lekin
+    // Postgres bigint EMAS — diapazondan oshgan qiymat SQLSTATE 22003
+    // ("value out of range for type bigint") bilan yiqiladi, bu global
+    // handlerda statusCode'siz xato sifatida 500'ga aylanardi. Shuning
+    // uchun shakl TO'G'RI bo'lsa ham, yuqori chegara shu yerda, BigInt()
+    // dan keyin, lekin bazaga yuborishdan OLDIN tekshiriladi.
+    if (!/^\d+$/.test(id) || BigInt(id) > PG_BIGINT_MAX) {
       return reply.status(400).send({
         success: false,
         error: { code: 'VALIDATION_ERROR', message: "Identifikator noto'g'ri" },
@@ -61,6 +72,12 @@ export default async function securityRoutes(app: FastifyInstance) {
     onRequest: [app.authenticate, app.requireRoles('ADMIN', 'SUPER_ADMIN')],
   }, async (request, reply) => {
     const { id } = request.params as { id: string }
+    if (!/^\d+$/.test(id) || BigInt(id) > PG_BIGINT_MAX) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: "Identifikator noto'g'ri" },
+      })
+    }
     const alert = await securityService.resolveAlert(BigInt(id), request.user.sub)
     return reply.send({ success: true, data: { ...alert, id: alert.id.toString() } })
   })

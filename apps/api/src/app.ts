@@ -203,7 +203,9 @@ export async function buildApp() {
     return reply.status(statusCode).send({
       success: false,
       error: {
-        code: statusCode === 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_ERROR',
+        code: statusCode === 500 ? 'INTERNAL_SERVER_ERROR'
+            : statusCode === 503 ? 'SERVICE_UNAVAILABLE'
+            : 'REQUEST_ERROR',
         message: statusCode === 500 ? 'Tizimda xatolik yuz berdi' : error.message,
       },
     })

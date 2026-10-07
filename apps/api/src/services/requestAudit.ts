@@ -16,8 +16,6 @@ import { inspect as inspectBehavior } from './behaviorDetector'
 import { recordAuthz, recordPrivilegedScope } from './signalWindow'
 import { evaluate as correlationEvaluate } from './correlationDetector'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 // Qayd etilmaydigan yo'llar — shovqinni kamaytirish uchun.
 // /v1/security — aniqlash tizimining o'z sahifalari: ularni qayd etsak,
 // audit jurnalini ochishning o'zi yangi yozuvlar yaratib, o'zini oziqlantiradi.
@@ -26,32 +24,138 @@ const SKIP_PREFIXES = ['/health', '/v1/internal', '/v1/security']
 // Obyekt holatini o'zgartirmaydigan metodlar
 const SAFE_METHODS = new Set(['GET', 'HEAD'])
 
-export const DETECTOR_VERSION = 'authz-1.0.0'
+/**
+ * Parametr nomi → kanonik resurs turi.
+ *
+ * R4/R6 FIX: ilgari resurs turi "UUID'dan oldingi segment" degan heuristika
+ * bilan HAQIQIY so'rov yo'lidan o'qilardi — yangi tavsiflovchi segment
+ * (`stats`, `teacher`, `students`...) qo'shilgan har bir marshrut shu
+ * heuristikani qayta buzardi. Endi manba — Fastify'ning RO'YXATDAN
+ * O'TGAN marshrut shabloni (`request.routeOptions.url`, Fastify 5),
+ * HAQIQIY so'rov yo'li EMAS. Jadval quyidagi haqiqiy marshrut fayllaridan
+ * qo'lda tuzilgan (har biri parametr nomi bilan birga):
+ *
+ *   attendance.routes.ts   — GET /stats/:enrollmentId
+ *   assessment.routes.ts   — GET /course/:courseId[/grades], GET /enrollment/:enrollmentId/grades
+ *   analytics.routes.ts    — GET /students/:studentId/enrollment/:enrollmentId,
+ *                             GET /courses/:courseId[/simple], GET /teacher/:teacherId/kpi,
+ *                             GET /students/:studentId
+ *   course.routes.ts       — GET/PATCH/DELETE /:id, PATCH /:id/status, POST /:id/enroll (param name "id")
+ *   enrollment.routes.ts   — GET /:id, PATCH /:id/status (param name "id")
+ *   user.routes.ts         — GET/PATCH/DELETE /:id, PATCH /:id/toggle-status (param name "id")
+ *   assessment.routes.ts   — PATCH/DELETE /:id, GET/POST /:id/grades (param name "id")
+ *   notification.routes.ts — PATCH /:id/read (param name "id", BigInt — not UUID)
+ *
+ * Only `teacherId`/`studentId`/`userId`/`enrollmentId`/`courseId` are
+ * semantic enough to map on PARAM NAME alone. The generic `:id` routes
+ * above are resolved instead from the LITERAL segment that precedes the
+ * param IN THE PATTERN (see `findIdParam`) — e.g. `/v1/courses/:id` →
+ * preceding segment 'courses', already the MODEL_BY_RESOURCE key. For the
+ * two routes with a singular literal predecessor (`/course/:courseId`,
+ * `/enrollment/:enrollmentId/grades`), the PARAM NAME table below wins
+ * first, so RESOURCE_TYPE_ALIASES in ownershipResolver.ts is no longer
+ * exercised by any live route — it is kept as a defensive normalizer for
+ * any future/other caller of `resolveAccess`, per Item 1.4 (not pruned).
+ */
+const PARAM_NAME_TO_RESOURCE: Record<string, string> = {
+  enrollmentId: 'enrollments',
+  courseId:     'courses',
+  // teacherId/studentId/userId all denote the `users` resource — a teacher
+  // or student id IS a user id. Previously (incorrectly) denylisted as
+  // "unownable" (UNOWNABLE_SEGMENTS), which made cross-teacher/cross-student
+  // access on these routes permanently invisible to the correlation layer.
+  teacherId: 'users',
+  studentId: 'users',
+  userId:    'users',
+}
+
+/**
+ * Registered-route patterns that reach the detection hook but have NO
+ * ownable object at all — matched against `request.routeOptions.url`
+ * (the Fastify-registered pattern), never against the live path. Each
+ * entry must be justified in FINDINGS.md (R4/R6 resolution notes).
+ *
+ *  - `/v1/uploads/avatars/*` — @fastify/static serving publicly-readable
+ *    avatar files (confirmed via @fastify/static source: it registers
+ *    `path: prefix + '*'`, i.e. exactly this pattern). No Fastify named
+ *    param exists here (the id is encoded in the filename, not a route
+ *    param), so it can never be resolved via `findIdParam` below; without
+ *    this explicit entry it would silently fall through to the generic
+ *    no-param branch and read as `resource: 'uploads'` — a real string
+ *    that matches no ownership-rule type, i.e. UNKNOWN by heuristic
+ *    failure, exactly the defect class R4/R6 exist to close.
+ */
+const UNOWNABLE_PATTERNS = new Set<string>([
+  '/v1/uploads/avatars/*',
+])
+
+/** Marshrutga egalik qoidasi bo'lmagan, lekin aniqlash qatlamiga yetib
+ *  keladigan resurslar uchun aniq belgi (UNKNOWN heuristika muvaffaqiyatsizligi
+ *  emas — bu ataylab egasiz ob'ekt). */
+export const UNOWNABLE_RESOURCE = '_unownable'
+
+export const DETECTOR_VERSION = 'authz-1.1.0'
+
+/**
+ * Ro'yxatdan o'tgan marshrut SHABLONIDAN (haqiqiy yo'ldan emas) oxirgi
+ * `:param` segmentini va undan oldingi LITERAL segmentni topadi.
+ *
+ * Shablon ichida qidirish — haqiqiy so'rov yo'lida emas — shuning uchun ID
+ * shakli (UUID yoki BigInt) ahamiyatsiz: parametr nomi ro'yxatdan o'tishda
+ * qat'iy belgilangan, hech qachon "o'xshamay qoladi".
+ */
+function findIdParam(
+  routePattern: string | undefined,
+): { paramName: string; precedingSegment: string | null } | null {
+  if (!routePattern) return null
+  const segments = routePattern.split('/').filter(Boolean)
+  for (let k = segments.length - 1; k >= 0; k--) {
+    if (segments[k].startsWith(':')) {
+      const paramName  = segments[k].slice(1)
+      const prevRaw    = k > 0 ? segments[k - 1] : null
+      const precedingSegment = prevRaw && !prevRaw.startsWith(':') ? prevRaw : null
+      return { paramName, precedingSegment }
+    }
+  }
+  return null
+}
 
 /**
  * Yo'ldan murojaat qilingan obyektni ajratadi.
  *
- * Muhimi: resurs turi va identifikator BIR juftlikdan olinishi kerak. Ilgari
- * tur birinchi segmentdan, ID esa oxirgi UUID'dan olinardi — ichma-ich yo'lda
- * (`/v1/courses/<cid>/enrollments/<eid>`) bu `course.findUnique(eid)` degan
- * mos kelmaydigan so'rovni berardi va natija jimgina UNKNOWN bo'lardi.
+ * `routePattern` — `request.routeOptions.url` (Fastify 5): ro'yxatdan
+ * o'tgan marshrut shabloni, masalan `/v1/attendance/stats/:enrollmentId`.
+ * Bu HAQIQIY so'rov yo'li emas (undan hech qachon ID shakli — UUID yoki
+ * BigInt — o'qilmaydi), shuning uchun heuristika yangi tavsiflovchi
+ * segmentlarga sezilmas (R4/R6 ildiz sababi).
  *
- * Endi oxirgi `<to'plam>/<uuid>` juftligi olinadi — u aynan so'rov tegishli
- * bo'lgan obyekt:
- *   /v1/courses/<cid>/enrollments/<eid> -> enrollments, <eid>
- *   /v1/courses/<cid>/enrollments       -> courses,     <cid>
- *   /v1/courses                         -> courses,     undefined
+ * Shablonda `:param` bo'lmasa (ro'yxat/`me`/statik/login kabi marshrutlar,
+ * yoki haqiqiy 404 — `routePattern` shunda `undefined`), bu yerda
+ * ko'rsatiladigan OBYEKT umuman yo'q: `pathname`dan birinchi real segment
+ * olinadi, `resourceId` esa aniqlanmay qoladi. `resolveAccess` buni
+ * (resurs turi noto'g'ri emas, shunchaki OBYEKT ID berilmagan) alohida,
+ * o'ziga xos UNKNOWN sifatida qaytaradi — bu R4/R6'ning "resurs TURI xato
+ * aniqlanishi" muammosidan butunlay boshqa, kutilgan holat.
  */
-export function targetFromPath(pathname: string): { resource: string; resourceId?: string } {
+export function targetFromPath(
+  pathname: string,
+  routePattern: string | undefined,
+  params: Record<string, string> = {},
+): { resource: string; resourceId?: string } {
+  if (routePattern && UNOWNABLE_PATTERNS.has(routePattern)) {
+    return { resource: UNOWNABLE_RESOURCE }
+  }
+
+  const idParam = findIdParam(routePattern)
+  if (idParam) {
+    const resourceId = params[idParam.paramName]
+    const resource = PARAM_NAME_TO_RESOURCE[idParam.paramName] ?? idParam.precedingSegment
+    if (resource) return { resource, resourceId }
+  }
+
   const parts = pathname.split('/').filter(Boolean)
   const i = parts.indexOf('v1')
   const segments = i >= 0 ? parts.slice(i + 1) : parts
-
-  for (let k = segments.length - 1; k >= 1; k--) {
-    if (UUID_RE.test(segments[k])) {
-      return { resource: segments[k - 1], resourceId: segments[k] }
-    }
-  }
   return { resource: segments[0] ?? 'unknown' }
 }
 
@@ -89,7 +193,11 @@ export async function recordRequest(request: FastifyRequest, reply: FastifyReply
     const status = reply.statusCode
     const denied = status === 401 || status === 403
     const userId = request.user?.sub ?? null
-    const { resource, resourceId } = targetFromPath(pathname)
+    const { resource, resourceId } = targetFromPath(
+      pathname,
+      request.routeOptions.url,
+      (request.params as Record<string, string> | null) ?? {},
+    )
 
     // 1-QATLAM: aktor va obyekt o'rtasidagi munosabatni aniqlash
     const verdict = await resolveAccess(resource, resourceId, userId, request.user?.role ?? null)

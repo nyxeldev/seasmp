@@ -1,6 +1,13 @@
 import { Prisma } from '@prisma/client'
 
 /**
+ * PostgreSQL `bigint` ustuniga jo'natilgan qiymat ushbu diapazondan oshmasligi
+ * kerak. JS `BigInt` cheksiz aniqlikka ega, shuning uchun raqamli shakl
+ * tekshiruvi yetarli emas — baza SQLSTATE 22003 bilan yiqiladi.
+ */
+export const PG_BIGINT_MAX = 9223372036854775807n
+
+/**
  * FK (xorijiy kalit) cheklovi buzilishiga mos Postgres SQLSTATE kodlari.
  *
  * - 23503 = foreign_key_violation — Prisma odatda buni o'zining P2003

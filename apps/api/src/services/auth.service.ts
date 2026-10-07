@@ -18,6 +18,7 @@ import {
   flagRefreshTokenReuse,
 } from './securityMonitor'
 import { securityService } from './security.service'
+import { Prisma } from '@prisma/client'
 import type { User } from '@prisma/client'
 import * as jwt from 'jsonwebtoken'
 
@@ -287,7 +288,12 @@ export const authService = {
       // o'sha belgi topilsa, bu haqiqiy qayta ishlatish: tokenning o'zi
       // haqiqiy edi, lekin allaqachon ISHLATILGAN. Oddiy muddati tugagan/
       // soxta token uchun bu belgi hech qachon qo'yilmagan bo'ladi.
-      const reusedUserId = await redis.get(`refresh_used:${tokenHash}`)
+      let reusedUserId: string | null
+      try {
+        reusedUserId = await redis.get(`refresh_used:${tokenHash}`)
+      } catch {
+        throw Object.assign(new Error("Xizmat vaqtincha mavjud emas, qaytadan urinib ko'ring"), { statusCode: 503 })
+      }
       if (reusedUserId) {
         await flagRefreshTokenReuse(reusedUserId, ipAddress)
         await securityService.revokeAllSessions(reusedUserId)
@@ -310,9 +316,35 @@ export const authService = {
     // (hali o'chirilmagan) topadi, yo belgini — hech qachon ikkisini ham
     // yo'qotib qo'ymaydi.
     const ttlSeconds = Math.max(1, Math.ceil((storedToken.expiresAt.getTime() - Date.now()) / 1000))
-    await redis.setex(`refresh_used:${tokenHash}`, ttlSeconds, storedToken.userId)
+    try {
+      await redis.setex(`refresh_used:${tokenHash}`, ttlSeconds, storedToken.userId)
+    } catch {
+      throw Object.assign(new Error("Xizmat vaqtincha mavjud emas, qaytadan urinib ko'ring"), { statusCode: 503 })
+    }
 
-    await prisma.refreshToken.delete({ where: { tokenHash } })
+    // Re-audit topilmasi: ikkita bir vaqtdagi so'rov XUDDI SHU haqiqiy
+    // tokenni ishlatsa (masalan ikki tab, tarmoq qayta urinishi), ikkalasi
+    // ham shu yergacha yetib kelishi mumkin (ikkalasi ham tokenni haqiqiy
+    // deb topgan). `tokenHash` yagona kalit bo'lgani uchun faqat BIRI
+    // `delete()`ni muvaffaqiyatli bajaradi; ikkinchisi Prisma P2025
+    // ("yozuv topilmadi") bilan yiqiladi. Bu HAQIQIY o'g'irlangan qayta
+    // ishlatish EMAS — ikkalasi ham bir xil, haqiqiy mijozdan, bir xil
+    // daqiqada kelgan — shuning uchun signal/revokeAllSessions chaqirilmaydi,
+    // faqat oddiy "yaroqsiz" 401 (xuddi tabiiy muddati tugagan holatdagidek).
+    try {
+      await prisma.refreshToken.delete({ where: { tokenHash } })
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        throw Object.assign(new Error('Refresh token yaroqsiz yoki muddati tugagan'), { statusCode: 401 })
+      }
+      // P2025 bo'lmagan DB nosozligi: belgi yozildi, lekin o'chirish bajarilmadi.
+      // Keyingi haqiqiy taqdimotda token bazada topiladi va belgi tekshirilmaydi —
+      // natijada belgi soxta "qayta ishlatish" signali berishi mumkin.
+      // Uni eng yaxshi urinish bilan o'chiramiz, so'ng xatoni qayta tashlaymiz
+      // (token juftligi BERILMAYDI — xato yopiq holatda).
+      await redis.del(`refresh_used:${tokenHash}`).catch(() => {})
+      throw err
+    }
     return this._createTokenPair(storedToken.user.id, storedToken.user.role, ipAddress, userAgent)
   },
 

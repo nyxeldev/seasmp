@@ -5,9 +5,11 @@
  * "token never existed". The fix adds a short-lived Redis tombstone
  * (`refresh_used:<hash>`, TTL = the token's own remaining lifetime) written
  * at rotation time — no Prisma schema change. If that tombstone is found
- * for a token that's no longer in the DB, the whole session family is
- * revoked (`securityService.revokeAllSessions`, already-existing
- * mechanism) and a security alert + audit entry are recorded.
+ * for a token that's no longer in the DB, ALL of that user's refresh
+ * tokens are revoked (`securityService.revokeAllSessions(userId)` with no
+ * `exceptTokenHash` — this is literally every session/device for that
+ * user, not a narrower "token family"; verified by reading the function)
+ * and a security alert + audit entry are recorded.
  */
 import { startApp, seedStudent, cleanup, prisma } from './setup'
 import type { FastifyInstance } from 'fastify'
@@ -71,7 +73,7 @@ describe('M4 — refresh-token rotation and reuse detection', () => {
     expect(res2.statusCode).toBe(200)
   })
 
-  it('reusing an already-rotated refresh token is detected and revokes the whole session family', async () => {
+  it('reusing an already-rotated refresh token is detected and revokes every session for that user', async () => {
     const { refreshToken: rt0 } = await login()
 
     const rotated = await refresh(rt0)
@@ -83,7 +85,7 @@ describe('M4 — refresh-token rotation and reuse detection', () => {
     expect(reused.statusCode).toBe(401)
 
     // The legitimately-issued rt1 must now ALSO be dead — proof that
-    // reuse detection revoked the whole session family, not just rt0.
+    // reuse detection revoked ALL of this user's sessions, not just rt0.
     const afterReuse = await refresh(rt1)
     expect(afterReuse.statusCode).toBe(401)
 
@@ -156,5 +158,51 @@ describe('M4 — refresh-token rotation and reuse detection', () => {
   it('a malformed/never-issued refresh token is rejected (401)', async () => {
     const res = await refresh('not-a-real-token-at-all')
     expect(res.statusCode).toBe(401)
+  })
+
+  // Re-audit finding: two concurrent requests presenting the SAME still-valid
+  // token both pass the initial find/expiry/isActive checks before either
+  // one deletes the row (no transaction/row lock guards that window). Only
+  // one can win the unique-key delete; before this fix, the loser hit an
+  // unhandled Prisma P2025 ("record not found") and got a raw 500. Neither
+  // request can walk away with a usable NEW token pair from the loser's
+  // side, so there is no double-redemption — but the loser must get the
+  // same clean 401 as any other invalid-token case, not a server error,
+  // and must NOT be treated as malicious reuse (no alert/revocation) since
+  // this is indistinguishable from an ordinary double-submit by the same
+  // legitimate client.
+  it('two concurrent refreshes with the SAME still-valid token: one succeeds, the other gets a clean 401 (never a 500)', async () => {
+    const { refreshToken: rt0 } = await login()
+
+    // Baseline BEFORE the race — an earlier test in this file legitimately
+    // created a reuse alert for this same student, so "no alert exists" is
+    // not a valid check; "no NEW alert appeared" is.
+    const alertsBefore = await prisma.securityAlert.count({
+      where: { userId: studentId, type: 'UNAUTHORIZED_OBJECT_ACCESS', severity: 'CRITICAL' },
+    })
+
+    const [a, b] = await Promise.all([refresh(rt0), refresh(rt0)])
+    const codes = [a.statusCode, b.statusCode].sort()
+
+    expect(codes).toEqual([200, 401])
+
+    const winner = a.statusCode === 200 ? a : b
+    expect(winner.json().data.accessToken).toBeTruthy()
+
+    const loser = a.statusCode === 200 ? b : a
+    expect(loser.json().error.message).toBe('Refresh token yaroqsiz yoki muddati tugagan')
+
+    // The race loser must not trigger a reuse alert — this was two
+    // requests from the same legitimate client, not theft.
+    const alertsAfter = await prisma.securityAlert.count({
+      where: { userId: studentId, type: 'UNAUTHORIZED_OBJECT_ACCESS', severity: 'CRITICAL' },
+    })
+    expect(alertsAfter).toBe(alertsBefore)
+
+    // The winner's new token must still be usable — the race must not have
+    // left the session in a half-revoked state.
+    const winnerRt = extractRefreshCookie(winner)
+    const next = await refresh(winnerRt)
+    expect(next.statusCode).toBe(200)
   })
 })
