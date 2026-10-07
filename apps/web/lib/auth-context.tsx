@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { authApi, usersApi, clearTokens, type User } from './api'
+import { authApi, usersApi, setTokens, clearTokens, type User } from './api'
 
 export type LoginResult =
   | { step: 'done' }
@@ -70,14 +70,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const loginData = data as { accessToken: string; user: User }
-    localStorage.setItem('accessToken', loginData.accessToken)
+    setTokens(loginData.accessToken)
     setUser(loginData.user)
     postLoginRedirect(router)
     return { step: 'done' }
   }
 
   const completeLogin = (accessToken: string, newUser: User) => {
-    localStorage.setItem('accessToken', accessToken)
+    setTokens(accessToken)
     setUser(newUser)
     postLoginRedirect(router)
   }

@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
+import { resolveMediaUrl } from '@/lib/api'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useLocale } from '@/store/locale'
 import type { TKey } from '@/store/locale'
@@ -130,7 +131,7 @@ export function Sidebar() {
 
   const navItems = ALL_NAV.filter(item => item.roles.includes(user.role))
   const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-  const avatarUrl = user.avatarUrl
+  const avatarUrl = resolveMediaUrl(user.avatarUrl)
 
   return (
     <div style={{ position: 'relative', flexShrink: 0, display: 'flex' }}>

@@ -14,6 +14,10 @@ const mockAuthApiLogin = vi.fn()
 const mockUsersApiMe   = vi.fn()
 const mockAuthApiLogout = vi.fn()
 const mockClearTokens   = vi.fn()
+// Haqiqiy setTokens() ning localStorage'ga yozish qismini takrorlaydi —
+// shu bilan pastdagi testlar login()'dan keyin accessToken'ni tekshirishda
+// davom etadi.
+const mockSetTokens = vi.fn((access: string) => { localStorage.setItem('accessToken', access) })
 
 vi.mock('@/lib/api', () => ({
   authApi: {
@@ -23,6 +27,7 @@ vi.mock('@/lib/api', () => ({
   usersApi: {
     me: (...args: unknown[]) => mockUsersApiMe(...args),
   },
+  setTokens:   (...args: [string]) => mockSetTokens(...args),
   clearTokens: (...args: unknown[]) => mockClearTokens(...args),
 }))
 

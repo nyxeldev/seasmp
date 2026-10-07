@@ -268,7 +268,7 @@ function AuditLogView() {
                 <TableHead>{t('table.user')}</TableHead>
                 <TableHead>{t('audit.action')}</TableHead>
                 <TableHead>{t('audit.resource')}</TableHead>
-                <TableHead>{t('audit.relation')}</TableHead>
+                <TableHead>{t('audit.relationLabel')}</TableHead>
                 <TableHead>ID</TableHead>
                 <TableHead>{t('table.ip')}</TableHead>
                 <TableHead>{t('table.status')}</TableHead>
