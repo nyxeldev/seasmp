@@ -7,7 +7,24 @@ const base = {
       tsconfig: { module: 'commonjs', esModuleInterop: true },
       diagnostics: false,
     }],
+    // @fastify/static pins an ESM-only content-disposition (type: module).
+    // Jest's CJS module registry can't require() that file as-is, so it
+    // needs transpiling to CommonJS like any other source file.
+    // (`transform` keys are matched against the raw filename with no
+    // path-separator normalization, unlike transformIgnorePatterns — use
+    // `.` instead of an explicit slash so this matches on Windows too.)
+    'content-disposition.dist.+\\.js$': ['babel-jest', {
+      babelrc:    false,
+      configFile: false,
+      plugins:    ['@babel/plugin-transform-modules-commonjs'],
+    }],
   },
+  // Default is ['/node_modules/'] (transform nothing under node_modules).
+  // Carve out the one ESM package that needs transpiling; everything else
+  // keeps being skipped.
+  transformIgnorePatterns: [
+    'node_modules/(?!(@fastify/static/node_modules/)?content-disposition/)',
+  ],
   clearMocks: true,
 }
 

@@ -125,6 +125,21 @@ export async function checkBulkDelete(userId: string, ip: string): Promise<void>
   }
 }
 
+// ─── Rule 6: Refresh-token qayta ishlatilishi (M4) ─────────────────────────────
+//
+// Rotatsiyadan o'tgan (allaqachon ishlatilgan/o'chirilgan) refresh-tokenning
+// qayta taqdim etilishi — klassik o'g'irlangan token belgisi. Haqiqiy
+// chaqiruvchi — `auth.service.ts`dagi `refresh()`; bu funksiya faqat
+// signal/javob qismi: ogohlantirish yaratadi va audit yozadi. Sessiyalarni
+// bekor qilishning o'zi (`securityService.revokeAllSessions`) chaqiruvchida
+// qoladi — bu yerda takrorlanmaydi.
+export async function flagRefreshTokenReuse(userId: string, ip: string): Promise<void> {
+  await _createAlert('UNAUTHORIZED_OBJECT_ACCESS', 'CRITICAL', {
+    userId, ip, reason: 'refresh_token_reuse',
+  })
+  logger.warn({ msg: 'Refresh token qayta ishlatildi — barcha sessiyalar bekor qilinadi', userId, ip })
+}
+
 // ─── Rule 5: tezlik chegarasi ────────────────────────────────────────────────
 //
 // Bu yerda `checkRateLimit` degan Redis ustidagi sirpanuvchi oyna bor edi.
@@ -139,7 +154,7 @@ export async function checkBulkDelete(userId: string, ip: string): Promise<void>
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 async function _createAlert(
-  type: 'BRUTE_FORCE' | 'MULTI_DEVICE' | 'UNUSUAL_HOUR' | 'BULK_DELETE' | 'RATE_LIMIT',
+  type: 'BRUTE_FORCE' | 'MULTI_DEVICE' | 'UNUSUAL_HOUR' | 'BULK_DELETE' | 'RATE_LIMIT' | 'UNAUTHORIZED_OBJECT_ACCESS',
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
   details: Record<string, unknown>
 ): Promise<void> {

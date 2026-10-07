@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { authApi, usersApi, clearTokens, type User } from './api'
+import { authApi, usersApi, setTokens, clearTokens, type User } from './api'
 
 export type LoginResult =
   | { step: 'done' }
@@ -19,6 +19,23 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
+
+export const PENDING_QR_TOKEN_KEY = 'seasmp-pending-qr-token'
+
+/**
+ * Login muvaffaqiyatli bo'lgach qayerga yuborish kerakligini hal qiladi.
+ *
+ * Talaba QR kodni skanerlab, lekin tizimga kirmagan bo'lsa,
+ * `/attendance/scan` sahifasi tokenni shu kalit bilan saqlab, login'ga
+ * yuboradi — login tugagach foydalanuvchi standart /dashboard o'rniga
+ * aynan o'sha skanerlash sahifasiga qaytishi kerak, aks holda davomat
+ * hech qachon belgilanmay qoladi.
+ */
+function postLoginRedirect(router: ReturnType<typeof useRouter>) {
+  let pendingToken: string | null = null
+  try { pendingToken = sessionStorage.getItem(PENDING_QR_TOKEN_KEY) } catch { /* xavfsiz e'tiborsiz qoldiriladi */ }
+  router.push(pendingToken ? `/attendance/scan?token=${pendingToken}` : '/dashboard')
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser]       = useState<User | null>(null)
@@ -53,16 +70,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const loginData = data as { accessToken: string; user: User }
-    localStorage.setItem('accessToken', loginData.accessToken)
+    setTokens(loginData.accessToken)
     setUser(loginData.user)
-    router.push('/dashboard')
+    postLoginRedirect(router)
     return { step: 'done' }
   }
 
   const completeLogin = (accessToken: string, newUser: User) => {
-    localStorage.setItem('accessToken', accessToken)
+    setTokens(accessToken)
     setUser(newUser)
-    router.push('/dashboard')
+    postLoginRedirect(router)
   }
 
   const logout = async () => {

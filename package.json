@@ -4,8 +4,7 @@
   "private": true,
   "description": "Smart Education Analytics & Security Monitoring Platform",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/*"
   ],
   "scripts": {
     "dev:api": "npm run dev --workspace=apps/api",

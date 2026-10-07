@@ -68,7 +68,7 @@ export default function CourseDetailPage() {
   }, [courseId]) // eslint-disable-line
 
   useEffect(() => {
-    if ((user?.role === 'ADMIN') && enrollOpen) {
+    if ((user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && enrollOpen) {
       usersApi.list('role=STUDENT&limit=200').then(r => setStudents(r.data)).catch(() => {})
     }
   }, [enrollOpen, user])
@@ -77,7 +77,7 @@ export default function CourseDetailPage() {
   useEffect(() => {
     if (qrCountdown <= 0) {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
-      if (qrToken) { setQrToken(null); setQrImage(null); toast.info('QR token expired') }
+      if (qrToken) { setQrToken(null); setQrImage(null); toast.info("QR tokenning muddati tugadi") }
       return
     }
     timerRef.current = setInterval(() => setQrCountdown(c => c - 1), 1000)
@@ -227,25 +227,23 @@ export default function CourseDetailPage() {
                 ) : (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Expires in</span>
+                      <span className="text-sm text-muted-foreground">Muddati tugaydi</span>
                       <Badge variant={qrCountdown < 60 ? 'destructive' : 'default'} className="text-lg px-3 py-1 font-mono">
                         {qrFmt}
                       </Badge>
                     </div>
-                    {/* Skanerlanadigan kod. API uni qaytarardi, lekin oyna faqat
-                        matnni ko'rsatardi — "skanerlanganda" deyilsa-da,
-                        skanerlaydigan narsa yo'q edi. */}
+                    {/* QR endi xom tokenni emas, to'liq havolani kodlaydi
+                        (/attendance/scan?token=...) — telefon kamerasi bilan
+                        skanerlansa, talaba to'g'ridan-to'g'ri davomat
+                        belgilanadigan sahifaga ochiladi. */}
                     {qrImage && (
                       <div className="flex justify-center bg-white rounded-lg p-3">
-                        <img src={qrImage} alt="QR attendance code" className="size-44" />
+                        <img src={qrImage} alt="QR davomat kodi" className="size-44" />
                       </div>
                     )}
-                    <Card size="sm">
-                      <CardContent className="pt-3">
-                        <p className="font-mono text-xs break-all bg-muted p-3 rounded select-all">{qrToken}</p>
-                      </CardContent>
-                    </Card>
-                    <p className="text-xs text-muted-foreground">Share this token with students. It auto-marks attendance when scanned.</p>
+                    <p className="text-xs text-muted-foreground text-center">
+                      Talabalar buni telefon kamerasi bilan skanerlasa, davomat avtomatik belgilanadi
+                    </p>
                     <Button variant="outline" onClick={generateQr} disabled={qrGenerating} className="w-full">
                       {qrGenerating ? 'Yaratilmoqda...' : 'Qayta yaratish'}
                     </Button>

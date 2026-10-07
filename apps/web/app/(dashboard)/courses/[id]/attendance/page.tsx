@@ -247,15 +247,18 @@ export default function CourseAttendancePage() {
                           {qrFmt}
                         </Badge>
                       </div>
-                      {/* Skanerlanadigan kod. API uni qaytarardi, lekin bu oyna
-                          faqat matnni ko'rsatib, rasmni tashlab yuborardi — ya'ni
-                          "skanerlang" deyilsa-da, skanerlaydigan narsa yo'q edi. */}
+                      {/* QR endi xom tokenni emas, to'liq havolani kodlaydi
+                          (/attendance/scan?token=...) — telefon kamerasi bilan
+                          skanerlansa, talaba to'g'ridan-to'g'ri davomat
+                          belgilanadigan sahifaga ochiladi. */}
                       {qrImage && (
                         <div className="flex justify-center bg-white rounded-lg p-3">
                           <img src={qrImage} alt="QR davomat kodi" className="size-44" />
                         </div>
                       )}
-                      <p className="font-mono text-xs break-all bg-muted p-3 rounded select-all">{qrToken}</p>
+                      <p className="text-xs text-muted-foreground text-center">
+                        Talabalar buni telefon kamerasi bilan skanerlasa, davomat avtomatik belgilanadi
+                      </p>
                       <Button variant="outline" onClick={generateQr} disabled={qrGenerating} className="w-full">
                         {qrGenerating ? 'Yaratilmoqda...' : 'Qayta yaratish'}
                       </Button>

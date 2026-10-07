@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { notificationService } from '../services/notification.service'
+import { PG_BIGINT_MAX } from '../lib/prismaErrors'
 
 /**
  * Bildirishnomalar — har bir foydalanuvchi FAQAT o'zinikini ko'radi.
@@ -28,6 +29,12 @@ export default async function notificationRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string }
     let parsed: bigint
     try { parsed = BigInt(id) } catch {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: "Identifikator noto'g'ri" },
+      })
+    }
+    if (parsed > PG_BIGINT_MAX) {
       return reply.status(400).send({
         success: false,
         error: { code: 'VALIDATION_ERROR', message: "Identifikator noto'g'ri" },

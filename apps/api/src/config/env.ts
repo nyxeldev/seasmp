@@ -34,12 +34,40 @@ function loadDotenv(): void {
 
 loadDotenv()
 
+/**
+ * Dev/test uchun qulay standart — lekin production'da bu qiymat qolib
+ * ketishi /v1/internal/* ni ochiq siri qiladi (quyidagi superRefine buni
+ * rad etadi).
+ */
+const DEFAULT_ANALYTICS_INTERNAL_KEY = 'internal-dev-key-change-in-prod'
+
 const envSchema = z.object({
   NODE_ENV:             z.enum(['development', 'production', 'test']).default('development'),
   API_PORT:             z.coerce.number().default(4000),
   API_HOST:             z.string().default('0.0.0.0'),
 
   DATABASE_URL:         z.string().url(),
+
+  /**
+   * Prisma ulanish puli — ilgari hech qayerda sozlanmagan edi, Prisma
+   * o'zining ichki standartiga (taxminan CPU soni * 2 + 1) tayanardi.
+   * Standart qiymatlar Prisma'ning o'z standartlariga teng — birortasi
+   * o'zgarmaydi, faqat endi aniq va muhit o'zgaruvchisi bilan sozlanadigan.
+   * Joriy arxitektura — bitta API nusxasi — uchun 10 ulanish etarli va
+   * Postgres'ning max_connections=100'idan ancha past (analytics puli
+   * bilan bir vaqtda ham joy qoladi).
+   */
+  DATABASE_CONNECTION_LIMIT: z.coerce.number().int().positive().default(10),
+  DATABASE_POOL_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(10),
+  /**
+   * Bitta so'rov Postgres'da necha sekund davom etishiga ruxsat — osilib
+   * qolgan/sekin so'rov ulanishni abadiy band qilib qolmasligi uchun.
+   * postgresql.conf'ning o'zi o'zgartirilmaydi: bu qiymat har bir Prisma
+   * ulanishiga ulanish satrining `options=-c statement_timeout=...` orqali
+   * uzatiladi (config/prisma.ts), ya'ni faqat shu ilova ulanishlariga
+   * tegishli, butun baza konfiguratsiyasiga emas.
+   */
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
   REDIS_URL:            z.string(),
   /**
@@ -99,9 +127,18 @@ const envSchema = z.object({
 
   AES_ENCRYPTION_KEY:   z.string().length(64), // 32 bytes hex
 
+  /**
+   * Yuklangan fayllar (masalan, avatarlar) qayerga yoziladi. Nisbiy yo'l
+   * process.cwd() ga nisbatan hal qilinadi — dev'da ham, Docker'da ham
+   * (Dockerfile WORKDIR /app/apps/api) bir xil joyga tushadi. Docker'da bu
+   * papka alohida volume'ga ulanadi, aks holda konteyner qayta tiklanganda
+   * fayllar yo'qoladi.
+   */
+  UPLOAD_DIR:           z.string().default('uploads'),
+
   CORS_ORIGIN:          z.string().default('http://localhost:3000'),
   ANALYTICS_API_URL:    z.string().url().default('http://localhost:5000'),
-  ANALYTICS_INTERNAL_KEY: z.string().default('internal-dev-key-change-in-prod'),
+  ANALYTICS_INTERNAL_KEY: z.string().default(DEFAULT_ANALYTICS_INTERNAL_KEY),
 
   /**
    * Xato monitoringi. Berilmasa Sentry umuman ishga tushmaydi va xatolar
@@ -117,6 +154,18 @@ const envSchema = z.object({
   SMTP_USER:  z.string().optional(),
   SMTP_PASS:  z.string().optional(),
   EMAIL_FROM: z.string().default('SEASMP <noreply@seasmp.uz>'),
+}).superRefine((data, ctx) => {
+  // Production'da ANALYTICS_INTERNAL_KEY hali ham ma'lum dev-standart
+  // qiymatda qolishi mumkin emas — bu /v1/internal/* ni istalgan kishi
+  // ochiq manbadan o'qib, bir xil sarlavha bilan chaqira olishiga olib
+  // keladi (H1). Qiymatning o'zi xato xabariga chiqarilmaydi.
+  if (data.NODE_ENV === 'production' && data.ANALYTICS_INTERNAL_KEY === DEFAULT_ANALYTICS_INTERNAL_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['ANALYTICS_INTERNAL_KEY'],
+      message: 'Production muhitida ANALYTICS_INTERNAL_KEY standart (dev) qiymatda qolishi mumkin emas — .env da haqiqiy, maxfiy qiymat o\'rnating.',
+    })
+  }
 })
 
 const parsed = envSchema.safeParse(process.env)
