@@ -13,7 +13,7 @@ def nightly_risk_calculation(self):
     """Runs nightly at 02:00 Asia/Tashkent — scores all active enrollments."""
     from src.config.database import SessionLocal
     from src.services.etl import extract_all_active_students
-    from src.services.ml_model import predict_score, score_to_label
+    from src.services.ml_model import predict_score, score_to_label, current_model_version
     from sqlalchemy import text
 
     db = SessionLocal()
@@ -22,6 +22,7 @@ def nightly_risk_calculation(self):
         total = len(df)
         logger.info("nightly_risk_calculation: %d active enrollments", total)
 
+        model_version = current_model_version()
         scored = 0
         high_risk = []
         for _, row in df.iterrows():
@@ -30,9 +31,19 @@ def nightly_risk_calculation(self):
                 score = predict_score(features)
                 label = score_to_label(score)
 
+                # dropout_risk_score har doim score_model_version/scored_at
+                # bilan birga yoziladi — qaysi model/qachon hisoblaganini
+                # ustunlarning o'zidan bilsa bo'ladi (bitta yagona yozuvchi:
+                # shu vazifa; legacy quvur olib tashlandi).
                 db.execute(
-                    text("UPDATE enrollments SET dropout_risk_score = :score WHERE id = :id"),
-                    {"score": score, "id": row["enrollment_id"]},
+                    text(
+                        "UPDATE enrollments "
+                        "SET dropout_risk_score = :score, "
+                        "    score_model_version = :model_version, "
+                        "    scored_at = now() "
+                        "WHERE id = :id"
+                    ),
+                    {"score": score, "model_version": model_version, "id": row["enrollment_id"]},
                 )
                 scored += 1
 

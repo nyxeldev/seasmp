@@ -5,7 +5,6 @@ omit =
     src/tasks/*
     src/config/database.py
     src/services/cache.py
-    src/services/dropout_service.py
     ml/*
     tests/*
 
