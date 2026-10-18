@@ -8,7 +8,12 @@ test.describe('RBAC — route access', () => {
 
   test('student is denied /users', async ({ studentPage }) => {
     await studentPage.goto('/users')
-    await studentPage.waitForSelector('aside', { timeout: 8000 }).catch(() => {})
+    // `aside` RoleGuard qaroridan mustaqil — layout darajasida HAR doim bor,
+    // shuning uchun uni kutish client-side redirect tugaganini kafolatlamaydi
+    // (sinovda topildi: URL hali eski bo'lganida ham aside allaqachon bor edi,
+    // bu esa testni redirect commit bo'lishidan OLDIN tekshirishga olib keldi).
+    // Haqiqiy navigatsiya natijasini kutish kerak.
+    await studentPage.waitForURL(/\/(login|dashboard)(\?|$)/, { timeout: 8000 }).catch(() => {})
     const denied     = await studentPage.getByText(/kirish taqiqlangan|forbidden/i).isVisible().catch(() => false)
     const redirected = studentPage.url().includes('login') || studentPage.url().includes('dashboard')
     expect(denied || redirected).toBe(true)
@@ -21,7 +26,7 @@ test.describe('RBAC — route access', () => {
 
   test('student cannot access /security/audit', async ({ studentPage }) => {
     await studentPage.goto('/security/audit')
-    await studentPage.waitForSelector('aside', { timeout: 8000 }).catch(() => {})
+    await studentPage.waitForURL(/\/(login|dashboard)(\?|$)/, { timeout: 8000 }).catch(() => {})
     const denied     = await studentPage.getByText(/kirish taqiqlangan|forbidden/i).isVisible().catch(() => false)
     const redirected = studentPage.url().includes('login') || studentPage.url().includes('dashboard')
     expect(denied || redirected).toBe(true)
