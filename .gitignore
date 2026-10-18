@@ -59,5 +59,8 @@ apps/analytics/ml/models/
 # Docker volumes (local)
 docker/volumes/
 
+# Yuklangan fayllar (avatarlar) — apps/api/uploads/, api_uploads volume'ida yashaydi
+apps/api/uploads/
+
 # Prisma generated
 apps/api/prisma/generated/

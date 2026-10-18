@@ -7,7 +7,21 @@
  *   - aggregateCandidateScores sof funksiya — qo'lda tuzilgan hodisa va
  *     qator ro'yxati bilan sinaladi
  */
-import { discoverCandidatePaths } from '../../services/ownershipInference'
+import { jest } from '@jest/globals'
+
+const mockAuditLogFindMany = jest.fn<() => Promise<any[]>>()
+const mockOwnershipRuleFindMany = jest.fn<() => Promise<any[]>>()
+const mockCourseFindMany = jest.fn<() => Promise<any[]>>()
+
+jest.mock('../../config/prisma', () => ({
+  prisma: {
+    auditLog: { findMany: mockAuditLogFindMany },
+    ownershipRule: { findMany: mockOwnershipRuleFindMany },
+    course: { findMany: mockCourseFindMany },
+  },
+}))
+
+import { discoverCandidatePaths, scoreResourceType, DEFAULT_LOOKBACK_DAYS, DEFAULT_MAX_EVENTS } from '../../services/ownershipInference'
 import { aggregateCandidateScores } from '../../services/ownershipPaths'
 
 describe('discoverCandidatePaths — sxemadan nomzod yo\'llarni topish', () => {
@@ -132,5 +146,42 @@ describe('aggregateCandidateScores — sof ishonch hisob-kitobi', () => {
     ]
     const scores = aggregateCandidateScores([{ path: 'studentId', segments: 1 }], events, rowById, 1)
     expect(scores[0].total).toBe(0)
+  })
+})
+
+describe('scoreResourceType — audit_logs so\'rovi chegaralangan (DB fix phase, M3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockAuditLogFindMany.mockResolvedValue([])
+    mockOwnershipRuleFindMany.mockResolvedValue([])
+    mockCourseFindMany.mockResolvedValue([])
+  })
+
+  it('standart holatda vaqt oynasi va qator chegarasi qo\'yiladi, eng yangilari birinchi', async () => {
+    await scoreResourceType('courses')
+
+    expect(mockAuditLogFindMany).toHaveBeenCalledTimes(1)
+    const call = mockAuditLogFindMany.mock.calls[0][0] as any
+
+    expect(call.where.resource).toBe('courses')
+    expect(call.where.action).toBe('ACCESS')
+    expect(call.where.createdAt.gte).toBeInstanceOf(Date)
+
+    const expectedSince = Date.now() - DEFAULT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+    expect(call.where.createdAt.gte.getTime()).toBeGreaterThan(expectedSince - 5000)
+    expect(call.where.createdAt.gte.getTime()).toBeLessThan(expectedSince + 5000)
+
+    expect(call.take).toBe(DEFAULT_MAX_EVENTS)
+    expect(call.orderBy).toEqual({ id: 'desc' })
+  })
+
+  it('lookbackDays/maxEvents qo\'lda berilsa, standart o\'rniga ular ishlatiladi', async () => {
+    await scoreResourceType('courses', { lookbackDays: 7, maxEvents: 123 })
+
+    const call = mockAuditLogFindMany.mock.calls[0][0] as any
+    const expectedSince = Date.now() - 7 * 24 * 60 * 60 * 1000
+    expect(call.where.createdAt.gte.getTime()).toBeGreaterThan(expectedSince - 5000)
+    expect(call.where.createdAt.gte.getTime()).toBeLessThan(expectedSince + 5000)
+    expect(call.take).toBe(123)
   })
 })

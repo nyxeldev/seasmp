@@ -152,7 +152,7 @@ export default function CoursesPage() {
 
   useEffect(() => { load() }, [status]) // eslint-disable-line
   useEffect(() => {
-    if (user?.role === 'ADMIN') {
+    if (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') {
       usersApi.list('role=TEACHER').then(r => setTeachers(r.data)).catch(() => {})
     }
   }, [user])
@@ -183,7 +183,11 @@ export default function CoursesPage() {
     catch (err: any) { toast.error(err.message) }
   }
 
-  const canManage = user?.role === 'ADMIN' || user?.role === 'TEACHER'
+  // Ilgari SUPER_ADMIN bu yerda unutilgan edi — eng yuqori huquqli rol
+  // kurs kartidagi "Ko'rish" havolasini (demak, butun kurs tafsilotlari
+  // sahifasini) umuman ko'ra olmasdi, holbuki u ADMIN qila oladigan
+  // hamma narsani qila olishi kerak.
+  const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'TEACHER'
   const isAdmin   = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
 
   const filtered = courses.filter(c =>

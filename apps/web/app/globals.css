@@ -211,7 +211,7 @@ body {
 .heat-good  { --heat-bg: #86efac }
 .heat-great { --heat-bg: #22c55e }
 
-.dark .heat-none  { --heat-bg: #1e293b }
+.dark .heat-none  { --heat-bg: #334155 }
 .dark .heat-zero  { --heat-bg: #7f1d1d }
 .dark .heat-low   { --heat-bg: #991b1b }
 .dark .heat-med   { --heat-bg: #92400e }

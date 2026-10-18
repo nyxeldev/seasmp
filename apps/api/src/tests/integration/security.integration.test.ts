@@ -69,6 +69,108 @@ describe('GET /v1/security/audit-logs', () => {
   })
 })
 
+// L1 — GET /v1/security/audit-logs/:id must validate `id` BEFORE BigInt(id):
+// a non-numeric id used to throw an uncaught SyntaxError (no statusCode),
+// which the global error handler turned into a raw 500. This had no direct
+// regression test — the list-endpoint tests above do not exercise :id at
+// all — so the fix was unverified by the suite.
+describe('GET /v1/security/audit-logs/:id', () => {
+  let logId: string
+
+  beforeAll(async () => {
+    const log = await prisma.auditLog.create({
+      data: { userId: adminId, action: 'LOGIN', resource: 'users', ipAddress: '127.0.0.1' },
+    })
+    logId = log.id.toString()
+  })
+
+  it('a valid, existing numeric id returns the log (ADMIN)', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'GET',
+      url:     `/v1/security/audit-logs/${logId}`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.id).toBe(logId)
+  })
+
+  it('a malformed (non-numeric) id returns 400, not 500', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'GET',
+      url:     '/v1/security/audit-logs/not-a-bigint',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('a negative-looking id returns 400, not 500', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'GET',
+      url:     '/v1/security/audit-logs/-1',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('a well-formed but nonexistent numeric id returns 404', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'GET',
+      url:     '/v1/security/audit-logs/999999999999',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it('STUDENT cannot access a single audit log — 403', async () => {
+    const token = makeToken(studentId, 'STUDENT')
+    const res = await app.inject({
+      method:  'GET',
+      url:     `/v1/security/audit-logs/${logId}`,
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  // Closeout: the digits-only regex alone was not enough. JS BigInt is
+  // arbitrary-precision, so a numeric string far larger than Postgres'
+  // bigint range still passed the regex, reached the DB, and raised
+  // SQLSTATE 22003 ("value out of range for type bigint") — an uncaught
+  // Prisma error with no statusCode, falling through to a raw 500.
+  it('an id far larger than Postgres bigint range returns 400, not 500', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'GET',
+      url:     '/v1/security/audit-logs/99999999999999999999999999',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('exactly Postgres bigint max (9223372036854775807) is a VALID id shape — 404, not 400', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'GET',
+      url:     '/v1/security/audit-logs/9223372036854775807',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it('bigint max + 1 (9223372036854775808) is rejected — 400', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'GET',
+      url:     '/v1/security/audit-logs/9223372036854775808',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+})
+
 // ─── Security Alerts ─────────────────────────────────────────────────────────
 
 describe('GET /v1/security/alerts', () => {
@@ -95,6 +197,60 @@ describe('GET /v1/security/alerts', () => {
     expect(typeof data.todayTotal).toBe('number')
     expect(typeof data.unresolved).toBe('number')
     expect(typeof data.blockedIps).toBe('number')
+  })
+})
+
+// R7 — PATCH /v1/security/alerts/:id/resolve BigInt overflow guard
+// (same defect class as L1 on the audit-logs route — no validation at all).
+describe('PATCH /v1/security/alerts/:id/resolve', () => {
+  it('non-numeric id returns 400', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'PATCH',
+      url:     '/v1/security/alerts/not-a-bigint/resolve',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('an id far larger than Postgres bigint range returns 400, not 500', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'PATCH',
+      url:     '/v1/security/alerts/99999999999999999999999999/resolve',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('exactly Postgres bigint max (9223372036854775807) is a VALID id shape — 404, not 400', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'PATCH',
+      url:     '/v1/security/alerts/9223372036854775807/resolve',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it('bigint max + 1 (9223372036854775808) is rejected — 400', async () => {
+    const token = makeToken(adminId, 'ADMIN')
+    const res = await app.inject({
+      method:  'PATCH',
+      url:     '/v1/security/alerts/9223372036854775808/resolve',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('STUDENT cannot access resolve — 403 (RBAC unchanged)', async () => {
+    const token = makeToken(studentId, 'STUDENT')
+    const res = await app.inject({
+      method:  'PATCH',
+      url:     '/v1/security/alerts/999999/resolve',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(res.statusCode).toBe(403)
   })
 })
 

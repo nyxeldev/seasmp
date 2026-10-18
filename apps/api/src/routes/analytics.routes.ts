@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { analyticsService } from '../services/analytics.service'
+import { enrollmentService } from '../services/enrollment.service'
 import { env } from '../config/env'
 
 const PY_BASE = env.ANALYTICS_API_URL
@@ -59,6 +60,13 @@ export default async function analyticsRoutes(app: FastifyInstance) {
   })
 
   // ─── Python-powered: student enrollment analytics ──────────────────────────
+  //
+  // H2 fix: Python xizmati faqat X-Internal-Key'ni tekshiradi, foydalanuvchi
+  // darajasidagi egalikka ishonmaydi — shuning uchun `enrollmentId` haqiqatan
+  // `studentId`ga tegishli ekanini BU YERDA, Node tarafida tasdiqlash shart.
+  // Mavjud `enrollmentService.findById` naqshidan foydalaniladi (u allaqachon
+  // STUDENT/TEACHER egalik qoidalarini qo'llaydi — course.routes/enrollment.
+  // routes'dagi bilan bir xil manba).
   app.get('/students/:studentId/enrollment/:enrollmentId', {
     onRequest: [app.authenticate],
   }, async (request, reply) => {
@@ -67,6 +75,28 @@ export default async function analyticsRoutes(app: FastifyInstance) {
     if (role === 'STUDENT' && sub !== studentId) {
       return reply.status(403).send({ success: false, error: "Ruxsat yo'q" })
     }
+
+    let enrollment
+    try {
+      enrollment = await enrollmentService.findById(enrollmentId, sub, role)
+    } catch (e: any) {
+      // 403 (begona enrollment) va 404 (mavjud emas) ikkalasi ham 404 sifatida
+      // qaytariladi — aks holda javob kodi orqali "bu enrollment mavjud, lekin
+      // sizniki emas" degan ma'lumot sizib chiqadi (begona foydalanuvchining
+      // enrollment ID'si mavjudligini tasdiqlagan bo'lardi).
+      if (e.statusCode === 403 || e.statusCode === 404) {
+        return reply.status(404).send({ success: false, error: 'Not found' })
+      }
+      throw e
+    }
+
+    // :studentId va :enrollmentId bir-biriga mos kelishi shart — aks holda
+    // (masalan ADMIN ikkita mos kelmaydigan ID yuborsa) ham xuddi shu
+    // "topilmadi" javobi qaytadi.
+    if (enrollment.studentId !== studentId) {
+      return reply.status(404).send({ success: false, error: 'Not found' })
+    }
+
     try {
       const data = await pyGet(`/v1/students/${enrollmentId}/analytics`)
       return reply.send({ success: true, data })
@@ -96,10 +126,37 @@ export default async function analyticsRoutes(app: FastifyInstance) {
   })
 
   // ─── Python-powered: high dropout risk list ────────────────────────────────
+  //
+  // H3 fix: Python xizmati `course_id` bo'yicha o'qituvchi egaligini
+  // tekshirmaydi — `course_id` berilmasa, BUTUN tizim bo'yicha xavf
+  // ro'yxatini qaytaradi. TEACHER uchun `course_id` endi MAJBURIY va uning
+  // haqiqatan shu o'qituvchiga tegishli ekanligi Node tarafida tasdiqlanadi
+  // (xuddi shu tekshiruv quyidagi `/courses/:courseId` uchun ishlatiladi —
+  // `analyticsService.courseStats`). ADMIN/SUPER_ADMIN uchun xatti-harakat
+  // o'zgarmaydi — `course_id` ixtiyoriy, tizim bo'yicha ko'rinish saqlanadi.
   app.get('/dropout-risk', {
     onRequest: [app.authenticate, app.requireRoles('ADMIN', 'SUPER_ADMIN', 'TEACHER')],
   }, async (request, reply) => {
     const q = request.query as any
+    const { sub, role } = request.user
+
+    if (role === 'TEACHER') {
+      if (!q.course_id) {
+        return reply.status(400).send({
+          success: false,
+          error: "O'qituvchi uchun course_id majburiy",
+        })
+      }
+      try {
+        await analyticsService.courseStats(q.course_id, sub, role)
+      } catch (e: any) {
+        if (e.statusCode === 403 || e.statusCode === 404) {
+          return reply.status(e.statusCode).send({ success: false, error: e.message })
+        }
+        throw e
+      }
+    }
+
     const qs = new URLSearchParams()
     if (q.threshold) qs.set('threshold', q.threshold)
     if (q.course_id) qs.set('course_id', q.course_id)

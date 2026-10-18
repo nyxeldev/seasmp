@@ -12,10 +12,18 @@ logger = logging.getLogger(__name__)
 
 _model = None
 _scaler = None
+_model_version: str | None = None
+
+# Hisoblangan model fayli yo'q (yoki yuklanmagan) paytda qoida-asosli
+# `_rule_based_score` ishlatiladi — bu HAM "model", shuning uchun u ham o'z
+# versiyasiga ega bo'lishi kerak: aks holda dropout_risk_score'ni kim
+# hisoblagani noaniq qolardi (aynan shu narsa ikki quvur muammosining
+# o'zagi edi). Bu murakkab model registry emas — oddiy, o'zgarmas belgi.
+RULE_BASED_VERSION = "rule-based-fallback-v1"
 
 
 def load_model() -> None:
-    global _model, _scaler
+    global _model, _scaler, _model_version
     if os.path.exists(MODEL_PATH):
         try:
             _model = joblib.load(MODEL_PATH)
@@ -34,6 +42,22 @@ def load_model() -> None:
             logger.warning("Failed to load scaler: %s", e)
             _scaler = None
 
+    # ml/train.py allaqachon har bir o'qitishda model_metadata.json ga
+    # timestamp versiyasini yozadi (ml/train.py:148-159). Yangi versiya
+    # o'ylab topish o'rniga xuddi shu versiya qayta ishlatiladi — shunda
+    # dropout_risk_score qaysi aniq o'qitilgan modeldan kelganini
+    # model_metadata.json bilan to'g'ridan-to'g'ri solishtirish mumkin.
+    if _model is not None:
+        try:
+            from ml.train import get_model_metadata
+            meta = get_model_metadata()
+            _model_version = meta.get("version") if meta else "unversioned"
+        except Exception as e:
+            logger.warning("Model metadata o'qilmadi: %s", e)
+            _model_version = "unversioned"
+    else:
+        _model_version = None
+
 
 def get_model():
     return _model
@@ -41,6 +65,16 @@ def get_model():
 
 def is_model_loaded() -> bool:
     return _model is not None
+
+
+def current_model_version() -> str:
+    """Hozir predict_score() qaysi model/versiyadan foydalanayotganini qaytaradi.
+
+    enrollments.score_model_version ustuniga yoziladigan qiymat shu —
+    o'qitilgan model yuklangan bo'lsa uning model_metadata.json'dagi haqiqiy
+    versiyasi, aks holda qoida-asosli fallback'ning o'zgarmas belgisi.
+    """
+    return _model_version or RULE_BASED_VERSION
 
 
 def _rule_based_score(features: dict) -> float:

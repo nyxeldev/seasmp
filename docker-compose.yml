@@ -69,6 +69,11 @@ services:
         condition: service_healthy
       analytics:
         condition: service_healthy
+    volumes:
+      # Yuklangan avatarlar. Volume'siz konteyner qayta qurilganda
+      # (yoki ko'p nusxada ishlaganda) fayllar yo'qolardi — xuddi
+      # analytics_models kabi sabab.
+      - api_uploads:/app/apps/api/uploads
     networks:
       - seasmp-network
 
@@ -96,6 +101,82 @@ services:
       - analytics_models:/app/ml/models
     networks:
       - seasmp-network
+
+  # ─── Celery Worker (Analytics) ────────────────────────────────────────────────
+  #
+  # celery_app.py'da nightly-risk, daily-cache, monthly-retrain va
+  # retention-cleanup rejalashtirilgan edi, lekin ularni haqiqatda
+  # BAJARUVCHI jarayon hech qachon ishga tushirilmagan — shu konteyner aynan
+  # shu bo'shliqni yopadi. Bitta image (analytics bilan bir xil Dockerfile)
+  # — shuning uchun src/ import yo'llari, muhit o'zgaruvchilari va
+  # schema_contract tekshiruvi (worker_process_init, celery_app.py) aynan
+  # API konteyneridagi kabi ishlaydi.
+  celery-worker:
+    build:
+      context: ./apps/analytics
+      dockerfile: Dockerfile
+    container_name: seasmp-celery-worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      REDIS_URL:    "redis://:${REDIS_PASSWORD}@redis:6379"
+    # `-A src.tasks.celery_app:celery` — Dockerfile WORKDIR /app bo'lgani
+    # uchun `src.tasks.celery_app` moduli to'g'ridan-to'g'ri import qilinadi
+    # (apps/analytics/src/tasks/celery_app.py), `:celery` esa shu moduldagi
+    # Celery nusxasining aniq nomi (boshqa konvensiyaga — `app` — tayanib
+    # noto'g'ri topilib qolmasligi uchun aniq ko'rsatilgan).
+    command: ["celery", "-A", "src.tasks.celery_app:celery", "worker", "--loglevel=info"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - analytics_models:/app/ml/models
+    networks:
+      - seasmp-network
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A src.tasks.celery_app:celery inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+  # ─── Celery Beat (Analytics) ──────────────────────────────────────────────────
+  #
+  # Rejalashtiruvchi — vazifalarni o'zi BAJARMAYDI, faqat belgilangan vaqtda
+  # Redis orqali navbatga qo'yadi (celery-worker ularni bajaradi). Shuning
+  # uchun DB/model volume kerak emas, va worker buyrug'ida `-B`/`--beat`
+  # YO'Q — aks holda ikki alohida beat rejalashtiruvchi bir vaqtda ishlab,
+  # har bir vazifa ikki marta navbatga tushardi. Butun stackda faqat shu
+  # BITTA beat jarayoni bor.
+  celery-beat:
+    build:
+      context: ./apps/analytics
+      dockerfile: Dockerfile
+    container_name: seasmp-celery-beat
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      REDIS_URL:    "redis://:${REDIS_PASSWORD}@redis:6379"
+    command: ["celery", "-A", "src.tasks.celery_app:celery", "beat", "--loglevel=info"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - seasmp-network
+    # Dockerfile'ning o'zida HEALTHCHECK bor (http://localhost:5000/health) —
+    # bu analytics (FastAPI/uvicorn) konteyneri uchun to'g'ri, lekin beat
+    # hech qanday portda tinglamaydi, shuning uchun shu tekshiruv bu yerda
+    # doim muvaffaqiyatsiz bo'lardi (toki jarayon tirik bo'lsa ham). O'chirib
+    # qo'yildi — jarayonning o'zi tirikligi `docker compose ps`dagi holat
+    # bilan ko'rinadi.
+    healthcheck:
+      disable: true
 
   # ─── Next.js Frontend ────────────────────────────────────────────────────────
   frontend:
@@ -137,6 +218,7 @@ volumes:
   postgres_data:
   redis_data:
   analytics_models:
+  api_uploads:
 
 networks:
   seasmp-network:

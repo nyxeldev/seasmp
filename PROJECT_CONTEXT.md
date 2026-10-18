@@ -122,8 +122,9 @@ student_id        UUID FK→users
 course_id         UUID FK→courses
 enrolled_at       TIMESTAMPTZ
 status            ENUM('ACTIVE','COMPLETED','DROPPED')
-dropout_risk_score DECIMAL(5,4) nullable  -- 0.0000–1.0000, written by Python service
-final_grade       DECIMAL(5,2) nullable
+dropout_risk_score DECIMAL(5,4) nullable CHECK (0-1)  -- written by analytics (canonical pipeline only)
+score_model_version VARCHAR(50) nullable  -- which model/version produced dropout_risk_score
+scored_at         TIMESTAMPTZ nullable    -- when dropout_risk_score was last written
 UNIQUE(student_id, course_id)
 ```
 
@@ -147,7 +148,7 @@ course_id   UUID FK→courses (CASCADE)
 title       VARCHAR(255)
 type        ENUM('QUIZ','MIDTERM','FINAL','HOMEWORK')
 max_score   DECIMAL(5,2) default 100
-weight      DECIMAL(5,4) default 0.1  -- contribution to final grade (0–1)
+weight      DECIMAL(5,4) default 0.1 CHECK (0-1)  -- contribution to final grade
 due_date    TIMESTAMPTZ nullable
 created_at  TIMESTAMPTZ
 ```

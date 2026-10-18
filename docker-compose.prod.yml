@@ -53,6 +53,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      # Yuklangan avatarlar — bir nechta nusxa/qayta tiklashda saqlanib qolishi uchun.
+      - api_uploads:/app/apps/api/uploads
     networks:
       - seasmp-network
     healthcheck:
@@ -88,6 +91,60 @@ services:
       timeout: 10s
       start_period: 40s
       retries: 3
+
+  # ─── Celery Worker (Analytics) ────────────────────────────────────────────────
+  # Bir xil image, bitta farq — command. nightly-risk/daily-cache/
+  # monthly-retrain/retention-cleanup shu konteynerda bajariladi.
+  celery-worker:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_OWNER}/seasmp-analytics:${IMAGE_TAG:-latest}
+    container_name: seasmp-celery-worker
+    restart: always
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      REDIS_URL:    "redis://:${REDIS_PASSWORD}@redis:6379"
+    command: ["celery", "-A", "src.tasks.celery_app:celery", "worker", "--loglevel=info"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - analytics_models:/app/ml/models
+    networks:
+      - seasmp-network
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A src.tasks.celery_app:celery inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+  # ─── Celery Beat (Analytics) ──────────────────────────────────────────────────
+  # Faqat rejalashtiradi, bajarmaydi — shuning uchun model volume yo'q.
+  # Butun prod stackda aynan BITTA beat konteyneri bo'lishi shart: worker
+  # buyrug'ida `-B`/`--beat` yo'q, shu servis `replicas`siz, bitta nusxada.
+  celery-beat:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_OWNER}/seasmp-analytics:${IMAGE_TAG:-latest}
+    container_name: seasmp-celery-beat
+    restart: always
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      REDIS_URL:    "redis://:${REDIS_PASSWORD}@redis:6379"
+    command: ["celery", "-A", "src.tasks.celery_app:celery", "beat", "--loglevel=info"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - seasmp-network
+    # Image'ning Dockerfile'ida HEALTHCHECK http://localhost:5000/health'ni
+    # tekshiradi (analytics/FastAPI konteyneri uchun to'g'ri) — beat hech
+    # qanday portda tinglamaydi, shuning uchun bu yerda o'chirilgan.
+    healthcheck:
+      disable: true
 
   # ─── Next.js Frontend ────────────────────────────────────────────────────────
   frontend:
@@ -131,6 +188,7 @@ volumes:
   postgres_data:
   redis_data:
   analytics_models:
+  api_uploads:
 
 networks:
   seasmp-network:

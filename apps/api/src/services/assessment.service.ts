@@ -212,6 +212,20 @@ export const assessmentService = {
     const enrollment = await prisma.enrollment.findUnique({ where: { id: data.enrollmentId } })
     if (!enrollment) throw Object.assign(new Error("Ro'yxatga olish topilmadi"), { statusCode: 404 })
 
+    // M1: enrollment va assessment BIR XIL kursga tegishli ekani tekshiriladi.
+    // Ilgari bu tekshiruv yo'q edi — o'z kursiga tegishli assessmentId bilan,
+    // lekin BOSHQA kursdagi enrollmentId yuborilsa, `grade` jadvalida
+    // kurslararo, mantiqsiz yozuv yaratilardi (masalan boshqa o'qituvchining
+    // talabasiga tegishli enrollment uchun baho). Xuddi shu naqsh
+    // `attendance.service.ts`'ning `markBulk`'ida allaqachon ishlatiladi —
+    // u yerda ham "yozuv bu kursga tegishli emas" 400 bilan rad etiladi.
+    if (enrollment.courseId !== assessment.courseId) {
+      throw Object.assign(
+        new Error("Ro'yxatga olish bu baholashning kursiga tegishli emas"),
+        { statusCode: 400 },
+      )
+    }
+
     const grade = await prisma.grade.upsert({
       where: { assessmentId_enrollmentId: { assessmentId: data.assessmentId, enrollmentId: data.enrollmentId } },
       create: { assessmentId: data.assessmentId, enrollmentId: data.enrollmentId, score: data.score, feedback: data.feedback, gradedBy: actorId },

@@ -23,6 +23,13 @@
  * yoziladi) — trafikdan o'rganilgan qoidani production avtorizatsiyasiga
  * so'zsiz qo'llash xavfsizlik nuqtai nazaridan noto'g'ri bo'lardi. Qoida
  * taklif qilinadi, inson tasdiqlaydi.
+ *
+ * MUHIM — ulanish holati: bu modul `app.ts`/`requestAudit.ts` orqali HAR
+ * SO'ROVDA chaqirilmaydi (u — `ownershipResolver.ts`ning ishi). Bu yerdagi
+ * funksiyalar faqat qo'lda ishga tushiriladi: `tools/inferOwnership.ts`
+ * CLI skripti (`npm run infer:ownership`) va `tests/security/
+ * ownershipInference.test.ts` orqali. Ikkala faylni ishga tushirishdan oldin
+ * aralashtirib yubormaslik uchun shuni yodda tuting.
  */
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma'
@@ -49,6 +56,27 @@ const MAX_SEGMENTS = 3
 const MIN_ROLE_SUPPORT = 10
 const OWNER_CONFIDENCE_THRESHOLD = 0.8
 const CUSTODIAN_CONFIDENCE_THRESHOLD = 0.6
+
+/**
+ * DB fix phase (M3): bu qo'lda ishga tushiriladigan admin vositasi (hech
+ * qachon so'rov yo'lida emas), lekin audit_logs cheksiz o'sadi (endi HAR BIR
+ * /v1/ so'rovi uni yozadi — requestAudit.ts) va avvalgi kodda bu yerdagi
+ * `findMany` hech qanday chegarasiz EDI: resourceType bo'yicha mos keladigan
+ * BARCHA 'ACCESS' yozuvini xotiraga yuklardi.
+ *
+ * Ikki chegara qo'yildi:
+ *   - vaqt oynasi (standart 90 kun — Python tomondagi
+ *     AUDIT_LOG_RETENTION_DAYS standartiga mos, chunki shundan eski
+ *     yozuvlar baribir saqlanish siyosati bilan o'chiriladi)
+ *   - qator soni chegarasi (standart 50 000 — oddiy loyihada bu chegaraga
+ *     yetish amalda deyarli mumkin emas, lekin yomon holatda xotira/so'rov
+ *     narxini cheklaydi)
+ * Chegaraga yetganda ENG YANGI hodisalar olinadi (id bo'yicha kamayish
+ * tartibida) — tarixiy signal butunlay yo'q qilinmaydi, faqat eng foydali
+ * (yangi) qismi bilan cheklanadi.
+ */
+export const DEFAULT_LOOKBACK_DAYS = 90
+export const DEFAULT_MAX_EVENTS = 50_000
 
 export interface CandidatePath {
   /** "studentId", "course.teacherId" — nuqtali yo'l, resurs jadvalining o'zidan boshlanadi */
@@ -126,16 +154,25 @@ export interface InferenceResult {
  * noyob resourceId uchun BITTA so'rov bilan qator olinadi, keyin xotirada
  * barcha nomzodlar bo'yicha hisoblanadi.
  */
-export async function scoreResourceType(resourceType: string): Promise<InferenceResult | null> {
+export async function scoreResourceType(
+  resourceType: string,
+  options?: { lookbackDays?: number; maxEvents?: number },
+): Promise<InferenceResult | null> {
   const modelName = MODEL_BY_RESOURCE[resourceType]
   if (!modelName) return null
 
   const candidates = discoverCandidatePaths(modelName)
   if (candidates.length === 0) return null
 
+  const lookbackDays = options?.lookbackDays ?? DEFAULT_LOOKBACK_DAYS
+  const maxEvents = options?.maxEvents ?? DEFAULT_MAX_EVENTS
+  const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000)
+
   const events = await prisma.auditLog.findMany({
-    where: { resource: resourceType, resourceId: { not: null }, action: 'ACCESS' },
+    where: { resource: resourceType, resourceId: { not: null }, action: 'ACCESS', createdAt: { gte: since } },
     select: { resourceId: true, userId: true, user: { select: { role: true } } },
+    orderBy: { id: 'desc' },
+    take: maxEvents,
   })
 
   const existingRules = await (prisma as any).ownershipRule.findMany({
@@ -188,10 +225,12 @@ export async function scoreResourceType(resourceType: string): Promise<Inference
   return { resourceType, modelName, candidates: candidateScores, existingRules, proposals }
 }
 
-export async function scoreAllResourceTypes(): Promise<InferenceResult[]> {
+export async function scoreAllResourceTypes(
+  options?: { lookbackDays?: number; maxEvents?: number },
+): Promise<InferenceResult[]> {
   const out: InferenceResult[] = []
   for (const resourceType of Object.keys(MODEL_BY_RESOURCE)) {
-    const r = await scoreResourceType(resourceType)
+    const r = await scoreResourceType(resourceType, options)
     if (r) out.push(r)
   }
   return out

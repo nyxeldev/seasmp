@@ -17,7 +17,15 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Shield, AlertTriangle, Users, Ban, RefreshCw, CheckCircle, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useLocale } from '@/store/locale'
+import { useLocale, type TKey } from '@/store/locale'
+
+/** `t()` to'liq kalit ro'yxatida bo'lmagan dinamik tur/qatlam nomlari uchun —
+ *  kalit topilmasa xom qiymatni qaytaradi (t() o'zi shunday fallback qiladi). */
+function dynLabel(t: (key: TKey) => string, prefix: 'security.type.' | 'security.layer.', value: string): string {
+  const key = `${prefix}${value}` as TKey
+  const label = t(key)
+  return label === key ? value : label
+}
 
 // ─── Severity helpers ─────────────────────────────────────────────────────────
 const SEV_COLORS: Record<AlertSeverity, string> = {
@@ -27,24 +35,12 @@ const SEV_COLORS: Record<AlertSeverity, string> = {
   CRITICAL: 'bg-red-100 text-red-800',
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  BRUTE_FORCE:  'Brute Force',
-  MULTI_DEVICE: 'Ko\'p qurilma',
-  UNUSUAL_HOUR: 'G\'ayrioddiy vaqt',
-  BULK_DELETE:  'Ommaviy o\'chirish',
-  RATE_LIMIT:   'Rate Limit',
-  UNAUTHORIZED_OBJECT_ACCESS: 'Ruxsatsiz obyekt',
-  PRIVILEGE_ESCALATION:       'Huquq oshirish',
-  BEHAVIOR_ANOMALY:           'Xatti-harakat anomaliyasi',
-  MASS_DATA_ACCESS:           'Ommaviy ma\'lumot chiqarish',
-}
+const ALERT_TYPES = [
+  'BRUTE_FORCE', 'MULTI_DEVICE', 'UNUSUAL_HOUR', 'BULK_DELETE', 'RATE_LIMIT',
+  'UNAUTHORIZED_OBJECT_ACCESS', 'PRIVILEGE_ESCALATION', 'BEHAVIOR_ANOMALY', 'MASS_DATA_ACCESS',
+] as const
 
-/** Qaysi qatlam aniqladi */
-const LAYER_LABELS: Record<string, string> = {
-  AUTHORIZATION: 'Avtorizatsiya',
-  BEHAVIOR:      'Xatti-harakat',
-  CORRELATED:    'Korrelyatsiya',
-}
+const ALERT_LAYERS = ['AUTHORIZATION', 'BEHAVIOR', 'CORRELATED'] as const
 
 /**
  * Ishonch bali. Raqam yolg'iz o'zi taqqoslash uchun sekin o'qiladi,
@@ -144,8 +140,8 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   // tomonda takrorlansa ikkita manba bir-biridan ajrab ketardi.
   useRealtimeEvent<SecurityAlertEvent>('security:alert', (e) => {
     toast.warning(
-      `${TYPE_LABELS[e.type] ?? e.type} — ${e.severity}`,
-      { description: e.layer ? `Qatlam: ${LAYER_LABELS[e.layer] ?? e.layer}` : undefined },
+      `${dynLabel(t, 'security.type.', e.type)} — ${e.severity}`,
+      { description: e.layer ? `${t('security.layerLabel')}: ${dynLabel(t, 'security.layer.', e.layer)}` : undefined },
     )
     loadStats()
     loadAlerts()
@@ -154,7 +150,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const resolveAlert = async (id: string) => {
     try {
       await securityApi.resolveAlert(id)
-      toast.success('Alert hal qilindi')
+      toast.success(t('security.alertResolved'))
       setAlerts(prev => prev.map(a => a.id === id ? { ...a, resolved: true } : a))
       loadStats()
     } catch (e: any) { toast.error(e.message) }
@@ -164,7 +160,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     if (!isSuperAdmin) return
     try {
       await securityApi.forceRevoke(sessionId)
-      toast.success('Sessiya o\'chirildi')
+      toast.success(t('security.sessionRevoked'))
       setSessions(prev => prev.filter(s => s.id !== sessionId))
       loadStats()
     } catch (e: any) { toast.error(e.message) }
@@ -192,7 +188,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           <Link href="/security/audit">
             <Button variant="outline" size="sm">
               <ExternalLink className="size-[18px] mr-1.5" />
-              Audit Log
+              {t('security.auditLog')}
             </Button>
           </Link>
         </div>
@@ -220,14 +216,14 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <Select value={typeFilter} onValueChange={v => setTypeFilter(v ?? 'ALL')}>
           <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">Barcha turlar</SelectItem>
-            {Object.entries(TYPE_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+            <SelectItem value="ALL">{t('security.allTypes')}</SelectItem>
+            {ALERT_TYPES.map(v => <SelectItem key={v} value={v}>{dynLabel(t, 'security.type.', v)}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={sevFilter} onValueChange={v => setSevFilter(v ?? 'ALL')}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">Barcha darajalar</SelectItem>
+            <SelectItem value="ALL">{t('security.allSeverities')}</SelectItem>
             {(['LOW','MEDIUM','HIGH','CRITICAL'] as AlertSeverity[]).map(s => (
               <SelectItem key={s} value={s}>{s}</SelectItem>
             ))}
@@ -238,7 +234,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           size="sm"
           onClick={() => setShowResolved(v => !v)}
         >
-          {showResolved ? 'Hal qilinganlar' : 'Hal qilinmaganlar'}
+          {showResolved ? t('security.resolvedOnes') : t('security.unresolvedOnes')}
         </Button>
       </div>
 
@@ -247,21 +243,21 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <AlertTriangle className="size-[18px] text-destructive" />
-            Xavfsizlik Alertlari ({total})
+            {t('security.alerts')} ({total})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Vaqt</TableHead>
-                <TableHead>Tur</TableHead>
-                <TableHead>Daraja</TableHead>
-                <TableHead>Qatlam</TableHead>
-                <TableHead>Ball</TableHead>
-                <TableHead>Foydalanuvchi</TableHead>
-                <TableHead>IP</TableHead>
-                <TableHead>Holat</TableHead>
+                <TableHead>{t('table.time')}</TableHead>
+                <TableHead>{t('table.type')}</TableHead>
+                <TableHead>{t('table.severity')}</TableHead>
+                <TableHead>{t('table.layer')}</TableHead>
+                <TableHead>{t('table.score')}</TableHead>
+                <TableHead>{t('table.user')}</TableHead>
+                <TableHead>{t('table.ip')}</TableHead>
+                <TableHead>{t('table.status')}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -271,10 +267,10 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                     {new Date(alert.createdAt).toLocaleString('uz-UZ')}
                   </TableCell>
-                  <TableCell className="font-medium text-sm">{TYPE_LABELS[alert.type] ?? alert.type}</TableCell>
+                  <TableCell className="font-medium text-sm">{dynLabel(t, 'security.type.', alert.type)}</TableCell>
                   <TableCell><SeverityBadge severity={alert.severity} /></TableCell>
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {alert.layer ? LAYER_LABELS[alert.layer] ?? alert.layer : '—'}
+                    {alert.layer ? dynLabel(t, 'security.layer.', alert.layer) : '—'}
                   </TableCell>
                   <TableCell><ScoreCell score={alert.score} /></TableCell>
                   <TableCell className="text-sm">
@@ -283,8 +279,8 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
                   <TableCell className="text-xs font-mono">{alert.ipAddress ?? '—'}</TableCell>
                   <TableCell>
                     {alert.resolved
-                      ? <Badge variant="secondary" className="text-green-700">Hal qilindi</Badge>
-                      : <Badge variant="destructive">Faol</Badge>
+                      ? <Badge variant="secondary" className="text-green-700">{t('security.resolvedBadge')}</Badge>
+                      : <Badge variant="destructive">{t('security.activeBadge')}</Badge>
                     }
                   </TableCell>
                   <TableCell>
@@ -299,7 +295,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               {alerts.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    {loading ? 'Yuklanmoqda...' : 'Alert topilmadi'}
+                    {loading ? t('common.loading') : t('security.noAlerts')}
                   </TableCell>
                 </TableRow>
               )}
@@ -330,7 +326,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="size-[18px]" />
-              Aktiv Sessionlar ({sessions.length})
+              {t('security.activeSessions')} ({sessions.length})
             </CardTitle>
             <Button variant="outline" size="sm" onClick={loadSessions} disabled={sessLoading}>
               <RefreshCw className={`size-[18px] ${sessLoading ? 'animate-spin' : ''}`} />
@@ -341,11 +337,11 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Foydalanuvchi</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead>IP</TableHead>
-                <TableHead>Qurilma</TableHead>
-                <TableHead>Yaratildi</TableHead>
+                <TableHead>{t('table.user')}</TableHead>
+                <TableHead>{t('table.role')}</TableHead>
+                <TableHead>{t('table.ip')}</TableHead>
+                <TableHead>{t('table.device')}</TableHead>
+                <TableHead>{t('table.created')}</TableHead>
                 {isSuperAdmin && <TableHead></TableHead>}
               </TableRow>
             </TableHeader>
@@ -376,7 +372,7 @@ function SecurityDashboard({ isSuperAdmin }: { isSuperAdmin: boolean }) {
               {sessions.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={isSuperAdmin ? 6 : 5} className="text-center text-muted-foreground py-6">
-                    Aktiv session yo'q
+                    {t('security.noActiveSessions')}
                   </TableCell>
                 </TableRow>
               )}

@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { prisma } from '../config/prisma'
 import { auditService } from './audit.service'
+import { isForeignKeyRestrictError } from '../lib/prismaErrors'
 import type { User, UserRole } from '@prisma/client'
 import type { SafeUser } from './auth.service'
 
@@ -86,7 +87,36 @@ export const userService = {
     const user = await prisma.user.findUnique({ where: { id } })
     if (!user) throw Object.assign(new Error('Foydalanuvchi topilmadi'), { statusCode: 404 })
 
-    await prisma.user.delete({ where: { id } })
+    // courses.teacher_id / enrollments.student_id / grades.graded_by /
+    // attendance.marked_by hammasi ON DELETE RESTRICT — bu ataylab shunday:
+    // kurs o'qitgan yoki talaba sifatida tarix qoldirgan hisobni jimgina
+    // o'chirib, o'sha tarixni yetim qoldirish xavfsizlik va audit nuqtai
+    // nazaridan noto'g'ri. Hard delete faqat HECH QANDAY tarixi yo'q
+    // hisoblar uchun ishlaydi; qolganlari uchun to'g'ri yo'l — deaktivatsiya
+    // (`toggleStatus` / `isActive=false`), u allaqachon ishlaydi va hisobni
+    // tizimga kira olmaydigan holga keltiradi, tarixni yo'qotmaydi.
+    //
+    // DIQQAT: bu aniq `ON DELETE RESTRICT` cheklovi Postgres'da SQLSTATE
+    // 23001 (restrict_violation) qaytaradi — bu Prisma'ning P2003 xaritasi
+    // qamrab olmagan SQLSTATE, shuning uchun bu yerda oddiy
+    // `err.code === 'P2003'` ishlamaydi (`PrismaClientUnknownRequestError`
+    // keladi, `.code` maydonsiz). `isForeignKeyRestrictError` ikkala
+    // shaklni ham (P2003 va 23001/23503 o'z-ichida) qamrab tekshiradi.
+    try {
+      await prisma.user.delete({ where: { id } })
+    } catch (err) {
+      if (isForeignKeyRestrictError(err)) {
+        throw Object.assign(
+          new Error(
+            "Bu foydalanuvchini o'chirib bo'lmaydi: unga bog'liq kurslar, ro'yxatga olishlar, baholar yoki " +
+            "davomat yozuvlari mavjud. Buning o'rniga hisobni deaktivatsiya qiling " +
+            "(PATCH /v1/users/:id/toggle-status) — bu tarixni saqlab, foydalanuvchining tizimga kirishini to'xtatadi."
+          ),
+          { statusCode: 409 },
+        )
+      }
+      throw err
+    }
 
     await auditService.log({
       userId: actorId, action: 'DELETE', resource: 'users',

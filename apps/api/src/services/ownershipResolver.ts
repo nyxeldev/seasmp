@@ -48,6 +48,31 @@ const MODEL_BY_RESOURCE: Record<string, string> = {
 
 const PRIVILEGED_ROLES = ['ADMIN', 'SUPER_ADMIN']
 
+/**
+ * M5: ba'zi ichma-ich/ikkinchi darajali yo'llar (masalan
+ * `/v1/analytics/students/:id/enrollment/:id`, `/v1/assessments/course/:id`)
+ * resurs so'zini BIRLIKDA yozadi, holbuki `ownership_rules.resource_type`
+ * va `MODEL_BY_RESOURCE` kaliti har doim asosiy marshrut prefiksiga mos —
+ * KO'PLIKDA (`enrollments`, `courses`). `targetFromPath` (requestAudit.ts)
+ * UUID'dan oldingi so'zni o'zgartirmasdan qaytaradi (bu to'g'ri — u sof
+ * URL ajratuvchi), shuning uchun normallashtirish shu yerda, iste'molchida
+ * bajariladi.
+ *
+ * Faqat HAQIQATAN mavjud bo'lgan, qoidasi bor kelishmovchiliklar ro'yxatga
+ * olingan — keng ko'lamli "har doim -s qo'sh" generatsiyasi emas (masalan
+ * `attendance`'ning ko'pligi yo'q, `teacher`/`students` uchun umuman
+ * egalik qoidasi mavjud emas — ularni bu yerga qo'shish soxta signal
+ * yaratardi).
+ */
+const RESOURCE_TYPE_ALIASES: Record<string, string> = {
+  enrollment: 'enrollments',
+  course:     'courses',
+}
+
+function normalizeResourceType(resourceType: string): string {
+  return RESOURCE_TYPE_ALIASES[resourceType] ?? resourceType
+}
+
 interface Rule {
   resourceType: string
   ownerPath:    string
@@ -98,6 +123,7 @@ export async function resolveAccess(
   actorRole: string | null,
 ): Promise<OwnershipVerdict> {
   if (!actorId) return unknown()
+  resourceType = normalizeResourceType(resourceType)
 
   // Ilgari bu yerda imtiyozli rol uchun darhol qaytish bor edi: egalik umuman
   // hisoblanmasdi va ownerId null bo'lib qolardi. Ikkita oqibati bor edi.
